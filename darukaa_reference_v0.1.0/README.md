@@ -173,4 +173,4 @@ The pipeline produces a JSON + CSV scorecard:
 
 ## License
 
-Internal use — Darukaa.Earth. Contact: gaurav@darukaa.earth
+Internal use — Darukaa.Earth. Contact: gaurav.singh@darukaa.com
