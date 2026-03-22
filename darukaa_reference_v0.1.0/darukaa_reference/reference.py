@@ -339,7 +339,7 @@ class ReferenceSelector:
                 break
 
         # Step 4-5: Mask to same land cover + select least disturbed
-        ghm = ee.Image(self.GHM_ASSET).select("gHM")
+        ghm = ee.ImageCollection(self.GHM_ASSET).first().select("gHM")
 
         # Create combined mask: same ecoregion region + same land cover
         if lc_value is not None:
@@ -422,16 +422,17 @@ class ReferenceSelector:
         if layer is None:
             return None
 
-        # Check if it's stored in metadata as a pre-built image
+        # Check if there's a custom builder function (preferred)
         if "gee_image_fn" in spec.metadata:
             return spec.metadata["gee_image_fn"](self.config)
 
-        # Try as ImageCollection (take median) or single Image
+        # Try as ImageCollection first (most GEE assets are collections),
+        # then fall back to single Image
         try:
-            return ee.Image(layer)
+            return ee.ImageCollection(layer).mosaic()
         except Exception:
             try:
-                return ee.ImageCollection(layer).median()
+                return ee.Image(layer)
             except Exception:
                 return None
 
