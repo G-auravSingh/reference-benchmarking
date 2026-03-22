@@ -376,53 +376,65 @@ def _build_lst_image(config: Config):
 
 def _build_bii_image(config: Config):
     """
-    Get Biodiversity Intactness Index image.
+    Get Biodiversity Intactness Index image from GEE.
 
-    Tries multiple sources in order:
-    1. GEE Community Catalog BII (public, ~100m)
-    2. Impact Observatory asset (may require access)
+    Priority order:
+    1. User's own GEE asset (config.bii_gee_asset) — PREDICTS-based NHM BII
+       uploaded as a personal/project asset. Most reliable path.
+    2. GEE Community Catalog public assets (may have access issues)
 
-    Reference: Newbold et al. (2016). Science, 353(6296), 288–291.
-    DOI:10.1126/science.aaf2201
+    NHM BII v2.1.1 stores values as 0–100 (percentages); we divide by 100
+    to normalise to 0–1 for consistency with all other indicators.
+
+    References:
+        Newbold, T. et al. (2016). Has land use pushed terrestrial biodiversity
+        beyond the planetary boundary? Science, 353(6296), 288–291.
+        DOI:10.1126/science.aaf2201
+
+        Hudson, L.N. et al. (2017). The database of the PREDICTS project.
+        Ecology and Evolution, 7(1), 145–188. DOI:10.1002/ece3.2579
+
+        Scholes, R.J. & Biggs, R. (2005). A biodiversity intactness index.
+        Nature, 434, 45–49. DOI:10.1038/nature03289
     """
     import ee
 
-    # Source 1: GEE Community Catalog (publicly accessible)
-    BII_ASSETS = [
+    # Priority 1: User's own GEE asset (configured in config.yaml or programmatically)
+    user_asset = getattr(config, "bii_gee_asset", None)
+    if user_asset:
+        try:
+            img = ee.Image(user_asset).select(0).divide(100).rename("BII")
+            logger.info(f"BII loaded from user asset: {user_asset}")
+            return img
+        except Exception as e:
+            logger.warning(f"User BII asset failed ({user_asset}): {e}")
+
+    # Priority 2: Public GEE assets (fallback)
+    PUBLIC_BII_ASSETS = [
         "projects/sat-io/open-datasets/BII/BII_2017",
         "projects/ebx-data/assets/earthblox/IO/BIOINTACT",
     ]
 
-    for asset_id in BII_ASSETS:
+    for asset_id in PUBLIC_BII_ASSETS:
         try:
-            # Try as Image first
             img = ee.Image(asset_id).select(0).rename("BII")
-            # Force evaluation to check if accessible
-            img.getInfo()
-            logger.info(f"BII loaded from: {asset_id}")
+            img.getInfo()  # Force evaluation to check accessibility
+            logger.info(f"BII loaded from public asset: {asset_id}")
             return img
         except Exception:
             try:
-                # Try as ImageCollection
                 img = (
                     ee.ImageCollection(asset_id)
                     .sort("system:time_start", False)
-                    .first()
-                    .select(0)
-                    .rename("BII")
+                    .first().select(0).rename("BII")
                 )
                 img.getInfo()
-                logger.info(f"BII loaded from collection: {asset_id}")
+                logger.info(f"BII loaded from public collection: {asset_id}")
                 return img
             except Exception:
-                logger.debug(f"BII asset not accessible: {asset_id}")
                 continue
 
-    logger.warning(
-        "No BII asset accessible. To use BII, download NHM v2.1.1 from "
-        "https://data.nhm.ac.uk/dataset/bii-developed-by-nhm-v2-1-1-limited-release "
-        "and register as a local_raster indicator."
-    )
+    logger.warning("No BII GEE asset accessible.")
     return None
 
 
