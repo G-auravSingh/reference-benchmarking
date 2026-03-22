@@ -268,10 +268,13 @@ def extract_bii(geometry, config: Config) -> Dict[str, Any]:
         DOI:10.1002/ece3.2579
     """
     # Priority 1: Local PREDICTS-based BII raster
+    # NHM v2.1.1 stores BII as percentages (0–100); scale to 0–1
     raster_path = config.raster_paths.get("bii")
     if raster_path:
         try:
-            return _extract_from_local_raster(raster_path, geometry, band=1)
+            return _extract_from_local_raster(
+                raster_path, geometry, band=1, scale_factor=0.01
+            )
         except Exception as e:
             logger.warning(f"Local BII raster failed: {e}, trying GEE...")
 
@@ -533,35 +536,70 @@ def _reduce_image_at_site(image, geometry, scale: int = 100) -> Dict[str, Any]:
 
 
 def _extract_from_local_raster(
-    raster_path: str, geometry, band: int = 1
+    raster_path: str, geometry, band: int = 1, scale_factor: float = 1.0
 ) -> Dict[str, Any]:
-    """Extract values from a local GeoTIFF within a geometry."""
+    """
+    Extract values from a local GeoTIFF within a geometry.
+
+    Handles coarse-resolution global rasters (e.g., BII at ~10km, SEED at ~1km)
+    by falling back to centroid sampling when the site polygon is smaller than
+    ~4 raster pixels. This prevents mask-based extraction from returning empty
+    arrays for small sites on coarse grids.
+
+    Parameters
+    ----------
+    raster_path : str
+        Path to the GeoTIFF file.
+    geometry : shapely geometry
+        Site polygon or point.
+    band : int
+        Band number to read (1-indexed).
+    scale_factor : float
+        Multiply extracted values by this factor. Use 0.01 for rasters that
+        store values as percentages (0–100) instead of fractions (0–1).
+    """
     import rasterio
     from rasterio.mask import mask as rio_mask
-    from shapely.geometry import mapping, Point
+    from shapely.geometry import mapping
 
     with rasterio.open(raster_path) as src:
-        # If geometry is a point or very small, use a buffer
-        if hasattr(geometry, "area") and geometry.area < 1e-6:
-            # Point-like; sample the raster directly
-            centroid = geometry.centroid if hasattr(geometry, "centroid") else geometry
-            if isinstance(centroid, Point):
-                row, col = src.index(centroid.x, centroid.y)
+        # Compute pixel area in the raster's CRS (typically degrees)
+        pixel_w = abs(src.transform[0])
+        pixel_h = abs(src.transform[4])
+        pixel_area = pixel_w * pixel_h
+
+        # If geometry is smaller than ~4 pixels, sample at centroid
+        # This handles small sites on coarse global rasters (BII ~10km, GLOBIO ~300m)
+        use_centroid = (
+            hasattr(geometry, "area") and geometry.area < pixel_area * 4
+        )
+
+        if use_centroid:
+            centroid = geometry.centroid
+            row, col = src.index(centroid.x, centroid.y)
+            if 0 <= row < src.height and 0 <= col < src.width:
                 data = src.read(band)
                 val = float(data[row, col])
-                if src.nodata is not None and val == src.nodata:
+                # Handle NaN nodata (common in NHM BII raster)
+                if not np.isfinite(val):
                     return {"value": None, "pixels": None}
+                if src.nodata is not None and not np.isnan(src.nodata) and val == src.nodata:
+                    return {"value": None, "pixels": None}
+                val *= scale_factor
                 return {"value": val, "pixels": np.array([val])}
+            return {"value": None, "pixels": None}
 
+        # Normal mask-based extraction for larger geometries
         geom_json = [mapping(geometry)]
         try:
             out_image, _ = rio_mask(src, geom_json, crop=True, nodata=src.nodata)
-            arr = out_image[band - 1]
-            if src.nodata is not None:
-                arr = arr[arr != src.nodata]
+            arr = out_image[band - 1].flatten()
             arr = arr[np.isfinite(arr)]
+            if src.nodata is not None and not np.isnan(src.nodata):
+                arr = arr[arr != src.nodata]
             if len(arr) == 0:
                 return {"value": None, "pixels": None}
+            arr = arr * scale_factor
             return {"value": float(np.nanmean(arr)), "pixels": arr}
         except Exception as e:
             logger.warning(f"Raster extraction failed: {e}")
