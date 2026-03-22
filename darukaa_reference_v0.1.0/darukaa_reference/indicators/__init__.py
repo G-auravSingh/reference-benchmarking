@@ -43,6 +43,7 @@ def create_default_registry() -> IndicatorRegistry:
     registry = IndicatorRegistry()
 
     # 1. NDVI — Sentinel-2
+    #    Regional vegetation patterns operate at 50–100 km scale
     registry.register(
         name="ndvi",
         display_name="Vegetation Structure (NDVI)",
@@ -58,11 +59,13 @@ def create_default_registry() -> IndicatorRegistry:
         ),
         tier1_layer="COPERNICUS/S2_SR_HARMONIZED",
         tier2_eligible=True,
+        reference_radius_km=50.0,  # Vegetation community scale
         pillar=1,
         metadata={"gee_image_fn": _build_ndvi_image},
     )
 
     # 2. LST — MODIS (PRESSURE-like: lower LST = more canopy/evapotranspiration = healthier)
+    #    Tight radius to reduce elevation confounding in mountainous regions
     registry.register(
         name="lst",
         display_name="Land Surface Temperature",
@@ -77,11 +80,13 @@ def create_default_registry() -> IndicatorRegistry:
         tier1_layer="MODIS/061/MOD11A2",
         tier2_eligible=True,
         higher_is_better=False,  # Lower LST = more canopy = healthier ecosystem
+        reference_radius_km=25.0,  # Tight radius — LST varies sharply with elevation
         pillar=1,
         metadata={"gee_image_fn": _build_lst_image},
     )
 
     # 3. MSA — GLOBIO4 (local raster)
+    #    MSA is a macroecological metric — ecoregion scale is ideal
     registry.register(
         name="msa_globio4",
         display_name="Mean Species Abundance (GLOBIO4)",
@@ -96,10 +101,12 @@ def create_default_registry() -> IndicatorRegistry:
         ),
         tier1_layer=None,  # Set via config.raster_paths["globio4_msa"]
         tier2_eligible=True,
+        reference_radius_km=100.0,  # Macroecological — broad landscape
         pillar=3,
     )
 
-    # 4. BII — Biodiversity Intactness Index (Impact Observatory via GEE)
+    # 4. BII — Biodiversity Intactness Index
+    #    Community-level intactness — broad landscape scale
     registry.register(
         name="bii",
         display_name="Biodiversity Intactness Index",
@@ -115,11 +122,13 @@ def create_default_registry() -> IndicatorRegistry:
         ),
         tier1_layer="projects/ebx-data/assets/earthblox/IO/BIOINTACT",
         tier2_eligible=True,
+        reference_radius_km=75.0,  # Community intactness — regional landscape
         pillar=3,
         metadata={"gee_image_fn": _build_bii_image},
     )
 
     # 5. EII — Ecosystem Integrity Index (Landbanking Group open-source)
+    #    Composite of structure + function + composition — broad scale
     registry.register(
         name="eii",
         display_name="Ecosystem Integrity Index",
@@ -135,11 +144,13 @@ def create_default_registry() -> IndicatorRegistry:
         ),
         tier1_layer=None,  # EII is computed from components, not a single asset
         tier2_eligible=True,
+        reference_radius_km=75.0,  # Ecosystem-level — matches BII scale
         pillar=1,
         metadata={"gee_image_fn": _build_eii_image},
     )
 
     # 6. SEED Biocomplexity Index (local raster)
+    #    Designed for ecoregion-scale comparison per McElderry et al. (2024)
     registry.register(
         name="seed",
         display_name="SEED Biocomplexity Index",
@@ -155,10 +166,12 @@ def create_default_registry() -> IndicatorRegistry:
         ),
         tier1_layer=None,  # Set via config.raster_paths["seed_biocomplexity"]
         tier2_eligible=True,
+        reference_radius_km=100.0,  # SEED is inherently ecoregion-scale
         pillar=1,
     )
 
     # 7. gHM — Global Human Modification (PRESSURE indicator: lower = better)
+    #    Landscape disturbance — broad scale for context
     registry.register(
         name="ghm",
         display_name="Global Human Modification",
@@ -175,6 +188,7 @@ def create_default_registry() -> IndicatorRegistry:
         tier1_layer="CSP/HM/GlobalHumanModification",
         tier2_eligible=False,  # gHM is the selector, not a benchmarked indicator
         higher_is_better=False,  # PRESSURE: lower human modification = better
+        reference_radius_km=50.0,  # Landscape disturbance context
         pillar=4,
         metadata={"gee_image_fn": _build_ghm_image},
     )
