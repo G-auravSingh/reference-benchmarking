@@ -178,22 +178,30 @@ class ReferenceSelector:
         """
         Extract Tier 1 reference stats within a buffer around the site.
 
+        Routes to GEE or local raster extraction depending on indicator type.
         Buffer radius is per-indicator (spec.reference_radius_km) with
-        fallback to config.reference_buffer_km. This avoids reducing over
-        entire ecoregions which timeout in GEE.
+        fallback to config.reference_buffer_km.
         """
+        radius_km = spec.reference_radius_km or self.config.reference_buffer_km
+
+        # Route: local raster indicators (BII, MSA, SEED)
+        if spec.source_type == "local_raster":
+            raster_path = self._get_local_raster_path(spec)
+            if raster_path:
+                return self._tier1_from_local_raster(
+                    raster_path, site_geometry, radius_km, spec
+                )
+
+        # Route: GEE-based indicators
         self._ensure_gee()
         import ee
 
         if not isinstance(site_geometry, ee.Geometry):
             site_geometry = self._shapely_to_ee(site_geometry)
 
-        radius_km = spec.reference_radius_km or self.config.reference_buffer_km
         buffer_m = radius_km * 1000
         region = site_geometry.centroid().buffer(buffer_m)
-        logger.debug(f"  Tier 1 buffer: {radius_km} km for {spec.name}")
 
-        # Get indicator image — try gee_image_fn first, then tier1_layer
         image = self._get_indicator_image(spec)
         if image is None:
             return {}
@@ -213,6 +221,89 @@ class ReferenceSelector:
         ).getInfo()
 
         return self._parse_gee_stats(stats)
+
+    def _tier1_from_local_raster(
+        self, raster_path: str, site_geometry, radius_km: float, spec: IndicatorSpec
+    ) -> Dict[str, Any]:
+        """
+        Compute Tier 1 reference from a local raster by reading a circular
+        buffer region.
+
+        This is the preferred approach for coarse global rasters (BII ~10km,
+        GLOBIO4 MSA ~300m, SEED ~1km) because:
+        1. Methodological consistency — same data source for site and reference
+        2. Self-contained — no GEE access needed for the indicator itself
+        3. Works regardless of GEE asset availability
+
+        Reference: Uses the same "regional buffer" approach as the GEE path,
+        but reads directly from the authoritative raster (e.g., PREDICTS-based
+        BII from NHM, GLOBIO4 MSA from PBL).
+        """
+        import rasterio
+        from rasterio.mask import mask as rio_mask
+        from shapely.geometry import mapping
+        from shapely.ops import transform as shapely_transform
+        import pyproj
+
+        # Ensure 2D geometry
+        if hasattr(site_geometry, 'has_z') and site_geometry.has_z:
+            site_geometry = shapely_transform(lambda x, y, z=None: (x, y), site_geometry)
+
+        centroid = site_geometry.centroid
+
+        # Create circular buffer in metres, then reproject to WGS84
+        # Use UTM zone for accurate buffering
+        utm_zone = int((centroid.x + 180) / 6) + 1
+        hemisphere = 'north' if centroid.y >= 0 else 'south'
+        utm_crs = pyproj.CRS(f"+proj=utm +zone={utm_zone} +{hemisphere} +datum=WGS84")
+        wgs84 = pyproj.CRS("EPSG:4326")
+
+        project_to_utm = pyproj.Transformer.from_crs(wgs84, utm_crs, always_xy=True).transform
+        project_to_wgs = pyproj.Transformer.from_crs(utm_crs, wgs84, always_xy=True).transform
+
+        centroid_utm = shapely_transform(project_to_utm, centroid)
+        buffer_utm = centroid_utm.buffer(radius_km * 1000)
+        buffer_wgs = shapely_transform(project_to_wgs, buffer_utm)
+
+        # Determine scale factor for this indicator
+        scale_factor = 1.0
+        if spec.name == "bii":
+            scale_factor = 0.01  # NHM BII stores 0–100, we need 0–1
+
+        with rasterio.open(raster_path) as src:
+            geom_json = [mapping(buffer_wgs)]
+            try:
+                out_image, _ = rio_mask(src, geom_json, crop=True, nodata=src.nodata)
+                arr = out_image[0].flatten()
+                arr = arr[np.isfinite(arr)]
+                if src.nodata is not None and not np.isnan(src.nodata):
+                    arr = arr[arr != src.nodata]
+                if len(arr) == 0:
+                    return {}
+                arr = arr * scale_factor
+                logger.info(
+                    f"  Tier 1 (local raster): {len(arr)} pixels in "
+                    f"{radius_km}km buffer, median={np.median(arr):.4f}"
+                )
+                return self._array_stats(arr)
+            except Exception as e:
+                logger.warning(f"Tier 1 local raster extraction failed: {e}")
+                return {}
+
+    def _get_local_raster_path(self, spec: IndicatorSpec) -> str:
+        """Resolve the local raster path for an indicator."""
+        # Map indicator names to config raster_paths keys
+        name_to_key = {
+            "bii": "bii",
+            "msa_globio4": "globio4_msa",
+            "seed": "seed_biocomplexity",
+        }
+        key = name_to_key.get(spec.name)
+        if key:
+            path = self.config.raster_paths.get(key)
+            if path and __import__("os").path.exists(path):
+                return path
+        return None
 
     # ------------------------------------------------------------------
     # Tier 2: Contemporary reference (SEED-style least-disturbed patches)
