@@ -178,19 +178,25 @@ class ReferenceSelector:
         """
         Extract Tier 1 reference stats within a buffer around the site.
 
-        Routes to GEE or local raster extraction depending on indicator type.
-        Buffer radius is per-indicator (spec.reference_radius_km) with
-        fallback to config.reference_buffer_km.
+        Priority: local raster (if available) > GEE.
+        This ensures indicators like BII that have both a local raster AND
+        a GEE fallback always use the authoritative local source for
+        reference computation.
         """
         radius_km = spec.reference_radius_km or self.config.reference_buffer_km
 
-        # Route: local raster indicators (BII, MSA, SEED)
-        if spec.source_type == "local_raster":
-            raster_path = self._get_local_raster_path(spec)
-            if raster_path:
-                return self._tier1_from_local_raster(
-                    raster_path, site_geometry, radius_km, spec
-                )
+        # Priority 1: Local raster (regardless of source_type)
+        # An indicator like BII may be registered as source_type="gee" for
+        # site extraction (which tries GEE then falls back to local), but
+        # if a local raster exists, Tier 1 reference should use it for
+        # methodological consistency.
+        raster_path = self._get_local_raster_path(spec)
+        if raster_path:
+            result = self._tier1_from_local_raster(
+                raster_path, site_geometry, radius_km, spec
+            )
+            if result:
+                return result
 
         # Route: GEE-based indicators
         self._ensure_gee()
