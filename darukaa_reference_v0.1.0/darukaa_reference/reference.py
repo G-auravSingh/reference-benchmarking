@@ -178,8 +178,9 @@ class ReferenceSelector:
         """
         Extract Tier 1 reference stats within a buffer around the site.
 
-        Uses config.reference_buffer_km as the radius. This avoids the
-        problem of reducing over entire ecoregions which timeout in GEE.
+        Buffer radius is per-indicator (spec.reference_radius_km) with
+        fallback to config.reference_buffer_km. This avoids reducing over
+        entire ecoregions which timeout in GEE.
         """
         self._ensure_gee()
         import ee
@@ -187,8 +188,10 @@ class ReferenceSelector:
         if not isinstance(site_geometry, ee.Geometry):
             site_geometry = self._shapely_to_ee(site_geometry)
 
-        buffer_m = self.config.reference_buffer_km * 1000
+        radius_km = spec.reference_radius_km or self.config.reference_buffer_km
+        buffer_m = radius_km * 1000
         region = site_geometry.centroid().buffer(buffer_m)
+        logger.debug(f"  Tier 1 buffer: {radius_km} km for {spec.name}")
 
         # Get indicator image — try gee_image_fn first, then tier1_layer
         image = self._get_indicator_image(spec)
@@ -234,8 +237,11 @@ class ReferenceSelector:
             site_geometry = self._shapely_to_ee(site_geometry)
 
         # Step 1: Reference zone = buffer around site centroid
-        buffer_m = self.config.reference_buffer_km * 1000
+        # Radius is per-indicator (ecological scale) with config fallback
+        radius_km = spec.reference_radius_km or self.config.reference_buffer_km
+        buffer_m = radius_km * 1000
         reference_zone = site_geometry.centroid().buffer(buffer_m)
+        logger.debug(f"  Tier 2 buffer: {radius_km} km for {spec.name}")
 
         # Step 2: Get land cover at site
         lc = ee.Image(self.config.landcover_gee_asset).select("discrete_classification")
