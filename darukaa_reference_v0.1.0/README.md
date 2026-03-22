@@ -180,3 +180,4 @@ Working prototype — validated on Paglam Community Reserve (Arunachal Pradesh).
 ## License
 
 Internal use — Darukaa.Earth
+Contact - gaurav.singh@darukaa.com
