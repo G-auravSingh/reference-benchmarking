@@ -142,8 +142,8 @@ class ReferenceSelector:
             result.tier1_n_pixels = tier1.get("n", 0)
 
             if result.site_value is not None and result.tier1_median:
-                result.tier1_intactness = min(
-                    result.site_value / result.tier1_median, 1.0
+                result.tier1_intactness = self._intactness_ratio(
+                    result.site_value, result.tier1_median, indicator_spec.higher_is_better
                 )
         except Exception as e:
             logger.warning(f"Tier 1 failed for {indicator_spec.name}: {e}")
@@ -162,8 +162,8 @@ class ReferenceSelector:
                 result.tier2_pixels = tier2.get("pixels")
 
                 if result.site_value is not None and result.tier2_median:
-                    result.tier2_intactness = min(
-                        result.site_value / result.tier2_median, 1.0
+                    result.tier2_intactness = self._intactness_ratio(
+                        result.site_value, result.tier2_median, indicator_spec.higher_is_better
                     )
             except Exception as e:
                 logger.warning(f"Tier 2 failed for {indicator_spec.name}: {e}")
@@ -344,6 +344,32 @@ class ReferenceSelector:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _intactness_ratio(
+        site_value: float, reference_value: float, higher_is_better: bool
+    ) -> float:
+        """
+        Compute intactness ratio, accounting for indicator directionality.
+
+        For STATE indicators (NDVI, BII, EII — higher_is_better=True):
+            intactness = site / reference, capped at 1.0
+            A site at 0.6 with reference 0.8 → 75% intactness
+
+        For PRESSURE indicators (gHM, LST, noise — higher_is_better=False):
+            intactness = reference / site, capped at 1.0
+            A site at 0.34 gHM with reference 0.23 → 68% intactness
+            (site has more human modification = lower intactness)
+
+        Both return 0–1 where 1.0 = equivalent to reference condition.
+        """
+        if reference_value == 0 or site_value == 0:
+            return None
+
+        if higher_is_better:
+            return min(site_value / reference_value, 1.0)
+        else:
+            return min(reference_value / site_value, 1.0)
 
     def _get_indicator_image(self, spec: IndicatorSpec):
         """
