@@ -230,13 +230,15 @@ def extract_msa_local(geometry, config: Config) -> Dict[str, Any]:
 
 def extract_bii(geometry, config: Config) -> Dict[str, Any]:
     """
-    Extract BII from Impact Observatory ~100m layer on GEE.
+    Extract BII from available GEE source.
 
     Reference: Newbold et al. (2016). DOI:10.1126/science.aaf2201
     """
     import ee
 
     image = _build_bii_image(config)
+    if image is None:
+        return {"value": None, "pixels": None}
     return _reduce_image_at_site(image, geometry, scale=100)
 
 
@@ -245,7 +247,6 @@ def extract_eii(geometry, config: Config) -> Dict[str, Any]:
     Extract EII (Ecosystem Integrity Index).
 
     EII = fuzzy_minimum(Structural, Compositional, Functional integrity).
-    Uses BII for compositional, gHM-derived for structural, NPP ratio for functional.
 
     Reference: Hill et al. (2022). DOI:10.1101/2022.08.21.504707
     Open-source: github.com/landler-io/ecosystem-integrity-index
@@ -253,6 +254,8 @@ def extract_eii(geometry, config: Config) -> Dict[str, Any]:
     import ee
 
     image = _build_eii_image(config)
+    if image is None:
+        return {"value": None, "pixels": None}
     return _reduce_image_at_site(image, geometry, scale=300)
 
 
@@ -328,16 +331,55 @@ def _build_lst_image(config: Config):
 
 
 def _build_bii_image(config: Config):
-    """Get BII image. Impact Observatory asset is an ImageCollection."""
+    """
+    Get Biodiversity Intactness Index image.
+
+    Tries multiple sources in order:
+    1. GEE Community Catalog BII (public, ~100m)
+    2. Impact Observatory asset (may require access)
+
+    Reference: Newbold et al. (2016). Science, 353(6296), 288–291.
+    DOI:10.1126/science.aaf2201
+    """
     import ee
 
-    return (
-        ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BIOINTACT")
-        .sort("system:time_start", False)
-        .first()
-        .select(0)
-        .rename("BII")
+    # Source 1: GEE Community Catalog (publicly accessible)
+    BII_ASSETS = [
+        "projects/sat-io/open-datasets/BII/BII_2017",
+        "projects/ebx-data/assets/earthblox/IO/BIOINTACT",
+    ]
+
+    for asset_id in BII_ASSETS:
+        try:
+            # Try as Image first
+            img = ee.Image(asset_id).select(0).rename("BII")
+            # Force evaluation to check if accessible
+            img.getInfo()
+            logger.info(f"BII loaded from: {asset_id}")
+            return img
+        except Exception:
+            try:
+                # Try as ImageCollection
+                img = (
+                    ee.ImageCollection(asset_id)
+                    .sort("system:time_start", False)
+                    .first()
+                    .select(0)
+                    .rename("BII")
+                )
+                img.getInfo()
+                logger.info(f"BII loaded from collection: {asset_id}")
+                return img
+            except Exception:
+                logger.debug(f"BII asset not accessible: {asset_id}")
+                continue
+
+    logger.warning(
+        "No BII asset accessible. To use BII, download NHM v2.1.1 from "
+        "https://data.nhm.ac.uk/dataset/bii-developed-by-nhm-v2-1-1-limited-release "
+        "and register as a local_raster indicator."
     )
+    return None
 
 
 def _build_eii_image(config: Config):
@@ -364,8 +406,8 @@ def _build_eii_image(config: Config):
     )
     structural = ee.Image.constant(1).subtract(structural).rename("structural")
 
-    # Compositional: BII
-    compositional = _build_bii_image(config).rename("compositional")
+    # Compositional: BII (may not be available)
+    bii_image = _build_bii_image(config)
 
     # Functional: Use MODIS NPP as proxy (simplified)
     # Full EII uses actual/potential NPP ratio; here we normalize MODIS NPP
@@ -379,8 +421,14 @@ def _build_eii_image(config: Config):
     # Normalize to 0-1 (rough: max global NPP ~2000 gC/m²/yr)
     functional = npp.divide(2.0).min(1.0).max(0.0).rename("functional")
 
-    # Fuzzy minimum: min(S, C, F) weighted down by other low values
-    stack = structural.addBands(compositional).addBands(functional)
+    # Fuzzy minimum: min(S, C, F) — or min(S, F) if BII unavailable
+    if bii_image is not None:
+        compositional = bii_image.rename("compositional")
+        stack = structural.addBands(compositional).addBands(functional)
+    else:
+        logger.warning("EII: BII unavailable, using structural + functional only")
+        stack = structural.addBands(functional)
+
     eii = stack.reduce(ee.Reducer.min()).rename("EII")
 
     return eii
