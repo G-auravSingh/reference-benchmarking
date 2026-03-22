@@ -33,6 +33,11 @@ class Config:
     ecoregion_source: str = "gee"  # "gee" or path to local shapefile
     ecoregion_gee_asset: str = "RESOLVE/ECOREGIONS/2017"
 
+    # BII GEE asset — upload NHM PREDICTS BII to your GEE project
+    # NHM v2.1.1: https://data.nhm.ac.uk/dataset/bii-developed-by-nhm-v2-1-1-limited-release
+    # Values stored as 0–100; pipeline divides by 100 automatically.
+    bii_gee_asset: Optional[str] = None  # e.g., "projects/gaurav-singh-007/assets/bii-2020_v2-1-1"
+
     # Tier 2 reference selection parameters
     reference_buffer_km: float = 100.0  # search radius for reference patches
     hmi_percentile_threshold: float = 5.0  # top N% least disturbed
