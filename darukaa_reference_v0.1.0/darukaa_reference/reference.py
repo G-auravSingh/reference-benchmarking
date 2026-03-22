@@ -230,8 +230,8 @@ class ReferenceSelector:
         else:
             # Use the extract_fn on the ecoregion geometry for a sample
             extraction = spec.extract_fn(eco_geometry, self.config)
-            if isinstance(extraction, dict) and "pixels" in extraction:
-                arr = np.array(extraction["pixels"])
+            if isinstance(extraction, dict) and "pixels" in extraction and extraction["pixels"] is not None:
+                arr = np.atleast_1d(extraction["pixels"])
                 return self._array_stats(arr)
             return {}
 
@@ -454,8 +454,15 @@ class ReferenceSelector:
     @staticmethod
     def _array_stats(arr: np.ndarray) -> Dict[str, Any]:
         """Compute standard statistics from a numpy array."""
+        # Handle 0-D arrays (scalars) and None values
+        if arr is None:
+            return {}
+        
+        arr = np.atleast_1d(arr)  # Ensure at least 1-D
+        
         if len(arr) == 0:
             return {}
+        
         return {
             "mean": float(np.nanmean(arr)),
             "median": float(np.nanmedian(arr)),
