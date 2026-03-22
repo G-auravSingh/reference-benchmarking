@@ -50,6 +50,21 @@ class IndicatorSpec:
     tier2_eligible: bool = True
     higher_is_better: bool = True  # True for state indicators (NDVI, BII, EII)
                                     # False for pressure indicators (gHM, LST, noise)
+    reference_radius_km: Optional[float] = None
+    # Per-indicator spatial scale for reference selection (km).
+    # If None, falls back to config.reference_buffer_km (default 100).
+    #
+    # Ecological rationale for scale selection:
+    #   1–5 km    : pollination, invertebrate dispersal
+    #   5–20 km   : seed dispersal, local habitat connectivity, acoustic landscapes
+    #   10–50 km  : bird/mammal corridors, landscape-scale habitat mosaics
+    #   50–100 km : regional vegetation, climate, hydrological processes
+    #   100–500 km: ecoregion-level composition, macroecological patterns
+    #
+    # Reference: Thornton, D.H. et al. (2011). The influence of landscape,
+    # patch, and within-patch factors on species presence and abundance: a
+    # review of focal patch studies. Landscape Ecology, 26, 7–18.
+    # DOI:10.1007/s10980-010-9549-z
     pillar: Optional[int] = None  # Darukaa pillar 1–4
     metadata: Dict[str, Any] = field(default_factory=dict)
 
