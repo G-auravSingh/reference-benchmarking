@@ -62,7 +62,7 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _build_ndvi_image},
     )
 
-    # 2. LST — MODIS
+    # 2. LST — MODIS (PRESSURE-like: lower LST = more canopy/evapotranspiration = healthier)
     registry.register(
         name="lst",
         display_name="Land Surface Temperature",
@@ -76,6 +76,7 @@ def create_default_registry() -> IndicatorRegistry:
         ),
         tier1_layer="MODIS/061/MOD11A2",
         tier2_eligible=True,
+        higher_is_better=False,  # Lower LST = more canopy = healthier ecosystem
         pillar=1,
         metadata={"gee_image_fn": _build_lst_image},
     )
@@ -157,7 +158,7 @@ def create_default_registry() -> IndicatorRegistry:
         pillar=1,
     )
 
-    # 7. gHM — Global Human Modification
+    # 7. gHM — Global Human Modification (PRESSURE indicator: lower = better)
     registry.register(
         name="ghm",
         display_name="Global Human Modification",
@@ -173,6 +174,7 @@ def create_default_registry() -> IndicatorRegistry:
         ),
         tier1_layer="CSP/HM/GlobalHumanModification",
         tier2_eligible=False,  # gHM is the selector, not a benchmarked indicator
+        higher_is_better=False,  # PRESSURE: lower human modification = better
         pillar=4,
         metadata={"gee_image_fn": _build_ghm_image},
     )
