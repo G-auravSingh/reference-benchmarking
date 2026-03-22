@@ -48,6 +48,8 @@ class IndicatorSpec:
     citation: str = ""
     tier1_layer: Optional[str] = None  # GEE asset or raster path
     tier2_eligible: bool = True
+    higher_is_better: bool = True  # True for state indicators (NDVI, BII, EII)
+                                    # False for pressure indicators (gHM, LST, noise)
     pillar: Optional[int] = None  # Darukaa pillar 1–4
     metadata: Dict[str, Any] = field(default_factory=dict)
 
