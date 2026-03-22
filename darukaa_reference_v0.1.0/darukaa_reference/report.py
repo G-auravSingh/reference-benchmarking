@@ -77,6 +77,8 @@ class ReportGenerator:
                 "display_name": spec.display_name if spec else comp.indicator_name,
                 "pillar": spec.pillar if spec else None,
                 "unit": spec.unit if spec else "",
+                "ref_radius_km": spec.reference_radius_km if spec else None,
+                "higher_is_better": spec.higher_is_better if spec else True,
                 "site_value": _safe_round(comp.site_value),
                 "tier1_reference": _safe_round(comp.tier1_reference),
                 "tier1_intactness": _safe_round(comp.tier1_intactness),
