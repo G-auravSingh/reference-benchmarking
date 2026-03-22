@@ -328,10 +328,16 @@ def _build_lst_image(config: Config):
 
 
 def _build_bii_image(config: Config):
-    """Get BII image from Impact Observatory GEE asset."""
+    """Get BII image. Impact Observatory asset is an ImageCollection."""
     import ee
 
-    return ee.Image("projects/ebx-data/assets/earthblox/IO/BIOINTACT").select(0).rename("BII")
+    return (
+        ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BIOINTACT")
+        .sort("system:time_start", False)
+        .first()
+        .select(0)
+        .rename("BII")
+    )
 
 
 def _build_eii_image(config: Config):
@@ -351,7 +357,11 @@ def _build_eii_image(config: Config):
     import ee
 
     # Structural: inverse of human modification
-    structural = ee.Image("CSP/HM/GlobalHumanModification").select("gHM")
+    structural = (
+        ee.ImageCollection("CSP/HM/GlobalHumanModification")
+        .first()
+        .select("gHM")
+    )
     structural = ee.Image.constant(1).subtract(structural).rename("structural")
 
     # Compositional: BII
@@ -377,10 +387,15 @@ def _build_eii_image(config: Config):
 
 
 def _build_ghm_image(config: Config):
-    """Get gHM image."""
+    """Get gHM image. CSP/HM/GlobalHumanModification is an ImageCollection."""
     import ee
 
-    return ee.Image("CSP/HM/GlobalHumanModification").select("gHM").rename("gHM")
+    return (
+        ee.ImageCollection("CSP/HM/GlobalHumanModification")
+        .first()
+        .select("gHM")
+        .rename("gHM")
+    )
 
 
 # ===========================================================================
