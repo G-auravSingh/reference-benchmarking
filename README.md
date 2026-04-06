@@ -2,7 +2,7 @@
 
 **An indicator-agnostic framework for comparing project-site biodiversity metrics against ecoregion-specific reference benchmarks.**
 
-Developed by Gaurav Singh, Scientific Lead — Biodiversity Methodology, Darukaa.Earth
+Developed by Gaurav Singh, Scientific Lead & Client Success Manager, Darukaa.Earth
 
 ---
 
