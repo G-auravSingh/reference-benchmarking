@@ -40,8 +40,15 @@ class Config:
 
     # Tier 2 reference selection parameters
     reference_buffer_km: float = 100.0  # search radius for reference patches
-    hmi_percentile_threshold: float = 5.0  # top N% least disturbed
-    min_reference_pixels: int = 20  # minimum pixels for valid reference
+    hmi_percentile_threshold: float = 5.0  # percentile of HMI distribution for threshold
+    hmi_hard_ceiling: float = 0.05  # SEED-adapted: absolute HMI ceiling for reference
+    # The dynamic threshold is min(P5(HMI), hmi_hard_ceiling).
+    # In pristine ecoregions, the 5th percentile will be very low (<0.01).
+    # In degraded ecoregions, the 5th percentile could be 0.3+.
+    # The ceiling ensures references are truly minimally disturbed.
+    # McElderry et al. (2024) use 0.05; adjustable per use case.
+    min_reference_pixels: int = 5  # SEED minimum: 5 pixels before fallback
+    # Previously 20; SEED uses 5 with biome-level fallback.
     landcover_gee_asset: str = "COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019"
     elevation_band_m: float = 300.0  # ±m elevation band for reference filtering
     # Filters reference pixels to within ±elevation_band_m of the site's
