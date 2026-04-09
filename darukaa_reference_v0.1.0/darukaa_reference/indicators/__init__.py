@@ -1,5 +1,5 @@
 """
-Pre-registered Indicators — v0.3.0
+Pre-registered Indicators — v0.4.0
 ====================================
 
 17 ex-situ biodiversity indicators across Darukaa's four pillars, each with
@@ -85,7 +85,9 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _build_lst_day_image},
     )
 
-    # ── 3. BII — PREDICTS / NHM ───────────────────────────────────────
+    # ── 3. BII — Biodiversity Intactness Index ───────────────────────────
+    #    Primary: Impact Observatory BII at 300m via Landbanking EII asset
+    #    Fallback: NHM PREDICTS BII at ~10km via user's GEE asset or local raster
     registry.register(
         name="bii",
         display_name="Biodiversity Intactness Index",
@@ -96,8 +98,8 @@ def create_default_registry() -> IndicatorRegistry:
         citation=(
             "Newbold, T. et al. (2016). Science, 353(6296), 288–291. "
             "DOI:10.1126/science.aaf2201. "
-            "PREDICTS: Hudson, L.N. et al. (2017). Ecol. Evol., 7(1), 145–188. "
-            "DOI:10.1002/ece3.2579"
+            "Primary: Impact Observatory BII at 300m via Landbanking EII asset. "
+            "Fallback: PREDICTS/NHM v2.1.1 at ~10km."
         ),
         tier1_layer=None,
         tier2_eligible=True,
@@ -128,6 +130,65 @@ def create_default_registry() -> IndicatorRegistry:
         reference_radius_km=75.0,
         pillar=1,
         metadata={"gee_image_fn": _build_eii_image},
+    )
+
+    # ── 4a. EII — Structural Integrity (component) ────────────────────
+    registry.register(
+        name="eii_structural",
+        display_name="EII: Structural Integrity",
+        source_type="gee",
+        extract_fn=extract_eii_structural,
+        unit="index",
+        value_range=(0.0, 1.0),
+        citation=(
+            "Hill et al. (2022). Quality-weighted core area approach. "
+            "300m erosion edge depth, HMI quality classes, 5km neighbourhood. "
+            "Kennedy et al. (2019). DOI:10.1111/gcb.14549"
+        ),
+        tier1_layer=None,
+        tier2_eligible=True,
+        reference_radius_km=75.0,
+        pillar=1,
+        metadata={"gee_image_fn": _build_eii_structural_image},
+    )
+
+    # ── 4b. EII — Compositional Integrity (component) ─────────────────
+    registry.register(
+        name="eii_compositional",
+        display_name="EII: Compositional Integrity",
+        source_type="gee",
+        extract_fn=extract_eii_compositional,
+        unit="index",
+        value_range=(0.0, 1.0),
+        citation=(
+            "Impact Observatory BII at 300m. Gassert et al. (2022). "
+            "Based on Newbold et al. (2016). DOI:10.1126/science.aaf2201"
+        ),
+        tier1_layer=None,
+        tier2_eligible=True,
+        reference_radius_km=75.0,
+        pillar=3,
+        metadata={"gee_image_fn": _build_eii_compositional_image},
+    )
+
+    # ── 4c. EII — Functional Integrity (component) ────────────────────
+    registry.register(
+        name="eii_functional",
+        display_name="EII: Functional Integrity",
+        source_type="gee",
+        extract_fn=extract_eii_functional,
+        unit="index",
+        value_range=(0.0, 1.0),
+        citation=(
+            "Actual vs potential NPP deviation. Potential NPP modelled from "
+            "climate + soil + topography. Hill et al. (2022). "
+            "Data: Copernicus Land Monitoring Service NPP + CHELSA."
+        ),
+        tier1_layer=None,
+        tier2_eligible=True,
+        reference_radius_km=75.0,
+        pillar=1,
+        metadata={"gee_image_fn": _build_eii_functional_image},
     )
 
     # ── 5. gHM — Global Human Modification ────────────────────────────
@@ -487,20 +548,39 @@ def _build_lst_day_image(config: Config):
 
 def extract_bii(geometry, config: Config) -> Dict[str, Any]:
     """
-    Extract BII. Priority: user's GEE asset > local raster > public assets.
-    NHM raster stores 0–100; pipeline divides by 100.
+    Extract BII.
+    Priority 1: Impact Observatory BII at 300m (via Landbanking EII component band)
+    Priority 2: User's GEE asset (PREDICTS NHM, ÷100)
+    Priority 3: Local PREDICTS raster
+    Priority 4: Public GEE assets
     """
+    import ee
+    # Priority 1: Landbanking compositional integrity band = IO BII at 300m
+    try:
+        io_bii = ee.Image(_EII_LANDLER_ASSET).select("compositional_integrity").rename("BII")
+        result = _reduce_image_at_site(io_bii, geometry, scale=300)
+        if result.get("value") is not None:
+            logger.info("BII: using Impact Observatory (300m) via Landbanking asset")
+            return result
+    except Exception:
+        pass
+
+    # Priority 2: User's own GEE asset (PREDICTS NHM)
+    image = _build_bii_image(config)
+    if image is not None:
+        result = _reduce_image_at_site(image, geometry, scale=1000)
+        if result.get("value") is not None:
+            return result
+
+    # Priority 3: Local raster
     raster_path = config.raster_paths.get("bii")
     if raster_path:
         try:
             return _extract_from_local_raster(raster_path, geometry, band=1, scale_factor=0.01)
         except Exception as e:
-            logger.warning(f"Local BII raster failed: {e}, trying GEE...")
-    import ee
-    image = _build_bii_image(config)
-    if image is None:
-        return {"value": None, "pixels": None}
-    return _reduce_image_at_site(image, geometry, scale=1000)
+            logger.warning(f"Local BII raster failed: {e}")
+
+    return {"value": None, "pixels": None}
 
 
 def _build_bii_image(config: Config):
@@ -656,6 +736,54 @@ def _build_eii_approx(config: Config):
     # when available, and simple min as fallback:
     eii = m.rename("EII")
     return eii
+
+
+# ── 4a/b/c. EII Components (from Landbanking asset) ──────────────────
+
+def extract_eii_structural(geometry, config: Config) -> Dict[str, Any]:
+    """Structural integrity from Landbanking EII asset (quality-weighted core area)."""
+    import ee
+    return _reduce_image_at_site(_build_eii_structural_image(config), geometry, scale=300)
+
+def _build_eii_structural_image(config: Config):
+    import ee
+    try:
+        return ee.Image(_EII_LANDLER_ASSET).select("structural_integrity").rename("EII_Structural")
+    except Exception:
+        # Fallback: simple 1 - gHM
+        logger.warning("EII structural: Landbanking asset unavailable, using 1-gHM fallback")
+        ghm = ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM")
+        return ee.Image.constant(1).subtract(ghm).rename("EII_Structural")
+
+def extract_eii_compositional(geometry, config: Config) -> Dict[str, Any]:
+    """Compositional integrity from Landbanking EII asset (Impact Observatory BII, 300m)."""
+    import ee
+    return _reduce_image_at_site(_build_eii_compositional_image(config), geometry, scale=300)
+
+def _build_eii_compositional_image(config: Config):
+    import ee
+    try:
+        return ee.Image(_EII_LANDLER_ASSET).select("compositional_integrity").rename("EII_Compositional")
+    except Exception:
+        logger.warning("EII compositional: Landbanking asset unavailable, using BII fallback")
+        bii = _build_bii_image(config)
+        return bii.rename("EII_Compositional") if bii else None
+
+def extract_eii_functional(geometry, config: Config) -> Dict[str, Any]:
+    """Functional integrity from Landbanking EII asset (actual/potential NPP deviation)."""
+    import ee
+    return _reduce_image_at_site(_build_eii_functional_image(config), geometry, scale=300)
+
+def _build_eii_functional_image(config: Config):
+    import ee
+    try:
+        return ee.Image(_EII_LANDLER_ASSET).select("functional_integrity").rename("EII_Functional")
+    except Exception:
+        logger.warning("EII functional: Landbanking asset unavailable, using MODIS NPP fallback")
+        npp = (ee.ImageCollection("MODIS/061/MOD17A3HGF")
+               .sort("system:time_start", False).first()
+               .select("Npp").multiply(0.0001))
+        return npp.divide(2.0).min(1.0).max(0.0).rename("EII_Functional")
 
 
 # ── 5. gHM ────────────────────────────────────────────────────────────
