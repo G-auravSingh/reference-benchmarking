@@ -218,7 +218,7 @@ def create_default_registry() -> IndicatorRegistry:
             "21st-Century Forest Cover Change. Science, 342(6160), 850–853. "
             "DOI:10.1126/science.1244693. Dataset v1.11 (2001–2023)."
         ),
-        tier1_layer="UMD/hansen/global_forest_change_2023_v1_11",
+        tier1_layer="UMD/hansen/global_forest_change_2024_v1_12",
         tier2_eligible=True,
         higher_is_better=False,
         reference_radius_km=50.0,
@@ -634,15 +634,22 @@ def _build_flii_image(config: Config):
     NOTE: This is an approximation, not the official Grantham et al. (2020) dataset.
     """
     import ee
-    year = config.ndvi_year
+    # Use latest available MODIS LC (may lag behind current year)
     modis = (ee.ImageCollection("MODIS/061/MCD12Q1")
-             .filterDate(f"{year}-01-01", f"{year}-12-31")
+             .sort("system:time_start", False)
              .first().select("LC_Type1"))
     forest = modis.gte(1).And(modis.lte(5))
 
+    year = config.ndvi_year
     night = (ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG")
              .filterDate(f"{year}-01-01", f"{year}-12-31")
-             .mean().select("avg_rad"))
+             .select("avg_rad"))
+    # If no VIIRS images for the year, fall back to latest year
+    night = ee.ImageCollection(
+        ee.Algorithms.If(night.size().gt(0), night,
+            ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG")
+            .sort("system:time_start", False).limit(12).select("avg_rad"))
+    ).mean()
     night_n = night.unitScale(0, 60).clamp(0, 1)
 
     connected = forest.focal_min(2)
@@ -668,7 +675,7 @@ def extract_forest_loss_rate(geometry, config: Config) -> Dict[str, Any]:
             geometry = shapely_transform(lambda x, y, z=None: (x, y), geometry)
         geometry = ee.Geometry(mapping(geometry))
 
-    gfc = ee.Image("UMD/hansen/global_forest_change_2023_v1_11").clip(geometry)
+    gfc = ee.Image("UMD/hansen/global_forest_change_2024_v1_12").clip(geometry)
     forest2000 = gfc.select("treecover2000").gte(30)
     loss = gfc.select("lossyear").gt(0)
     pixel_area = ee.Image.pixelArea()
@@ -692,7 +699,7 @@ def extract_forest_loss_rate(geometry, config: Config) -> Dict[str, Any]:
 def _build_forest_loss_image(config: Config):
     """Hansen loss year > 0 binary mask — for Tier reference computation."""
     import ee
-    gfc = ee.Image("UMD/hansen/global_forest_change_2023_v1_11")
+    gfc = ee.Image("UMD/hansen/global_forest_change_2024_v1_12")
     forest2000 = gfc.select("treecover2000").gte(30)
     loss = gfc.select("lossyear").gt(0)
     # Rate per pixel: loss / forest × 100 / 23
@@ -763,7 +770,10 @@ def _build_lst_night_image(config: Config):
 
 def extract_aridity(geometry, config: Config) -> Dict[str, Any]:
     import ee
-    return _reduce_image_at_site(_build_aridity_image(config), geometry, scale=5000)
+    image = _build_aridity_image(config)
+    if image is None:
+        return {"value": None, "pixels": None}
+    return _reduce_image_at_site(image, geometry, scale=5000)
 
 def _build_aridity_image(config: Config):
     """
@@ -771,16 +781,33 @@ def _build_aridity_image(config: Config):
     <0.03 Hyper-arid, 0.03–0.2 Arid, 0.2–0.5 Semi-arid,
     0.5–0.65 Sub-humid, >0.65 Humid.
     Sources: CHIRPS (precip) + TerraClimate (PET).
+    Uses previous complete year if current year data is incomplete.
     """
     import ee
     year = config.ndvi_year
-    precip = (ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY")
-              .filterDate(f"{year}-01-01", f"{year}-12-31")
-              .sum().rename("precipitation"))
-    pet = (ee.ImageCollection("IDAHO_EPSCOR/TERRACLIMATE")
-           .filterDate(f"{year}-01-01", f"{year}-12-31")
-           .select("pet").sum().rename("pet"))
-    return precip.divide(pet).rename("Aridity_Index")
+    # CHIRPS may not have full current year data — try requested year,
+    # fall back to previous year
+    for y in [year, year - 1]:
+        precip_col = (ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY")
+                      .filterDate(f"{y}-01-01", f"{y}-12-31"))
+        pet_col = (ee.ImageCollection("IDAHO_EPSCOR/TERRACLIMATE")
+                   .filterDate(f"{y}-01-01", f"{y}-12-31")
+                   .select("pet"))
+        # Check both have images (server-side count)
+        has_data = precip_col.size().gt(0).And(pet_col.size().gt(0))
+        try:
+            if has_data.getInfo():
+                precip = precip_col.sum().rename("precipitation")
+                pet = pet_col.sum().rename("pet")
+                # PET scale: TerraClimate stores PET in 0.1 mm units
+                pet = pet.multiply(0.1)
+                ai = precip.divide(pet.max(1))  # avoid division by zero
+                logger.info(f"  Aridity Index computed for year {y}")
+                return ai.rename("Aridity_Index")
+        except Exception:
+            continue
+    logger.warning("Aridity Index: no valid data found")
+    return None
 
 
 # ── 14. CERI — Composite Extinction-Risk Index ───────────────────────
@@ -788,7 +815,8 @@ def _build_aridity_image(config: Config):
 def extract_ceri(geometry, config: Config) -> Dict[str, Any]:
     """
     CERI = Σ(IUCN_weight) / (N × Wmax).
-    Uses Darukaa-hosted IUCN mammal range maps.
+    Uses IUCN mammal range maps. Asset path is configurable via
+    config or defaults to Darukaa's hosted dataset.
     Returns CERI (0–1) where lower = less extinction risk = better.
     """
     import ee
@@ -799,9 +827,11 @@ def extract_ceri(geometry, config: Config) -> Dict[str, Any]:
             geometry = shapely_transform(lambda x, y, z=None: (x, y), geometry)
         geometry = ee.Geometry(mapping(geometry))
 
-    spec = None
-    # Get asset path from registry metadata
-    asset = "projects/darukaa-earth130226/assets/RedList_Mammals_Terrestrial"
+    # Configurable asset path — check config.raster_paths or metadata
+    asset = config.raster_paths.get(
+        "iucn_mammals",
+        "projects/darukaa-earth130226/assets/RedList_Mammals_Terrestrial"
+    )
 
     try:
         species = ee.FeatureCollection(asset).filterBounds(geometry)
@@ -826,7 +856,11 @@ def extract_ceri(geometry, config: Config) -> Dict[str, Any]:
 
         return {"value": ceri.getInfo(), "pixels": None}
     except Exception as e:
-        logger.warning(f"CERI computation failed: {e}")
+        logger.warning(
+            f"CERI failed: {e}. "
+            f"Asset '{asset}' may not be accessible from your GEE project. "
+            f"Set config.raster_paths['iucn_mammals'] to your own asset path."
+        )
         return {"value": None, "pixels": None}
 
 
@@ -883,7 +917,11 @@ def extract_cpland(geometry, config: Config) -> Dict[str, Any]:
             geometry = shapely_transform(lambda x, y, z=None: (x, y), geometry)
         geometry = ee.Geometry(mapping(geometry))
 
-    pv_asset = "projects/darukaa-earth-product/assets/biodiversity_India_PV_Binary_2025_Full_Mosaic"
+    # Configurable PV binary asset path
+    pv_asset = config.raster_paths.get(
+        "pv_binary",
+        "projects/darukaa-earth-product/assets/biodiversity_India_PV_Binary_2025_Full_Mosaic"
+    )
     edge_m = 10.0
 
     try:
