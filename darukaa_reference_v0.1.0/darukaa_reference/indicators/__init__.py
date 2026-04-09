@@ -1,5 +1,5 @@
 """
-Pre-registered Indicators — v0.4.0
+Pre-registered Indicators — v0.5.0
 ====================================
 
 17 ex-situ biodiversity indicators across Darukaa's four pillars, each with
@@ -548,31 +548,20 @@ def _build_lst_day_image(config: Config):
 
 def extract_bii(geometry, config: Config) -> Dict[str, Any]:
     """
-    Extract BII.
-    Priority 1: Impact Observatory BII at 300m (via Landbanking EII component band)
-    Priority 2: User's GEE asset (PREDICTS NHM, ÷100)
-    Priority 3: Local PREDICTS raster
-    Priority 4: Public GEE assets
+    Extract BII. Uses _build_bii_image which returns:
+    Priority 1: Impact Observatory BII at 300m (via Landbanking asset)
+    Priority 2: User's NHM PREDICTS GEE asset
+    Priority 3: Public GEE assets
+    Priority 4 (local fallback): PREDICTS raster if GEE unavailable
     """
     import ee
-    # Priority 1: Landbanking compositional integrity band = IO BII at 300m
-    try:
-        io_bii = ee.Image(_EII_LANDLER_ASSET).select("compositional_integrity").rename("BII")
-        result = _reduce_image_at_site(io_bii, geometry, scale=300)
-        if result.get("value") is not None:
-            logger.info("BII: using Impact Observatory (300m) via Landbanking asset")
-            return result
-    except Exception:
-        pass
-
-    # Priority 2: User's own GEE asset (PREDICTS NHM)
     image = _build_bii_image(config)
     if image is not None:
-        result = _reduce_image_at_site(image, geometry, scale=1000)
+        result = _reduce_image_at_site(image, geometry, scale=300)
         if result.get("value") is not None:
             return result
 
-    # Priority 3: Local raster
+    # Final fallback: local raster
     raster_path = config.raster_paths.get("bii")
     if raster_path:
         try:
@@ -584,14 +573,39 @@ def extract_bii(geometry, config: Config) -> Dict[str, Any]:
 
 
 def _build_bii_image(config: Config):
-    """Load BII from user's GEE asset (÷100 for 0-1 scale) or public fallbacks."""
+    """
+    Build BII image for site extraction AND reference computation.
+
+    CRITICAL: This function is used by BOTH extract_bii (site value) and
+    the reference engine (_get_indicator_image → Tier 1/Tier 2). Both MUST
+    use the same data product, otherwise intactness ratios are meaningless
+    (comparing 300m IO BII at site against 10km PREDICTS at reference).
+
+    Priority order:
+    1. Landbanking compositional integrity band (Impact Observatory BII, 300m)
+       — Same source used inside EII. Consistent methodology.
+    2. User's own NHM PREDICTS GEE asset (÷100 scaling)
+    3. Public GEE BII assets (fallback)
+    """
     import ee
+
+    # Priority 1: Landbanking IO BII at 300m (matches site extraction)
+    try:
+        img = ee.Image(_EII_LANDLER_ASSET).select("compositional_integrity").rename("BII")
+        logger.info("BII image: using Landbanking IO BII (300m)")
+        return img
+    except Exception:
+        logger.debug("Landbanking BII not accessible, trying fallbacks...")
+
+    # Priority 2: User's NHM PREDICTS asset (÷100)
     user_asset = getattr(config, "bii_gee_asset", None)
     if user_asset:
         try:
             return ee.Image(user_asset).select(0).divide(100).rename("BII")
         except Exception:
             pass
+
+    # Priority 3: Public GEE assets
     for asset_id in [
         "projects/sat-io/open-datasets/BII/BII_2017",
         "projects/ebx-data/assets/earthblox/IO/BIOINTACT",
@@ -607,6 +621,7 @@ def _build_bii_image(config: Config):
                 return img
             except Exception:
                 continue
+
     logger.warning("No BII GEE asset accessible.")
     return None
 
