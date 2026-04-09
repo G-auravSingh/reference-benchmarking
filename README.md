@@ -39,15 +39,22 @@ The **intactness ratio** (site / reference for state indicators, reference / sit
 
 ### Reference Selection Methodology
 
-Our reference selection is **our own implementation**, inspired by and building on published frameworks:
+Our reference selection adapts the SEED biocomplexity framework's reference area algorithm (McElderry et al. 2024, Supplement S1.1) for indicator-specific benchmarking, with elevation stratification added.
 
-- **McNellie et al. (2020)** — The contemporary "best-on-offer" reference state concept: instead of comparing against a theoretical pristine baseline, compare against the best measurably intact habitat currently existing in the same landscape.
-- **Yen et al. (2019)** — Statistical benchmarking framework for biodiversity indicators in variable environments.
-- **Kennedy et al. (2019)** — Global Human Modification Index as the disturbance filter for identifying least-disturbed reference areas.
+**Adapted from SEED (McElderry et al. 2024):**
 
-The specific implementation choices — 5% HMI percentile threshold, land cover stratification (Copernicus LC), elevation stratification (SRTM ±300m), per-indicator buffer radii, and buffer-based spatial extent (rather than full ecoregion polygons) — are ours, informed by the ecological rationale in these papers but not a direct reproduction of any single published protocol. Buffer-based extent was a pragmatic choice to avoid GEE computation timeouts with complex ecoregion geometries.
+- **Dynamic HMI threshold with hard ceiling (Equation S1):** For each stratified zone, compute the 5th percentile of HMI. If P5 ≤ 0.05, use P5 as threshold. If P5 > 0.05 but P3 (3rd percentile) ≤ 0.05, use P3. If both exceed 0.05, cap at 0.05. This ensures references are truly minimally disturbed even in heavily degraded landscapes where the 5th percentile could be 0.3+.
+- **Minimum pixel fallback cascade:** If fewer than 5 reference pixels survive the threshold (SEED minimum), the pipeline progressively relaxes constraints: (1) drop land cover mask, keep elevation + buffer, (2) expand to full ecoregion geometry, (3) log a warning. This mirrors SEED's step-down from buffer to ecoregion to biome.
 
-This approach should be cited as "Darukaa.Earth reference benchmarking methodology, following the contemporary reference state framework of McNellie et al. (2020)" rather than attributed to any single external methodology.
+**Our additions beyond SEED:**
+
+- **Elevation stratification (±300m via SRTM DEM):** Not in SEED. Filters reference pixels to the same altitude band as the site, preventing ecologically incomparable mountain/valley pixels from contaminating the reference. Critical for sites in the Eastern Himalayas, Western Ghats, and Andes.
+- **Per-indicator spatial scale:** Each indicator uses an ecologically appropriate buffer radius (25–100 km), rather than SEED's full ecoregion extent. Pragmatic choice to avoid GEE computation timeouts with complex ecoregion geometries while maintaining ecological relevance.
+- **Indicator-specific benchmarking:** SEED computes a single biocomplexity score from 85 maps using a multivariate kernel estimator. Our pipeline benchmarks each indicator independently against its own reference, allowing indicator-by-indicator diagnosis.
+
+**Key difference from SEED:** SEED uses Potential Natural Vegetation (PNV) for land cover stratification; we use observed land cover (Copernicus LC). PNV represents what vegetation *should* be present; observed LC represents what *is* present. Our approach is more directly interpretable for indicator-specific benchmarking, but may include degraded land cover types in the stratification.
+
+**How to cite:** "Reference areas were selected following the contemporary minimal-disturbance approach, adapted from the SEED biocomplexity framework (McElderry et al. 2024, Supplement S1.1). Specifically, a dynamic HMI threshold (5th percentile, capped at 0.05 per SEED Equation S1) was applied within same land cover × elevation band strata. See McNellie et al. (2020) for the conceptual framework."
 
 ---
 
