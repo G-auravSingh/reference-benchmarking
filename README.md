@@ -34,7 +34,20 @@ The **intactness ratio** (site / reference for state indicators, reference / sit
 - **Directionality-aware:** Correct intactness formula for state vs pressure indicators.
 - **Per-indicator spatial scale:** 25–100 km buffers based on ecological process scale.
 - **Elevation stratification:** Prevents altitude-confounded reference selection.
-- **Landbanking Group EII integration:** Uses their authoritative pre-computed EII at 300m with full methodology (core area structural, IO BII compositional, potential NPP functional, fuzzy logic aggregation).
+- **Landbanking Group EII integration:** Uses their authoritative pre-computed EII at 300m with full methodology.
+- **Consistent data sources:** BII uses Impact Observatory 300m (via Landbanking) for both site extraction AND reference computation, preventing cross-product comparison artefacts.
+
+### Reference Selection Methodology
+
+Our reference selection is **our own implementation**, inspired by and building on published frameworks:
+
+- **McNellie et al. (2020)** — The contemporary "best-on-offer" reference state concept: instead of comparing against a theoretical pristine baseline, compare against the best measurably intact habitat currently existing in the same landscape.
+- **Yen et al. (2019)** — Statistical benchmarking framework for biodiversity indicators in variable environments.
+- **Kennedy et al. (2019)** — Global Human Modification Index as the disturbance filter for identifying least-disturbed reference areas.
+
+The specific implementation choices — 5% HMI percentile threshold, land cover stratification (Copernicus LC), elevation stratification (SRTM ±300m), per-indicator buffer radii, and buffer-based spatial extent (rather than full ecoregion polygons) — are ours, informed by the ecological rationale in these papers but not a direct reproduction of any single published protocol. Buffer-based extent was a pragmatic choice to avoid GEE computation timeouts with complex ecoregion geometries.
+
+This approach should be cited as "Darukaa.Earth reference benchmarking methodology, following the contemporary reference state framework of McNellie et al. (2020)" rather than attributed to any single external methodology.
 
 ---
 
@@ -59,6 +72,8 @@ The **intactness ratio** (site / reference for state indicators, reference / sit
 | Indicator | Source | Radius | Direction |
 |-----------|--------|--------|-----------|
 | `bii` — Biodiversity Intactness Index | Impact Observatory 300m (primary) / PREDICTS NHM (fallback) | 75 km | Higher=better |
+
+Note: BII uses the same Impact Observatory 300m product for both site extraction AND Tier 1/Tier 2 reference computation. This ensures intactness ratios are methodologically consistent — comparing like with like.
 | `ceri` — Composite Extinction-Risk Index | IUCN mammal ranges (Darukaa asset) | 100 km | Lower=better |
 
 ### Pillar 4 — Threats & Pressures (5 metrics)
