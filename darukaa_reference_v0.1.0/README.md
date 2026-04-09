@@ -54,7 +54,7 @@ Our reference selection adapts the SEED biocomplexity framework's reference area
 
 **Key difference from SEED:** SEED uses Potential Natural Vegetation (PNV) for land cover stratification; we use observed land cover (Copernicus LC). PNV represents what vegetation *should* be present; observed LC represents what *is* present. Our approach is more directly interpretable for indicator-specific benchmarking, but may include degraded land cover types in the stratification.
 
-**How to cite:** "Reference areas were selected following the contemporary minimal-disturbance approach, adapted from the SEED biocomplexity framework (McElderry et al. 2024, Supplement S1.1). Specifically, a dynamic HMI threshold (5th percentile, capped at 0.05 per SEED Equation S1) was applied within same land cover × elevation band strata. See McNellie et al. (2020) for the conceptual framework."
+**How to cite:** "Reference areas were selected following the contemporary minimal-disturbance approach, adapted from the SEED biocomplexity framework (McElderry et al. 2024, Supplement S1.1). Specifically, a dynamic HMI threshold (5th percentile, default 0.10, adapted from SEED's 0.05 for buffer-scale analysis) was applied within same land cover × elevation band strata. See McNellie et al. (2020) for the conceptual framework."
 
 ---
 
