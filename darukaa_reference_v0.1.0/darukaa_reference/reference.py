@@ -385,6 +385,7 @@ class ReferenceSelector:
 
         # Step 3: Build combined stratification mask
         ghm = ee.ImageCollection(self.GHM_ASSET).first().select("gHM")
+        ghm_raw = ghm  # Keep unmasked copy for fallbacks
         masks_applied = []
 
         # 3a: Land cover mask
