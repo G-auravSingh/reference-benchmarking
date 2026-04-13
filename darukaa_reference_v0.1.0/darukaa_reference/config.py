@@ -41,7 +41,7 @@ class Config:
     # Tier 2 reference selection parameters
     reference_buffer_km: float = 100.0  # search radius for reference patches
     hmi_percentile_threshold: float = 5.0  # percentile of HMI distribution for threshold
-    hmi_hard_ceiling: float = 0.05  # SEED-adapted: absolute HMI ceiling for reference
+    hmi_hard_ceiling: float = 0.10  # SEED-adapted: absolute HMI ceiling for reference #Chaned to 0.1 from 0.05
     # The dynamic threshold is min(P5(HMI), hmi_hard_ceiling).
     # In pristine ecoregions, the 5th percentile will be very low (<0.01).
     # In degraded ecoregions, the 5th percentile could be 0.3+.
