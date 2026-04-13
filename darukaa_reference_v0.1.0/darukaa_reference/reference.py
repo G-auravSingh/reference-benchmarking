@@ -319,35 +319,28 @@ class ReferenceSelector:
         self, spec: IndicatorSpec, site_geometry, eco_id: int
     ) -> Dict[str, Any]:
         """
-        Tier 2: Select the least-disturbed reference pixels using a
-        SEED-adapted dynamic threshold with three-way stratification.
+        Tier 2: Select the top 5% least-disturbed pixels within the
+        same land-cover class AND elevation band in a buffer around the site.
 
-        Adapted from McElderry et al. (2024) SEED biocomplexity framework
-        Supplement S1.1, with elevation stratification added:
-
+        Algorithm (following SEED framework, McElderry et al. 2024, extended
+        with elevation stratification):
         1. Buffer the site centroid by per-indicator reference_radius_km
         2. Get land cover class and elevation at site location
         3. Within the buffer, mask to pixels with:
            a) Same land cover class (Copernicus LC, 100m)
            b) Within ±elevation_band_m of site elevation (SRTM 30m)
-        4. Compute DYNAMIC HMI threshold (SEED Equation S1):
-           - P5 = 5th percentile, P3 = 3rd percentile of HMI in zone
-           - If P5 ≤ ceiling (0.05) → threshold = P5
-           - If P5 > ceiling but P3 ≤ ceiling → threshold = P3
-           - If both > ceiling → threshold = ceiling
-           This ensures truly minimal disturbance in reference areas.
-        5. Select pixels with HMI ≤ threshold
-        6. If fewer than min_reference_pixels (default 5, per SEED):
-           → Fallback 1: Drop land cover mask, keep elevation + buffer
-           → Fallback 2: Expand to full ecoregion geometry
-        7. Extract indicator statistics from reference pixels
+        4. Rank remaining pixels by HMI; select bottom hmi_percentile_threshold %
+        5. Extract indicator values from those reference pixels
+        6. Return statistics
 
-        References:
-            McElderry, R.M. et al. (2024). SEED framework. EcoEvoRxiv.
-                DOI:10.32942/X2689N. Supplement S1.1.
-            McNellie, M.J. et al. (2020). Contemporary reference states.
-                GCB, 26(12). DOI:10.1111/gcb.15383
-            Farr, T.G. et al. (2007). SRTM. DOI:10.1029/2005RG000183
+        Elevation stratification reference:
+            Farr, T.G. et al. (2007). The Shuttle Radar Topography Mission.
+            Reviews of Geophysics, 45, RG2004. DOI:10.1029/2005RG000183
+            GEE asset: USGS/SRTMGL1_003 (30m resolution)
+
+        This prevents ecologically incomparable high/low altitude pixels from
+        contaminating the reference distribution — critical in mountainous
+        regions like the Eastern Himalayas, Western Ghats, and Andes.
         """
         self._ensure_gee()
         import ee
@@ -390,73 +383,64 @@ class ReferenceSelector:
                 elev_value = v
                 break
 
-        # Step 3: Build stratification masks (kept separate for fallback)
-        ghm_raw = ee.ImageCollection(self.GHM_ASSET).first().select("gHM")
+        # Step 3: Build combined stratification mask
+        ghm = ee.ImageCollection(self.GHM_ASSET).first().select("gHM")
         masks_applied = []
 
-        lc_mask = None
+        # 3a: Land cover mask
         if lc_value is not None:
             lc_mask = lc.eq(ee.Number(lc_value))
+            ghm = ghm.updateMask(lc_mask)
             masks_applied.append(f"LC={lc_value}")
 
-        elev_mask = None
+        # 3b: Elevation mask (±elevation_band_m)
         if elev_value is not None:
             elev_band = self.config.elevation_band_m
             elev_min = elev_value - elev_band
             elev_max = elev_value + elev_band
             elev_mask = srtm.gte(ee.Number(elev_min)).And(srtm.lte(ee.Number(elev_max)))
+            ghm = ghm.updateMask(elev_mask)
             masks_applied.append(f"elev={elev_value:.0f}m±{elev_band:.0f}m")
         else:
             logger.warning("  Could not determine site elevation; skipping elevation filter")
 
-        # Apply all masks
-        ghm = ghm_raw
-        if lc_mask is not None:
-            ghm = ghm.updateMask(lc_mask)
-        if elev_mask is not None:
-            ghm = ghm.updateMask(elev_mask)
         ghm_in_zone = ghm.clip(reference_zone)
         logger.info(f"  Tier 2 stratification: {', '.join(masks_applied) or 'none'}")
 
         # Step 4: SEED-adapted dynamic HMI threshold
+        # P5 capped at ceiling (default 0.05 per McElderry et al. 2024 Eq. S1)
         hmi_ceiling = getattr(self.config, "hmi_hard_ceiling", 0.05)
+
+        # Get indicator image
         indicator_image = self._get_indicator_image(spec)
         if indicator_image is None:
             return {}
 
-        # Try primary zone (full stratification)
+        # Try primary zone first
         hmi_threshold = self._dynamic_hmi_threshold(ghm_in_zone, reference_zone, hmi_ceiling)
         if hmi_threshold is not None:
             result = self._extract_tier2_stats(
-                ghm_in_zone, hmi_threshold, indicator_image, reference_zone
-            )
+                ghm_in_zone, hmi_threshold, indicator_image, reference_zone)
             n_ref = result.get("n", 0)
             if n_ref >= self.config.min_reference_pixels:
-                logger.info(
-                    f"  Tier 2: {n_ref} ref pixels, HMI ≤ {hmi_threshold:.4f} "
-                    f"(ceiling={hmi_ceiling})"
-                )
+                logger.info(f"  Tier 2: {n_ref} ref pixels, HMI ≤ {hmi_threshold:.4f}")
                 return result
-            logger.info(f"  Tier 2: {n_ref} pixels < {self.config.min_reference_pixels}, "
-                        f"trying fallbacks...")
 
         # Fallback 1: Drop land cover, keep elevation + buffer
         if lc_value is not None:
-            logger.info("  Tier 2 fallback 1: dropping land cover mask...")
-            ghm_fb1 = ghm_raw
+            logger.info("  Tier 2 fallback 1: dropping LC mask...")
+            ghm_fb = ghm_raw
             if elev_mask is not None:
-                ghm_fb1 = ghm_fb1.updateMask(elev_mask)
-            ghm_fb1 = ghm_fb1.clip(reference_zone)
-            t_fb1 = self._dynamic_hmi_threshold(ghm_fb1, reference_zone, hmi_ceiling)
-            if t_fb1 is not None:
-                result = self._extract_tier2_stats(
-                    ghm_fb1, t_fb1, indicator_image, reference_zone
-                )
+                ghm_fb = ghm_fb.updateMask(elev_mask)
+            ghm_fb = ghm_fb.clip(reference_zone)
+            t = self._dynamic_hmi_threshold(ghm_fb, reference_zone, hmi_ceiling)
+            if t is not None:
+                result = self._extract_tier2_stats(ghm_fb, t, indicator_image, reference_zone)
                 if result.get("n", 0) >= self.config.min_reference_pixels:
-                    logger.info(f"  Tier 2 fallback 1: {result['n']} pixels (no LC mask)")
+                    logger.info(f"  Tier 2 fallback 1: {result['n']} pixels (no LC)")
                     return result
 
-        # Fallback 2: Progressive buffer widening (more reliable than ecoregion geometry)
+        # Fallback 2: Progressive buffer widening (more reliable than ecoregion)
         for multiplier in [2.0, 3.0, 4.0]:
             wider_km = radius_km * multiplier
             if wider_km > 200:
@@ -469,90 +453,58 @@ class ReferenceSelector:
             if lc_mask is not None:
                 ghm_wider = ghm_wider.updateMask(lc_mask)
             ghm_wider = ghm_wider.clip(wider_zone)
-            t_wider = self._dynamic_hmi_threshold(ghm_wider, wider_zone, hmi_ceiling)
-            if t_wider is not None:
+            t = self._dynamic_hmi_threshold(ghm_wider, wider_zone, hmi_ceiling)
+            if t is not None:
                 result = self._extract_tier2_stats(
-                    ghm_wider, t_wider, indicator_image, wider_zone
-                )
+                    ghm_wider, t, indicator_image, wider_zone)
                 if result.get("n", 0) >= self.config.min_reference_pixels:
                     logger.info(f"  Tier 2 fallback 2: {result['n']} pixels at {wider_km}km")
                     return result
 
-    def _dynamic_hmi_threshold(self, ghm_image, geometry, ceiling: float) -> float:
-        """
-        SEED Equation S1 — dynamic HMI threshold.
+        logger.warning(
+            f"Tier 2: insufficient reference pixels for {spec.name}. "
+            f"Buffer={radius_km}km, ceiling={hmi_ceiling}.")
+        return {}
 
-        For each zone, compute P5 and P3 of HMI:
-          If P5 ≤ ceiling → use P5 (restrictive, pristine ecoregion)
-          If P5 > ceiling but P3 ≤ ceiling → use P3 (step down)
-          If both > ceiling → use ceiling (degraded ecoregion, hard cap)
-
-        Returns threshold or None if computation fails.
-        """
+    def _dynamic_hmi_threshold(self, ghm_image, geometry, ceiling):
+        """SEED Eq. S1: P5 capped at ceiling, with P3 step-down."""
         import ee
         try:
             stats = ghm_image.reduceRegion(
                 reducer=ee.Reducer.percentile([3, 5]),
-                geometry=geometry,
-                scale=1000,
-                maxPixels=1e8,
-                bestEffort=True,
+                geometry=geometry, scale=1000, maxPixels=1e8, bestEffort=True
             ).getInfo()
         except Exception:
             return None
-
         if not stats:
             return None
-
-        # Parse P5 and P3 from GEE stats dict
         p5 = p3 = None
         for k, v in stats.items():
-            if v is None:
-                continue
+            if v is None: continue
             kl = k.lower()
-            if "p5" in kl or kl.endswith("_5"):
-                p5 = v
-            elif "p3" in kl or kl.endswith("_3"):
-                p3 = v
+            if "p5" in kl or kl.endswith("_5"): p5 = v
+            elif "p3" in kl or kl.endswith("_3"): p3 = v
+        if p5 is not None and p5 <= ceiling: return p5
+        if p3 is not None and p3 <= ceiling: return p3
+        if p5 is not None or p3 is not None: return ceiling
+        for v in stats.values():
+            if v is not None: return min(v, ceiling)
+        return None
 
-        # If both None, try any value
-        if p5 is None and p3 is None:
-            for v in stats.values():
-                if v is not None:
-                    return min(v, ceiling)
-            return None
-
-        # SEED decision tree
-        if p5 is not None and p5 <= ceiling:
-            return p5
-        if p3 is not None and p3 <= ceiling:
-            return p3
-        return ceiling
-
-    def _extract_tier2_stats(
-        self, ghm_in_zone, hmi_threshold, indicator_image, geometry
-    ) -> Dict[str, Any]:
+    def _extract_tier2_stats(self, ghm_zone, threshold, indicator_image, geometry):
         """Extract indicator stats from reference pixels (HMI ≤ threshold)."""
         import ee
-        ref_mask = ghm_in_zone.lte(ee.Number(hmi_threshold))
-        indicator_ref = indicator_image.updateMask(ref_mask).clip(geometry)
-
-        stats = indicator_ref.reduceRegion(
-            reducer=(
-                ee.Reducer.mean()
+        ref_mask = ghm_zone.lte(ee.Number(threshold))
+        ind_ref = indicator_image.updateMask(ref_mask).clip(geometry)
+        stats = ind_ref.reduceRegion(
+            reducer=(ee.Reducer.mean()
                 .combine(ee.Reducer.median(), sharedInputs=True)
                 .combine(ee.Reducer.stdDev(), sharedInputs=True)
                 .combine(ee.Reducer.percentile([25, 75, 90]), sharedInputs=True)
-                .combine(ee.Reducer.count(), sharedInputs=True)
-            ),
-            geometry=geometry,
-            scale=1000,
-            maxPixels=1e8,
-            bestEffort=True,
+                .combine(ee.Reducer.count(), sharedInputs=True)),
+            geometry=geometry, scale=1000, maxPixels=1e8, bestEffort=True
         ).getInfo()
-
         return self._parse_gee_stats(stats)
-
 
     # ------------------------------------------------------------------
     # Helpers
