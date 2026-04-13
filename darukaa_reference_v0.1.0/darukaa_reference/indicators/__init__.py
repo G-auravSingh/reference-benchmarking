@@ -139,7 +139,7 @@ def create_default_registry() -> IndicatorRegistry:
     r.register(name="flii", display_name="Forest Landscape Integrity Index", source_type="gee",
         extract_fn=extract_flii, unit="0–10", value_range=(0,10),
         citation="Approx MODIS LC(1-10)+VIIRS. Grantham et al. (2020). DOI:10.1038/s41467-020-19493-3",
-        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
+        tier2_eligible=True, reference_radius_km=150.0, pillar=2,
         metadata={"gee_image_fn": _img_flii, "tnfd_dim": 2})
 
     r.register(name="eii", display_name="Ecosystem Integrity Index", source_type="gee",
@@ -226,25 +226,25 @@ def create_default_registry() -> IndicatorRegistry:
     r.register(name="light_pollution", display_name="Light Pollution (VIIRS)", source_type="gee",
         extract_fn=extract_light_pollution, unit="nW/cm²/sr", value_range=(0,500),
         citation="Elvidge et al. (2017). DOI:10.1080/01431161.2017.1342050",
-        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_viirs, "tnfd_dim": "threats"})
 
     r.register(name="hdi", display_name="Human Disturbance Index", source_type="gee",
         extract_fn=extract_hdi, unit="index", value_range=(0,1),
         citation="ESA WorldCover v200. DOI:10.5281/zenodo.7254221",
-        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_hdi, "tnfd_dim": "threats"})
 
     r.register(name="lst_day", display_name="Daytime Surface Temperature", source_type="gee",
         extract_fn=extract_lst_day, unit="°C", value_range=(-40,70),
         citation="Wan et al. (2021). MOD11A1. DOI:10.5067/MODIS/MOD11A1.061",
-        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_lst_day, "tnfd_dim": "threats"})
 
     r.register(name="lst_night", display_name="Nighttime Surface Temperature", source_type="gee",
         extract_fn=extract_lst_night, unit="°C", value_range=(-40,50),
         citation="Wan et al. (2021). MOD11A1 Night. DOI:10.5067/MODIS/MOD11A1.061",
-        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_lst_night, "tnfd_dim": "threats"})
 
     return r
@@ -504,7 +504,7 @@ def extract_ceri(g,c):
                 cat=ee.String(f.get(cc))
                 w=ee.Number(ee.Algorithms.If(cat.compareTo("EX").eq(0),5,ee.Algorithms.If(cat.compareTo("EW").eq(0),5,ee.Algorithms.If(cat.compareTo("CR").eq(0),4,ee.Algorithms.If(cat.compareTo("EN").eq(0),3,ee.Algorithms.If(cat.compareTo("VU").eq(0),2,ee.Algorithms.If(cat.compareTo("NT").eq(0),1,ee.Algorithms.If(cat.compareTo("LC").eq(0),0,0))))))))
                 return f.set("weight",w)
-            wf=fc.filterBounds(eg).map(aw).distinct(nc)
+            wf=fc.filterBounds(eg).filter(ee.Filter.notNull([cc])).map(aw).distinct(nc)
             tn+=wf.size().getInfo(); tw+=wf.aggregate_sum("weight").getInfo()
         except Exception as e: logger.warning(f"CERI({asset}): {e}")
     if tn==0: return {"value":None,"pixels":None}
