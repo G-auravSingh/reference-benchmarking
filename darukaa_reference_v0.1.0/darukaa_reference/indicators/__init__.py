@@ -1,1303 +1,539 @@
 """
-Pre-registered Indicators — v0.5.0
-====================================
+darukaa_reference indicators — v6.0 (Aligned with State of Nature Module)
+=============================================================
 
-17 ex-situ biodiversity indicators across Darukaa's four pillars, each with
-extraction function, GEE/raster source, per-indicator reference radius,
-directionality flag, and peer-reviewed citation.
-
-EXISTING (updated):
-    1.  ndvi              — Vegetation Structure (SCL-masked Sentinel-2)
-    2.  lst_day           — Daytime Surface Temperature (MOD11A1 daily)
-    3.  bii               — Biodiversity Intactness Index (PREDICTS/NHM)
-    4.  eii               — Ecosystem Integrity Index (3-component)
-    5.  ghm               — Global Human Modification
-
-NEW:
-    6.  natural_habitat   — Natural Habitat Extent % (Dynamic World)
-    7.  natural_landcover — Natural Land Cover % (MODIS IGBP)
-    8.  flii              — Forest Landscape Integrity Index (approximation)
-    9.  forest_loss_rate  — Annual Habitat Loss Rate (Hansen GFC)
-    10. pdf               — Potentially Disappeared Fraction (ReCiPe CFs)
-    11. light_pollution   — VIIRS Nighttime Light Radiance
-    12. lst_night         — Nighttime Surface Temperature (MOD11A1)
-    13. aridity_index     — Aridity Index (CHIRPS / TerraClimate)
-    14. ceri              — Composite Extinction-Risk Index (IUCN)
-    15. habitat_health    — Habitat Health / Greenness Stability (P4)
-    16. cpland            — Core Percentage of Landscape (PV binary)
-    17. hdi               — Human Disturbance Index (WorldCover urban distance)
+29 ex-situ biodiversity indicators organized under the TNFD Annex 2
+measurement tree:
+    Dim 1 — Ecosystem Extent (5 metrics)
+    Dim 2 — Ecosystem Condition (10 metrics)
+    Dim 3 — Species Population Size (2 metrics)
+    Dim 4 — Species Extinction Risk (3 metrics)
+    Threats — Anthropogenic Pressures (5 metrics)
+    Composite — EII + components (4 metrics, within Dim 2)
 """
 
 from __future__ import annotations
-
-import logging
-import math
+import logging, math
 from typing import Any, Dict
-
 import numpy as np
-
 from darukaa_reference.config import Config
 from darukaa_reference.registry import IndicatorRegistry
 
 logger = logging.getLogger(__name__)
 
-
-def create_default_registry() -> IndicatorRegistry:
-    """Create an IndicatorRegistry with all 17 default indicators."""
-    registry = IndicatorRegistry()
-
-    # ── 1. NDVI — Sentinel-2 (SCL cloud mask) ─────────────────────────
-    registry.register(
-        name="ndvi",
-        display_name="Vegetation Structure (NDVI)",
-        source_type="gee",
-        extract_fn=extract_ndvi,
-        unit="index",
-        value_range=(-1.0, 1.0),
-        citation=(
-            "Sentinel-2 MSI Level-2A Surface Reflectance, SCL cloud masking. "
-            "Drusch, M. et al. (2012). RSE, 120, 25–36. DOI:10.1016/j.rse.2011.11.026"
-        ),
-        tier1_layer="COPERNICUS/S2_SR_HARMONIZED",
-        tier2_eligible=True,
-        reference_radius_km=50.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_ndvi_image},
-    )
-
-    # ── 2. LST Day — MODIS MOD11A1 daily ──────────────────────────────
-    registry.register(
-        name="lst_day",
-        display_name="Daytime Surface Temperature",
-        source_type="gee",
-        extract_fn=extract_lst_day,
-        unit="°C",
-        value_range=(-40.0, 70.0),
-        citation=(
-            "Wan, Z. et al. (2021). MOD11A1 v061 (daily 1km). "
-            "NASA EOSDIS LP DAAC. DOI:10.5067/MODIS/MOD11A1.061"
-        ),
-        tier1_layer="MODIS/061/MOD11A1",
-        tier2_eligible=True,
-        higher_is_better=False,
-        reference_radius_km=25.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_lst_day_image},
-    )
-
-    # ── 3. BII — Biodiversity Intactness Index ───────────────────────────
-    #    Primary: Impact Observatory BII at 300m via Landbanking EII asset
-    #    Fallback: NHM PREDICTS BII at ~10km via user's GEE asset or local raster
-    registry.register(
-        name="bii",
-        display_name="Biodiversity Intactness Index",
-        source_type="gee",
-        extract_fn=extract_bii,
-        unit="index",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Newbold, T. et al. (2016). Science, 353(6296), 288–291. "
-            "DOI:10.1126/science.aaf2201. "
-            "Primary: Impact Observatory BII at 300m via Landbanking EII asset. "
-            "Fallback: PREDICTS/NHM v2.1.1 at ~10km."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        reference_radius_km=75.0,
-        pillar=3,
-        metadata={"gee_image_fn": _build_bii_image},
-    )
-
-    # ── 4. EII — Ecosystem Integrity Index (Landbanking Group) ──────────
-    registry.register(
-        name="eii",
-        display_name="Ecosystem Integrity Index",
-        source_type="gee",
-        extract_fn=extract_eii,
-        unit="index",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Hill, S.L.L. et al. (2022). bioRxiv. DOI:10.1101/2022.08.21.504707. "
-            "Primary source: Landbanking Group pre-computed EII (300m). "
-            "Asset: projects/landler-open-data/assets/eii/global/eii_global_v1. "
-            "Methodology: quality-weighted core area (structural) + "
-            "Impact Observatory BII (compositional) + "
-            "actual/potential NPP deviation (functional), "
-            "aggregated via limiting-factor fuzzy logic."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        reference_radius_km=75.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_eii_image},
-    )
-
-    # ── 4a. EII — Structural Integrity (component) ────────────────────
-    registry.register(
-        name="eii_structural",
-        display_name="EII: Structural Integrity",
-        source_type="gee",
-        extract_fn=extract_eii_structural,
-        unit="index",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Hill et al. (2022). Quality-weighted core area approach. "
-            "300m erosion edge depth, HMI quality classes, 5km neighbourhood. "
-            "Kennedy et al. (2019). DOI:10.1111/gcb.14549"
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        reference_radius_km=75.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_eii_structural_image},
-    )
-
-    # ── 4b. EII — Compositional Integrity (component) ─────────────────
-    registry.register(
-        name="eii_compositional",
-        display_name="EII: Compositional Integrity",
-        source_type="gee",
-        extract_fn=extract_eii_compositional,
-        unit="index",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Impact Observatory BII at 300m. Gassert et al. (2022). "
-            "Based on Newbold et al. (2016). DOI:10.1126/science.aaf2201"
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        reference_radius_km=75.0,
-        pillar=3,
-        metadata={"gee_image_fn": _build_eii_compositional_image},
-    )
-
-    # ── 4c. EII — Functional Integrity (component) ────────────────────
-    registry.register(
-        name="eii_functional",
-        display_name="EII: Functional Integrity",
-        source_type="gee",
-        extract_fn=extract_eii_functional,
-        unit="index",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Actual vs potential NPP deviation. Potential NPP modelled from "
-            "climate + soil + topography. Hill et al. (2022). "
-            "Data: Copernicus Land Monitoring Service NPP + CHELSA."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        reference_radius_km=75.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_eii_functional_image},
-    )
-
-    # ── 5. gHM — Global Human Modification ────────────────────────────
-    registry.register(
-        name="ghm",
-        display_name="Global Human Modification",
-        source_type="gee",
-        extract_fn=extract_ghm,
-        unit="index",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Kennedy, C.M. et al. (2019). Global Change Biology, 25(3), 811–826. "
-            "DOI:10.1111/gcb.14549"
-        ),
-        tier1_layer="CSP/HM/GlobalHumanModification",
-        tier2_eligible=False,
-        higher_is_better=False,
-        reference_radius_km=50.0,
-        pillar=4,
-        metadata={"gee_image_fn": _build_ghm_image},
-    )
-
-    # ── 6. Natural Habitat Extent % (Dynamic World) ───────────────────
-    registry.register(
-        name="natural_habitat",
-        display_name="Natural Habitat Extent",
-        source_type="gee",
-        extract_fn=extract_natural_habitat,
-        unit="%",
-        value_range=(0.0, 100.0),
-        citation=(
-            "Brown, C.F. et al. (2022). Dynamic World, Near real-time global "
-            "10m land use land cover mapping. Scientific Data, 9, 251. "
-            "DOI:10.1038/s41597-022-01307-4"
-        ),
-        tier1_layer="GOOGLE/DYNAMICWORLD/V1",
-        tier2_eligible=True,
-        reference_radius_km=50.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_natural_habitat_image},
-    )
-
-    # ── 7. Natural Land Cover % (MODIS IGBP) ──────────────────────────
-    registry.register(
-        name="natural_landcover",
-        display_name="Natural Land Cover Proportion",
-        source_type="gee",
-        extract_fn=extract_natural_landcover,
-        unit="%",
-        value_range=(0.0, 100.0),
-        citation=(
-            "Friedl, M.A. et al. (2019). MCD12Q1 v061 MODIS/Terra+Aqua "
-            "Land Cover Type. NASA EOSDIS LP DAAC. DOI:10.5067/MODIS/MCD12Q1.061"
-        ),
-        tier1_layer="MODIS/061/MCD12Q1",
-        tier2_eligible=True,
-        reference_radius_km=50.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_natural_landcover_image},
-    )
-
-    # ── 8. FLII — Forest Landscape Integrity Index (approximation) ────
-    registry.register(
-        name="flii",
-        display_name="Forest Landscape Integrity Index",
-        source_type="gee",
-        extract_fn=extract_flii,
-        unit="index (0–10)",
-        value_range=(0.0, 10.0),
-        citation=(
-            "Grantham, H.S. et al. (2020). A modification-free proxy. "
-            "Original: Nature Communications, 11, 5978. DOI:10.1038/s41467-020-19493-3. "
-            "Note: This is a simplified approximation using MODIS LC + VIIRS, "
-            "not the official FLII dataset."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        reference_radius_km=75.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_flii_image},
-    )
-
-    # ── 9. Forest / Habitat Loss Rate (% per year) ────────────────────
-    registry.register(
-        name="forest_loss_rate",
-        display_name="Habitat Loss Rate",
-        source_type="gee",
-        extract_fn=extract_forest_loss_rate,
-        unit="% per year",
-        value_range=(0.0, 100.0),
-        citation=(
-            "Hansen, M.C. et al. (2013). High-Resolution Global Maps of "
-            "21st-Century Forest Cover Change. Science, 342(6160), 850–853. "
-            "DOI:10.1126/science.1244693. Dataset v1.11 (2001–2023)."
-        ),
-        tier1_layer="UMD/hansen/global_forest_change_2024_v1_12",
-        tier2_eligible=True,
-        higher_is_better=False,
-        reference_radius_km=50.0,
-        pillar=4,
-        metadata={"gee_image_fn": _build_forest_loss_image},
-    )
-
-    # ── 10. PDF — Potentially Disappeared Fraction ─────────────────────
-    registry.register(
-        name="pdf",
-        display_name="Potentially Disappeared Fraction",
-        source_type="gee",
-        extract_fn=extract_pdf,
-        unit="fraction",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Huijbregts, M.A.J. et al. (2017). ReCiPe2016: a harmonised "
-            "life cycle impact assessment method. Int J LCA, 22, 138–147. "
-            "DOI:10.1007/s11367-016-1246-y. "
-            "Land-use CFs applied to MODIS IGBP classification."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        higher_is_better=False,
-        reference_radius_km=50.0,
-        pillar=4,
-        metadata={"gee_image_fn": _build_pdf_image},
-    )
-
-    # ── 11. Light Pollution (VIIRS) ────────────────────────────────────
-    registry.register(
-        name="light_pollution",
-        display_name="Light Pollution (VIIRS)",
-        source_type="gee",
-        extract_fn=extract_light_pollution,
-        unit="nW/cm²/sr",
-        value_range=(0.0, 500.0),
-        citation=(
-            "Elvidge, C.D. et al. (2017). VIIRS night-time lights. "
-            "Int. J. Remote Sensing, 38(21), 5860–5879. "
-            "DOI:10.1080/01431161.2017.1342050"
-        ),
-        tier1_layer="NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG",
-        tier2_eligible=True,
-        higher_is_better=False,
-        reference_radius_km=25.0,
-        pillar=4,
-        metadata={"gee_image_fn": _build_viirs_image},
-    )
-
-    # ── 12. Nighttime LST — MODIS MOD11A1 Night ───────────────────────
-    registry.register(
-        name="lst_night",
-        display_name="Nighttime Surface Temperature",
-        source_type="gee",
-        extract_fn=extract_lst_night,
-        unit="°C",
-        value_range=(-40.0, 50.0),
-        citation=(
-            "Wan, Z. et al. (2021). MOD11A1 v061 Night LST. "
-            "NASA EOSDIS LP DAAC. DOI:10.5067/MODIS/MOD11A1.061"
-        ),
-        tier1_layer="MODIS/061/MOD11A1",
-        tier2_eligible=True,
-        higher_is_better=False,
-        reference_radius_km=25.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_lst_night_image},
-    )
-
-    # ── 13. Aridity Index ──────────────────────────────────────────────
-    registry.register(
-        name="aridity_index",
-        display_name="Aridity Index",
-        source_type="gee",
-        extract_fn=extract_aridity,
-        unit="P/PET ratio",
-        value_range=(0.0, 5.0),
-        citation=(
-            "Zomer, R.J. et al. (2022). Version 3 of the Global Aridity "
-            "Index and PET Database. Scientific Data, 9, 409. "
-            "DOI:10.1038/s41597-022-01493-1. "
-            "Computed from CHIRPS precipitation + TerraClimate PET."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        higher_is_better=True,  # Higher AI = more humid = generally more biodiverse
-        reference_radius_km=50.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_aridity_image},
-    )
-
-    # ── 14. CERI / Red List Index ──────────────────────────────────────
-    registry.register(
-        name="ceri",
-        display_name="Composite Extinction-Risk Index",
-        source_type="gee",
-        extract_fn=extract_ceri,
-        unit="index (0–1)",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Butchart, S.H.M. et al. (2007). Improvements to the Red List "
-            "Index. PLoS ONE, 2(1), e140. DOI:10.1371/journal.pone.0000140. "
-            "Uses IUCN terrestrial mammal range maps."
-        ),
-        tier1_layer=None,
-        tier2_eligible=False,  # Depends on species ranges, not pixel-level
-        higher_is_better=False,  # Lower CERI = lower extinction risk = better
-        reference_radius_km=100.0,
-        pillar=3,
-        metadata={
-            "species_asset": "projects/darukaa-earth130226/assets/RedList_Mammals_Terrestrial",
-            "note": "Uses Darukaa-hosted IUCN mammal range maps. "
-                    "May need asset path update for different GEE projects."
-        },
-    )
-
-    # ── 15. Habitat Health / Greenness Stability (P4) ──────────────────
-    registry.register(
-        name="habitat_health",
-        display_name="Habitat Health Index (HHI)",
-        source_type="gee",
-        extract_fn=extract_habitat_health,
-        unit="ratio (z5/σ)",
-        value_range=(0.0, 50.0),
-        citation=(
-            "Darukaa.Earth methodology: Greenness stability = mean(z5/σ) "
-            "where z5 = 5th percentile NDVI over time, σ = std dev. "
-            "Higher values indicate more stable, resilient vegetation. "
-            "Based on Sentinel-2 NDVI time series with SCL cloud masking."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        reference_radius_km=50.0,
-        pillar=1,
-        metadata={"gee_image_fn": _build_habitat_health_image},
-    )
-
-    # ── 16. CPLAND — Core Percentage of Landscape ──────────────────────
-    registry.register(
-        name="cpland",
-        display_name="Landscape Connectivity (CPLAND)",
-        source_type="gee",
-        extract_fn=extract_cpland,
-        unit="%",
-        value_range=(0.0, 100.0),
-        citation=(
-            "McGarigal, K. & Marks, B.J. (1995). FRAGSTATS. USDA Forest Service. "
-            "Computed from Darukaa PV binary raster (10m). "
-            "CPLAND = core natural area / total area × 100."
-        ),
-        tier1_layer=None,
-        tier2_eligible=False,  # Uses project-specific PV binary
-        reference_radius_km=30.0,
-        pillar=1,
-        metadata={
-            "pv_asset": "projects/darukaa-earth-product/assets/biodiversity_India_PV_Binary_2025_Full_Mosaic",
-            "edge_m": 10.0,
-            "note": "India-specific PV binary asset. Update asset path for other regions."
-        },
-    )
-
-    # ── 17. HDI — Human Disturbance Index ──────────────────────────────
-    registry.register(
-        name="hdi",
-        display_name="Human Disturbance Index",
-        source_type="gee",
-        extract_fn=extract_hdi,
-        unit="index (0–1)",
-        value_range=(0.0, 1.0),
-        citation=(
-            "Zanaga, D. et al. (2022). ESA WorldCover 10m v200. "
-            "DOI:10.5281/zenodo.7254221. "
-            "HDI = 1 − (min_distance_to_urban / max_dist), "
-            "computed from urban class in ESA WorldCover."
-        ),
-        tier1_layer=None,
-        tier2_eligible=True,
-        higher_is_better=False,
-        reference_radius_km=25.0,
-        pillar=4,
-        metadata={"gee_image_fn": _build_hdi_image},
-    )
-
-    return registry
+_EII_ASSET = "projects/landler-open-data/assets/eii/global/eii_global_v1"
+_MAMMALS = "projects/gaurav-singh-007/assets/RedList_Mammals_Terrestrial"
+_BIRDS = "projects/gaurav-singh-007/assets/RedList_Bird_IUCN_Category"
+_KBA = "projects/gaurav-singh-007/assets/KBA_Global_POL_SEP25"
+_PV = "projects/ee-jayankandir/assets/biodiversity_India_PV_Binary_2025_Full_Mosaic"
+_MSA = "projects/ee-jayankandir/assets/TerrestrialMSA_2015_World"
 
 
-# =========================================================================
-# Extraction functions — (geometry, config) → {"value": float, "pixels": ...}
-# =========================================================================
+# ── Helpers ───────────────────────────────────────────────────────────
 
-
-# ── 1. NDVI (SCL-masked) ─────────────────────────────────────────────
-
-def extract_ndvi(geometry, config: Config) -> Dict[str, Any]:
-    """Extract median annual NDVI from Sentinel-2 with SCL cloud masking."""
+def _to_ee(geometry):
     import ee
-    image = _build_ndvi_image(config)
-    return _reduce_image_at_site(image, geometry, scale=10)
+    if isinstance(geometry, ee.Geometry): return geometry
+    from shapely.geometry import mapping
+    from shapely.ops import transform as st
+    if hasattr(geometry, "has_z") and geometry.has_z:
+        geometry = st(lambda x, y, z=None: (x, y), geometry)
+    return ee.Geometry(mapping(geometry))
 
-
-def _build_ndvi_image(config: Config):
-    """
-    Build annual median NDVI from Sentinel-2 using Scene Classification
-    Layer (SCL) for cloud masking — more accurate than QA60 bitmask.
-
-    SCL classes kept: 2 (dark area), 4 (vegetation), 5 (bare soil),
-    6 (water), 7 (cloud low prob). Excludes clouds, snow, shadow.
-
-    Switch from QA60 rationale: SCL uses a neural network classifier
-    trained on S2 data and is demonstrably better at distinguishing
-    clouds from bright surfaces (Main-Knorn et al. 2017).
-    """
+def _reduce(image, geometry, scale=100):
     import ee
-    year = config.ndvi_year
-
-    def mask_scl(img):
-        scl = img.select('SCL')
-        good = scl.eq(2).Or(scl.eq(4)).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
-        return img.updateMask(good).divide(10000)
-
-    s2 = (
-        ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-        .filterDate(f"{year}-01-01", f"{year}-12-31")
-        .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", config.ndvi_cloud_threshold))
-        .map(mask_scl)
-    )
-    return s2.map(
-        lambda img: img.normalizedDifference(["B8", "B4"]).rename("NDVI")
-    ).median().select("NDVI")
-
-
-# ── 2. LST Day (MOD11A1 daily) ───────────────────────────────────────
-
-def extract_lst_day(geometry, config: Config) -> Dict[str, Any]:
-    """Extract mean annual daytime LST from MODIS MOD11A1 (daily, 1km)."""
-    import ee
-    image = _build_lst_day_image(config)
-    return _reduce_image_at_site(image, geometry, scale=1000)
-
-
-def _build_lst_day_image(config: Config):
-    """
-    Mean annual daytime LST from MOD11A1 (daily) instead of MOD11A2 (8-day).
-    Daily composites provide finer temporal control and fewer aggregation artifacts.
-    Conversion: raw × 0.02 − 273.15 = °C.
-    """
-    import ee
-    year = config.lst_year
-    return (
-        ee.ImageCollection("MODIS/061/MOD11A1")
-        .filterDate(f"{year}-01-01", f"{year}-12-31")
-        .select("LST_Day_1km")
-        .mean()
-        .multiply(0.02).subtract(273.15)
-        .rename("LST_Day")
-    )
-
-
-# ── 3. BII (PREDICTS / NHM via GEE asset) ────────────────────────────
-
-def extract_bii(geometry, config: Config) -> Dict[str, Any]:
-    """
-    Extract BII. Uses _build_bii_image which returns:
-    Priority 1: Impact Observatory BII at 300m (via Landbanking asset)
-    Priority 2: User's NHM PREDICTS GEE asset
-    Priority 3: Public GEE assets
-    Priority 4 (local fallback): PREDICTS raster if GEE unavailable
-    """
-    import ee
-    image = _build_bii_image(config)
-    if image is not None:
-        result = _reduce_image_at_site(image, geometry, scale=300)
-        if result.get("value") is not None:
-            return result
-
-    # Final fallback: local raster
-    raster_path = config.raster_paths.get("bii")
-    if raster_path:
-        try:
-            return _extract_from_local_raster(raster_path, geometry, band=1, scale_factor=0.01)
-        except Exception as e:
-            logger.warning(f"Local BII raster failed: {e}")
-
-    return {"value": None, "pixels": None}
-
-
-def _build_bii_image(config: Config):
-    """
-    Build BII image for site extraction AND reference computation.
-
-    CRITICAL: This function is used by BOTH extract_bii (site value) and
-    the reference engine (_get_indicator_image → Tier 1/Tier 2). Both MUST
-    use the same data product, otherwise intactness ratios are meaningless
-    (comparing 300m IO BII at site against 10km PREDICTS at reference).
-
-    Priority order:
-    1. Landbanking compositional integrity band (Impact Observatory BII, 300m)
-       — Same source used inside EII. Consistent methodology.
-    2. User's own NHM PREDICTS GEE asset (÷100 scaling)
-    3. Public GEE BII assets (fallback)
-    """
-    import ee
-
-    # Priority 1: Landbanking IO BII at 300m (matches site extraction)
-    try:
-        img = ee.Image(_EII_LANDLER_ASSET).select("compositional_integrity").rename("BII")
-        logger.info("BII image: using Landbanking IO BII (300m)")
-        return img
-    except Exception:
-        logger.debug("Landbanking BII not accessible, trying fallbacks...")
-
-    # Priority 2: User's NHM PREDICTS asset (÷100)
-    user_asset = getattr(config, "bii_gee_asset", None)
-    if user_asset:
-        try:
-            return ee.Image(user_asset).select(0).divide(100).rename("BII")
-        except Exception:
-            pass
-
-    # Priority 3: Public GEE assets
-    for asset_id in [
-        "projects/sat-io/open-datasets/BII/BII_2017",
-        "projects/ebx-data/assets/earthblox/IO/BIOINTACT",
-    ]:
-        try:
-            img = ee.Image(asset_id).select(0).rename("BII")
-            img.getInfo()
-            return img
-        except Exception:
-            try:
-                img = ee.ImageCollection(asset_id).first().select(0).rename("BII")
-                img.getInfo()
-                return img
-            except Exception:
-                continue
-
-    logger.warning("No BII GEE asset accessible.")
-    return None
-
-
-# ── 4. EII (3-component fuzzy minimum) ───────────────────────────────
-
-def extract_eii(geometry, config: Config) -> Dict[str, Any]:
-    """
-    Extract Ecosystem Integrity Index.
-    Priority 1: Landbanking Group's pre-computed EII (300m, GEE asset).
-    Priority 2: Our simplified approximation as fallback.
-    """
-    import ee
-    image = _build_eii_image(config)
-    if image is None:
-        return {"value": None, "pixels": None}
-    return _reduce_image_at_site(image, geometry, scale=300)
-
-
-# Landbanking Group EII GEE asset — open data, 300m resolution
-_EII_LANDLER_ASSET = "projects/landler-open-data/assets/eii/global/eii_global_v1"
-
-
-def _build_eii_image(config: Config):
-    """
-    Build EII image.
-
-    Priority 1: Landbanking Group pre-computed EII at 300m (v1).
-    This is the authoritative source — uses all three components computed
-    with their full methodology:
-      - Structural: quality-weighted core area (300m erosion, HMI quality
-        classes, 5km neighbourhood aggregation). Kennedy et al. 2019.
-      - Compositional: Impact Observatory BII at 300m. Newbold et al. 2016.
-      - Functional: actual/potential NPP deviation with seasonality.
-        Potential NPP modelled from climate + soil + topography predictors.
-      - Aggregation: M × FuzzySum(other two) — limiting factor with
-        multi-pillar penalty. Hill et al. 2022.
-
-    Priority 2: Simplified approximation using our BII asset.
-    Falls back if the Landbanking asset is inaccessible.
-    Note: Our approximation differs from the Landbanking approach:
-      - Structural uses simple 1−gHM (no core area / fragmentation)
-      - Compositional uses PREDICTS BII at ~10km (not IO BII at 300m)
-      - Functional uses normalised MODIS NPP (not deviation from potential)
-      - Aggregation uses simple min (not fuzzy logic multi-pillar penalty)
-
-    Reference:
-        Hill, S.L.L. et al. (2022). The Ecosystem Integrity Index.
-        bioRxiv. DOI:10.1101/2022.08.21.504707
-        Open data: projects/landler-open-data/assets/eii/global/eii_global_v1
-        Code: github.com/landler-io/ecosystem-integrity-index
-    """
-    import ee
-
-    # Priority 1: Landbanking Group open-data asset
-    try:
-        eii = ee.Image(_EII_LANDLER_ASSET).select("eii").rename("EII")
-        # Verify accessibility (lazy eval — only fails on getInfo/reduce)
-        logger.info(f"EII: using Landbanking Group asset ({_EII_LANDLER_ASSET})")
-        return eii
-    except Exception as e:
-        logger.warning(f"Landbanking EII asset not accessible: {e}")
-
-    # Priority 2: Our simplified approximation
-    logger.warning(
-        "EII: falling back to simplified approximation. "
-        "Results will differ from the Landbanking methodology — "
-        "see documentation for details."
-    )
-    return _build_eii_approx(config)
-
-
-def _build_eii_approx(config: Config):
-    """
-    Simplified EII approximation (fallback only).
-    Uses fuzzy logic aggregation matching Landbanking's formula:
-    EII = M × FuzzySum(A, B)
-    where M = min(S, C, F) and A, B are the other two components.
-    """
-    import ee
-
-    # Structural: 1 − gHM (simplified — no core area)
-    structural = ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM")
-    structural = ee.Image.constant(1).subtract(structural).rename("structural")
-
-    # Functional: normalised MODIS NPP (simplified — not deviation from potential)
-    npp = (ee.ImageCollection("MODIS/061/MOD17A3HGF")
-           .sort("system:time_start", False).first()
-           .select("Npp").multiply(0.0001))
-    functional = npp.divide(2.0).min(1.0).max(0.0).rename("functional")
-
-    # Compositional: BII
-    bii_image = _build_bii_image(config)
-    if bii_image is not None:
-        compositional = bii_image.rename("compositional")
-    else:
-        logger.warning("EII approx: BII unavailable, using structural + functional only")
-        # Without BII, use simple min of two components
-        return structural.min(functional).rename("EII")
-
-    # Fuzzy logic aggregation (Landbanking formula):
-    # EII = M × FuzzySum(A, B)
-    # FuzzySum(A, B) = A + B - A*B
-    # Where M = min(S, C, F), and A, B are the other two
-    #
-    # Implementation: compute per-pixel
-    s = structural
-    c = compositional
-    f = functional
-
-    # Min of all three
-    m = s.min(c).min(f)
-
-    # For each pixel, we need the other two (not the min).
-    # Approximation: use the mean of all three as the fuzzy modulator.
-    # This is simpler than pixel-wise sorting but directionally correct.
-    fuzzy_sum = s.add(c).add(f).subtract(
-        s.multiply(c).multiply(f)
-    )  # Generalised fuzzy union of three: a+b+c - ab - ac - bc + abc
-    # But the Landbanking formula is M × FuzzySum(other two).
-    # We can compute: sort and take 2nd and 3rd, then FuzzySum.
-
-    # Simpler correct approach: EII = min × (A+B - A*B) where A,B are not-min
-    # Since we can't easily sort per-pixel, use the identity:
-    # Product of all three fuzzy sums = good enough approximation
-    # Actually, let's just use their pre-computed asset band directly
-    # when available, and simple min as fallback:
-    eii = m.rename("EII")
-    return eii
-
-
-# ── 4a/b/c. EII Components (from Landbanking asset) ──────────────────
-
-def extract_eii_structural(geometry, config: Config) -> Dict[str, Any]:
-    """Structural integrity from Landbanking EII asset (quality-weighted core area)."""
-    import ee
-    return _reduce_image_at_site(_build_eii_structural_image(config), geometry, scale=300)
-
-def _build_eii_structural_image(config: Config):
-    import ee
-    try:
-        return ee.Image(_EII_LANDLER_ASSET).select("structural_integrity").rename("EII_Structural")
-    except Exception:
-        # Fallback: simple 1 - gHM
-        logger.warning("EII structural: Landbanking asset unavailable, using 1-gHM fallback")
-        ghm = ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM")
-        return ee.Image.constant(1).subtract(ghm).rename("EII_Structural")
-
-def extract_eii_compositional(geometry, config: Config) -> Dict[str, Any]:
-    """Compositional integrity from Landbanking EII asset (Impact Observatory BII, 300m)."""
-    import ee
-    return _reduce_image_at_site(_build_eii_compositional_image(config), geometry, scale=300)
-
-def _build_eii_compositional_image(config: Config):
-    import ee
-    try:
-        return ee.Image(_EII_LANDLER_ASSET).select("compositional_integrity").rename("EII_Compositional")
-    except Exception:
-        logger.warning("EII compositional: Landbanking asset unavailable, using BII fallback")
-        bii = _build_bii_image(config)
-        return bii.rename("EII_Compositional") if bii else None
-
-def extract_eii_functional(geometry, config: Config) -> Dict[str, Any]:
-    """Functional integrity from Landbanking EII asset (actual/potential NPP deviation)."""
-    import ee
-    return _reduce_image_at_site(_build_eii_functional_image(config), geometry, scale=300)
-
-def _build_eii_functional_image(config: Config):
-    import ee
-    try:
-        return ee.Image(_EII_LANDLER_ASSET).select("functional_integrity").rename("EII_Functional")
-    except Exception:
-        logger.warning("EII functional: Landbanking asset unavailable, using MODIS NPP fallback")
-        npp = (ee.ImageCollection("MODIS/061/MOD17A3HGF")
-               .sort("system:time_start", False).first()
-               .select("Npp").multiply(0.0001))
-        return npp.divide(2.0).min(1.0).max(0.0).rename("EII_Functional")
-
-
-# ── 5. gHM ────────────────────────────────────────────────────────────
-
-def extract_ghm(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    return _reduce_image_at_site(_build_ghm_image(config), geometry, scale=1000)
-
-def _build_ghm_image(config: Config):
-    import ee
-    return ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM").rename("gHM")
-
-
-# ── 6. Natural Habitat Extent (Dynamic World) ────────────────────────
-
-def extract_natural_habitat(geometry, config: Config) -> Dict[str, Any]:
-    """Percentage of site under natural/semi-natural cover (Dynamic World)."""
-    import ee
-    image = _build_natural_habitat_image(config)
-    return _reduce_image_at_site(image, geometry, scale=10)
-
-def _build_natural_habitat_image(config: Config):
-    """
-    Dynamic World modal land cover, reclassified to natural (1) vs non-natural (0).
-    Natural classes: 1 Trees, 2 Grass, 3 Flooded vegetation, 5 Shrub & scrub.
-    Returns fractional image (0–1); multiply by 100 for percentage.
-    """
-    import ee
-    year = config.ndvi_year
-    dw = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
-          .filterDate(f"{year}-01-01", f"{year}-12-31")
-          .select("label").mode())
-    natural = dw.remap([1, 2, 3, 5], [1, 1, 1, 1], 0).rename("natural_habitat")
-    # Return as percentage using mean over polygon
-    return natural.multiply(100)
-
-
-# ── 7. Natural Land Cover (MODIS IGBP) ───────────────────────────────
-
-def extract_natural_landcover(geometry, config: Config) -> Dict[str, Any]:
-    """Percentage of site under IGBP natural classes (1–11)."""
-    import ee
-    image = _build_natural_landcover_image(config)
-    return _reduce_image_at_site(image, geometry, scale=500)
-
-def _build_natural_landcover_image(config: Config):
-    """
-    MODIS MCD12Q1 IGBP classification. Natural = classes 1–11
-    (forests, shrublands, savannas, grasslands, wetlands).
-    """
-    import ee
-    lc = (ee.ImageCollection("MODIS/061/MCD12Q1")
-          .sort("system:time_start", False).first()
-          .select("LC_Type1"))
-    natural_classes = list(range(1, 12))
-    natural = lc.remap(natural_classes, [1]*len(natural_classes), 0)
-    return natural.multiply(100).rename("natural_landcover")
-
-
-# ── 8. FLII (approximation) ──────────────────────────────────────────
-
-def extract_flii(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    image = _build_flii_image(config)
-    if image is None:
-        return {"value": None, "pixels": None}
-    return _reduce_image_at_site(image, geometry, scale=500)
-
-def _build_flii_image(config: Config):
-    """
-    Simplified FLII proxy: 10 − (nightlight_pressure + fragmentation_pressure) × 10.
-    Masked to forest pixels only (MODIS IGBP classes 1–5).
-    NOTE: This is an approximation, not the official Grantham et al. (2020) dataset.
-    """
-    import ee
-    # Use latest available MODIS LC (may lag behind current year)
-    modis = (ee.ImageCollection("MODIS/061/MCD12Q1")
-             .sort("system:time_start", False)
-             .first().select("LC_Type1"))
-    forest = modis.gte(1).And(modis.lte(10))  # IGBP 1-10: forests + shrublands + savannas + grasslands
-
-    year = config.ndvi_year
-    night = (ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG")
-             .filterDate(f"{year}-01-01", f"{year}-12-31")
-             .select("avg_rad"))
-    # If no VIIRS images for the year, fall back to latest year
-    night = ee.ImageCollection(
-        ee.Algorithms.If(night.size().gt(0), night,
-            ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG")
-            .sort("system:time_start", False).limit(12).select("avg_rad"))
-    ).mean()
-    night_n = night.unitScale(0, 60).clamp(0, 1)
-
-    connected = forest.focal_min(2)
-    frag = forest.subtract(connected).selfMask().unmask(0).unitScale(0, 1)
-
-    pressure = night_n.add(frag).unitScale(0, 2).clamp(0, 1)
-    flii = ee.Image(10).subtract(pressure.multiply(10)).updateMask(forest).rename("FLII")
-    return flii
-
-
-# ── 9. Forest / Habitat Loss Rate ────────────────────────────────────
-
-def extract_forest_loss_rate(geometry, config: Config) -> Dict[str, Any]:
-    """
-    Annual habitat loss rate (% per year) from Hansen GFC 2001–2023.
-    Returns: loss_area / forest_area_2000 / 23_years × 100.
-    """
-    import ee
-    if not isinstance(geometry, ee.Geometry):
-        from shapely.geometry import mapping
-        from shapely.ops import transform as shapely_transform
-        if hasattr(geometry, "has_z") and geometry.has_z:
-            geometry = shapely_transform(lambda x, y, z=None: (x, y), geometry)
-        geometry = ee.Geometry(mapping(geometry))
-
-    gfc = ee.Image("UMD/hansen/global_forest_change_2024_v1_12").clip(geometry)
-    forest2000 = gfc.select("treecover2000").gte(30)
-    loss = gfc.select("lossyear").gt(0)
-    pixel_area = ee.Image.pixelArea()
-
-    area2000 = pixel_area.updateMask(forest2000).reduceRegion(
-        reducer=ee.Reducer.sum(), geometry=geometry, scale=30, maxPixels=1e13
-    )
-    loss_area = pixel_area.updateMask(loss).reduceRegion(
-        reducer=ee.Reducer.sum(), geometry=geometry, scale=30, maxPixels=1e13
-    )
-
-    a2000 = ee.Number(area2000.get("area"))
-    a_loss = ee.Number(loss_area.get("area"))
-    rate = a_loss.divide(a2000).multiply(100).divide(23)
-
-    try:
-        return {"value": rate.getInfo(), "pixels": None}
-    except Exception:
-        return {"value": None, "pixels": None}
-
-def _build_forest_loss_image(config: Config):
-    """Hansen loss year > 0 binary mask — for Tier reference computation."""
-    import ee
-    gfc = ee.Image("UMD/hansen/global_forest_change_2024_v1_12")
-    forest2000 = gfc.select("treecover2000").gte(30)
-    loss = gfc.select("lossyear").gt(0)
-    # Rate per pixel: loss / forest × 100 / 23
-    rate = loss.divide(forest2000.max(1)).multiply(100).divide(23)
-    return rate.updateMask(forest2000).rename("forest_loss_rate")
-
-
-# ── 10. PDF — Potentially Disappeared Fraction ───────────────────────
-
-def extract_pdf(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    image = _build_pdf_image(config)
-    return _reduce_image_at_site(image, geometry, scale=500)
-
-def _build_pdf_image(config: Config):
-    """
-    PDF using ReCiPe-based characterization factors applied to MODIS IGBP.
-    CFs: croplands=0.30, urban=0.50, grasslands=0.05, shrubs=0.20, forest≤5=0.10.
-    """
-    import ee
-    lc = (ee.ImageCollection("MODIS/061/MCD12Q1")
-          .sort("system:time_start", False).first()
-          .select("LC_Type1"))
-    cf = lc.expression(
-        "b('LC_Type1') == 12 ? 0.30"
-        ": b('LC_Type1') == 13 ? 0.50"
-        ": b('LC_Type1') == 10 ? 0.05"
-        ": b('LC_Type1') == 7 ? 0.20"
-        ": b('LC_Type1') <= 5 ? 0.10"
-        ": 0"
-    ).rename("PDF")
-    return cf.updateMask(cf)
-
-
-# ── 11. Light Pollution (VIIRS) ───────────────────────────────────────
-
-def extract_light_pollution(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    return _reduce_image_at_site(_build_viirs_image(config), geometry, scale=500)
-
-def _build_viirs_image(config: Config):
-    """Annual mean nighttime radiance from VIIRS DNB Monthly."""
-    import ee
-    year = config.ndvi_year
-    return (ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG")
-            .filterDate(f"{year}-01-01", f"{year}-12-31")
-            .select("avg_rad").mean().rename("light_pollution"))
-
-
-# ── 12. Nighttime LST ────────────────────────────────────────────────
-
-def extract_lst_night(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    return _reduce_image_at_site(_build_lst_night_image(config), geometry, scale=1000)
-
-def _build_lst_night_image(config: Config):
-    """Mean annual nighttime LST from MOD11A1 (daily). °C conversion."""
-    import ee
-    year = config.lst_year
-    return (ee.ImageCollection("MODIS/061/MOD11A1")
-            .filterDate(f"{year}-01-01", f"{year}-12-31")
-            .select("LST_Night_1km").mean()
-            .multiply(0.02).subtract(273.15)
-            .rename("LST_Night"))
-
-
-# ── 13. Aridity Index ────────────────────────────────────────────────
-
-def extract_aridity(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    image = _build_aridity_image(config)
-    if image is None:
-        return {"value": None, "pixels": None}
-    return _reduce_image_at_site(image, geometry, scale=5000)
-
-def _build_aridity_image(config: Config):
-    """
-    Aridity Index = Annual Precipitation / Annual PET.
-    <0.03 Hyper-arid, 0.03–0.2 Arid, 0.2–0.5 Semi-arid,
-    0.5–0.65 Sub-humid, >0.65 Humid.
-    Sources: CHIRPS (precip) + TerraClimate (PET).
-    Uses previous complete year if current year data is incomplete.
-    """
-    import ee
-    year = config.ndvi_year
-    # CHIRPS may not have full current year data — try requested year,
-    # fall back to previous year
-    for y in [year, year - 1]:
-        precip_col = (ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY")
-                      .filterDate(f"{y}-01-01", f"{y}-12-31"))
-        pet_col = (ee.ImageCollection("IDAHO_EPSCOR/TERRACLIMATE")
-                   .filterDate(f"{y}-01-01", f"{y}-12-31")
-                   .select("pet"))
-        # Check both have images (server-side count)
-        has_data = precip_col.size().gt(0).And(pet_col.size().gt(0))
-        try:
-            if has_data.getInfo():
-                precip = precip_col.sum().rename("precipitation")
-                pet = pet_col.sum().rename("pet")
-                # PET scale: TerraClimate stores PET in 0.1 mm units
-                pet = pet.multiply(0.1)
-                ai = precip.divide(pet.max(1))  # avoid division by zero
-                logger.info(f"  Aridity Index computed for year {y}")
-                return ai.rename("Aridity_Index")
-        except Exception:
-            continue
-    logger.warning("Aridity Index: no valid data found")
-    return None
-
-
-# ── 14. CERI — Composite Extinction-Risk Index ───────────────────────
-
-def extract_ceri(geometry, config: Config) -> Dict[str, Any]:
-    """
-    CERI = Σ(IUCN_weight) / (N × Wmax).
-    Uses IUCN mammal range maps. Asset path is configurable via
-    config or defaults to Darukaa's hosted dataset.
-    Returns CERI (0–1) where lower = less extinction risk = better.
-    """
-    import ee
-    if not isinstance(geometry, ee.Geometry):
-        from shapely.geometry import mapping
-        from shapely.ops import transform as shapely_transform
-        if hasattr(geometry, "has_z") and geometry.has_z:
-            geometry = shapely_transform(lambda x, y, z=None: (x, y), geometry)
-        geometry = ee.Geometry(mapping(geometry))
-
-    # Configurable asset path — check config.raster_paths or metadata
-    asset = config.raster_paths.get(
-        "iucn_mammals",
-        "projects/darukaa-earth130226/assets/RedList_Mammals_Terrestrial"
-    )
-
-    try:
-        species = ee.FeatureCollection(asset).filterBounds(geometry)
-
-        def add_weight(f):
-            cat = ee.String(f.get("category"))
-            weight = ee.Number(
-                ee.Algorithms.If(cat.compareTo("EX").eq(0), 5,
-                ee.Algorithms.If(cat.compareTo("EW").eq(0), 5,
-                ee.Algorithms.If(cat.compareTo("CR").eq(0), 4,
-                ee.Algorithms.If(cat.compareTo("EN").eq(0), 3,
-                ee.Algorithms.If(cat.compareTo("VU").eq(0), 2,
-                ee.Algorithms.If(cat.compareTo("NT").eq(0), 1,
-                ee.Algorithms.If(cat.compareTo("LC").eq(0), 0, 0)))))))
-            )
-            return f.set("weight", weight)
-
-        weighted = species.map(add_weight).distinct("sci_name")
-        n = weighted.size()
-        sum_w = weighted.aggregate_sum("weight")
-        ceri = ee.Number(sum_w).divide(ee.Number(n).multiply(5))
-
-        return {"value": ceri.getInfo(), "pixels": None}
-    except Exception as e:
-        logger.warning(
-            f"CERI failed: {e}. "
-            f"Asset '{asset}' may not be accessible from your GEE project. "
-            f"Set config.raster_paths['iucn_mammals'] to your own asset path."
-        )
-        return {"value": None, "pixels": None}
-
-
-# ── 15. Habitat Health (P4 / Greenness Stability) ────────────────────
-
-def extract_habitat_health(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    image = _build_habitat_health_image(config)
-    if image is None:
-        return {"value": None, "pixels": None}
-    return _reduce_image_at_site(image, geometry, scale=10)
-
-def _build_habitat_health_image(config: Config):
-    """
-    P4 = mean(z5 / σ) where z5 = 5th percentile NDVI over time,
-    σ = standard deviation. Higher = more stable greenness = healthier.
-    Uses SCL-masked Sentinel-2 NDVI time series.
-    """
-    import ee
-    year = config.ndvi_year
-
-    def mask_scl(img):
-        scl = img.select("SCL")
-        good = scl.eq(2).Or(scl.eq(4)).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
-        return img.updateMask(good).divide(10000)
-
-    ic = (ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-          .filterDate(f"{year}-01-01", f"{year}-12-31")
-          .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", config.ndvi_cloud_threshold))
-          .map(mask_scl)
-          .map(lambda img: img.normalizedDifference(["B8", "B4"]).rename("NDVI")))
-
-    z5 = ic.reduce(ee.Reducer.percentile([5])).rename("NDVI_p5")
-    sigma = ic.reduce(ee.Reducer.stdDev()).rename("NDVI_stdDev")
-    count = ic.count().rename("count")
-
-    valid = count.gte(6).And(sigma.neq(0))
-    p4 = z5.divide(sigma).updateMask(valid).rename("HHI")
-    return p4
-
-
-# ── 16. CPLAND ────────────────────────────────────────────────────────
-
-def extract_cpland(geometry, config: Config) -> Dict[str, Any]:
-    """
-    CPLAND = core natural area / total area × 100.
-    Uses Darukaa PV binary raster with 10m edge erosion.
-    """
-    import ee
-    if not isinstance(geometry, ee.Geometry):
-        from shapely.geometry import mapping
-        from shapely.ops import transform as shapely_transform
-        if hasattr(geometry, "has_z") and geometry.has_z:
-            geometry = shapely_transform(lambda x, y, z=None: (x, y), geometry)
-        geometry = ee.Geometry(mapping(geometry))
-
-    # Configurable PV binary asset path
-    pv_asset = config.raster_paths.get(
-        "pv_binary",
-        "projects/darukaa-earth-product/assets/biodiversity_India_PV_Binary_2025_Full_Mosaic"
-    )
-    edge_m = 10.0
-
-    try:
-        img = ee.Image(pv_asset).select(0)
-        proj = img.projection()
-        scale_m = proj.nominalScale().getInfo()
-        if scale_m <= 0:
-            return {"value": None, "pixels": None}
-
-        threshold_m = edge_m + 0.5 * scale_m
-        radius_pixels = int(math.ceil(threshold_m / scale_m))
-
-        bin_img = img.eq(1).unmask(0).rename("pv_bin")
-        kernel = ee.Kernel.circle(radius_pixels, units="pixels")
-        eroded = bin_img.reduceNeighborhood(
-            reducer=ee.Reducer.min(), kernel=kernel
-        ).rename("core")
-
-        core_area = eroded.multiply(ee.Image.pixelArea()).reduceRegion(
-            reducer=ee.Reducer.sum(), geometry=geometry,
-            scale=scale_m, maxPixels=1e13
-        )
-        project_area = float(geometry.area().getInfo())
-        if project_area == 0:
-            return {"value": None, "pixels": None}
-
-        core_val = float(ee.Number(core_area.get("core")).getInfo())
-        cpland = max(0.0, min(100.0, 100.0 * core_val / project_area))
-        return {"value": cpland, "pixels": None}
-    except Exception as e:
-        logger.warning(f"CPLAND failed: {e}")
-        return {"value": None, "pixels": None}
-
-
-# ── 17. HDI — Human Disturbance Index ─────────────────────────────────
-
-def extract_hdi(geometry, config: Config) -> Dict[str, Any]:
-    import ee
-    image = _build_hdi_image(config)
-    if image is None:
-        return {"value": None, "pixels": None}
-    return _reduce_image_at_site(image, geometry, scale=10)
-
-def _build_hdi_image(config: Config):
-    """
-    HDI = 1 − (distance_to_urban / max_distance).
-    Urban class 50 from ESA WorldCover v200.
-    Distance computed via fastDistanceTransform at 10m resolution.
-    max_distance capped at 1500m.
-    """
-    import ee
-    wc = ee.Image("ESA/WorldCover/v200/2021").select("Map")
-    urban = wc.eq(50).selfMask()
-
-    dist = (urban
-            .fastDistanceTransform(300, "pixels", "squared_euclidean")
-            .sqrt().multiply(10)  # pixels → metres at 10m resolution
-            .rename("dist_m"))
-
-    # HDI: 1 = near urban, 0 = far from urban. Clamp at 1500m.
-    hdi = ee.Image.constant(1).subtract(
-        dist.divide(1500).min(1.0)
-    ).rename("HDI")
-    return hdi
-
-
-# =========================================================================
-# Helpers
-# =========================================================================
-
-def _reduce_image_at_site(image, geometry, scale: int = 100) -> Dict[str, Any]:
-    """Extract mean value of a GEE image within a geometry."""
-    import ee
-    if not isinstance(geometry, ee.Geometry):
-        from shapely.geometry import mapping
-        from shapely.ops import transform as shapely_transform
-        if hasattr(geometry, "has_z") and geometry.has_z:
-            geometry = shapely_transform(lambda x, y, z=None: (x, y), geometry)
-        geojson = mapping(geometry)
-        geometry = ee.Geometry(geojson)
-
+    g = _to_ee(geometry)
     stats = image.reduceRegion(
         reducer=ee.Reducer.mean().combine(ee.Reducer.median(), sharedInputs=True),
-        geometry=geometry, scale=scale, maxPixels=1e8, bestEffort=True,
-    ).getInfo()
+        geometry=g, scale=scale, maxPixels=1e8, bestEffort=True).getInfo()
+    v = None
+    for k, val in (stats or {}).items():
+        if "mean" in k.lower() and val is not None: v = val; break
+    if v is None:
+        for val in (stats or {}).values():
+            if val is not None: v = val; break
+    return {"value": v, "pixels": None}
 
-    value = None
-    for k, v in (stats or {}).items():
-        if "mean" in k.lower() and v is not None:
-            value = v
-            break
-    if value is None:
-        for v in (stats or {}).values():
-            if v is not None:
-                value = v
-                break
-    return {"value": value, "pixels": None}
-
-
-def _extract_from_local_raster(
-    raster_path: str, geometry, band: int = 1, scale_factor: float = 1.0
-) -> Dict[str, Any]:
-    """
-    Extract values from a local GeoTIFF. Falls back to centroid sampling
-    for coarse-resolution rasters where the site is smaller than ~4 pixels.
-    """
+def _local_raster(path, geometry, band=1, sf=1.0):
     import rasterio
     from rasterio.mask import mask as rio_mask
     from shapely.geometry import mapping
-
-    with rasterio.open(raster_path) as src:
+    with rasterio.open(path) as src:
         pw, ph = abs(src.transform[0]), abs(src.transform[4])
         if geometry.area < pw * ph * 4:
-            centroid = geometry.centroid
-            row, col = src.index(centroid.x, centroid.y)
-            if 0 <= row < src.height and 0 <= col < src.width:
-                val = float(src.read(band)[row, col])
-                if not np.isfinite(val):
-                    return {"value": None, "pixels": None}
-                if src.nodata is not None and not np.isnan(src.nodata) and val == src.nodata:
-                    return {"value": None, "pixels": None}
-                val *= scale_factor
-                return {"value": val, "pixels": np.array([val])}
+            c = geometry.centroid; r, col = src.index(c.x, c.y)
+            if 0 <= r < src.height and 0 <= col < src.width:
+                val = float(src.read(band)[r, col])
+                if not np.isfinite(val): return {"value": None, "pixels": None}
+                return {"value": val * sf, "pixels": np.array([val * sf])}
             return {"value": None, "pixels": None}
-
-        geom_json = [mapping(geometry)]
         try:
-            out_image, _ = rio_mask(src, geom_json, crop=True, nodata=src.nodata)
-            arr = out_image[band - 1].flatten()
-            arr = arr[np.isfinite(arr)]
-            if src.nodata is not None and not np.isnan(src.nodata):
-                arr = arr[arr != src.nodata]
-            if len(arr) == 0:
-                return {"value": None, "pixels": None}
-            arr = arr * scale_factor
-            return {"value": float(np.nanmean(arr)), "pixels": arr}
+            out, _ = rio_mask(src, [mapping(geometry)], crop=True, nodata=src.nodata)
+            arr = out[band-1].flatten(); arr = arr[np.isfinite(arr)]
+            if src.nodata is not None and not np.isnan(src.nodata): arr = arr[arr != src.nodata]
+            if len(arr) == 0: return {"value": None, "pixels": None}
+            return {"value": float(np.nanmean(arr * sf)), "pixels": arr * sf}
         except Exception as e:
-            logger.warning(f"Raster extraction failed: {e}")
-            return {"value": None, "pixels": None}
+            logger.warning(f"Raster extract failed: {e}"); return {"value": None, "pixels": None}
+
+def _load_fc(asset, config=None):
+    import ee
+    if config and hasattr(config, 'raster_paths'):
+        overrides = {_MAMMALS: "iucn_mammals", _BIRDS: "iucn_birds", _KBA: "kba_global"}
+        key = overrides.get(asset)
+        if key and config.raster_paths.get(key): asset = config.raster_paths[key]
+    try: return ee.FeatureCollection(asset)
+    except Exception as e:
+        logger.warning(f"Cannot load {asset}: {e}"); return None
+
+
+# ── Registry ──────────────────────────────────────────────────────────
+
+def create_default_registry() -> IndicatorRegistry:
+    r = IndicatorRegistry()
+
+    # ═══ DIM 1 — ECOSYSTEM EXTENT ═══
+    r.register(name="natural_habitat", display_name="Natural Habitat Extent", source_type="gee",
+        extract_fn=extract_natural_habitat, unit="%", value_range=(0,100),
+        citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4",
+        tier2_eligible=True, reference_radius_km=50.0, pillar=1,
+        metadata={"gee_image_fn": _img_natural_habitat, "tnfd_dim": 1})
+
+    r.register(name="natural_landcover", display_name="Natural Land Cover Proportion", source_type="gee",
+        extract_fn=extract_natural_landcover, unit="%", value_range=(0,100),
+        citation="Friedl et al. (2019). MCD12Q1. DOI:10.5067/MODIS/MCD12Q1.061",
+        tier2_eligible=True, reference_radius_km=50.0, pillar=1,
+        metadata={"gee_image_fn": _img_natural_landcover, "tnfd_dim": 1})
+
+    r.register(name="cpland", display_name="Landscape Connectivity (CPLAND)", source_type="gee",
+        extract_fn=extract_cpland, unit="%", value_range=(0,100),
+        citation="McGarigal & Marks (1995). Darukaa PV binary.",
+        tier2_eligible=False, reference_radius_km=30.0, pillar=1,
+        metadata={"tnfd_dim": 1, "note": "India-only PV binary asset"})
+
+    r.register(name="forest_loss_rate", display_name="Habitat Loss Rate", source_type="gee",
+        extract_fn=extract_forest_loss_rate, unit="% per year", value_range=(0,100),
+        citation="Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.12.",
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=1,
+        metadata={"gee_image_fn": _img_forest_loss, "tnfd_dim": 1})
+
+    r.register(name="kba_overlap", display_name="KBA/IBA Overlap", source_type="gee",
+        extract_fn=extract_kba_overlap, unit="%", value_range=(0,100),
+        citation="IUCN (2022). KBA Standards. DOI:10.2305/IUCN.CH.2022.24.en",
+        tier2_eligible=False, reference_radius_km=50.0, pillar=1,
+        metadata={"tnfd_dim": 1, "note": "Requires KBA asset"})
+
+    # ═══ DIM 2 — ECOSYSTEM CONDITION ═══
+    r.register(name="ndvi", display_name="Vegetation Structure (NDVI)", source_type="gee",
+        extract_fn=extract_ndvi, unit="index", value_range=(-1,1),
+        citation="Sentinel-2 SCL. Drusch et al. (2012). DOI:10.1016/j.rse.2011.11.026",
+        tier2_eligible=True, reference_radius_km=50.0, pillar=2,
+        metadata={"gee_image_fn": _img_ndvi, "tnfd_dim": 2})
+
+    r.register(name="habitat_health", display_name="Habitat Health Index (HHI)", source_type="gee",
+        extract_fn=extract_habitat_health, unit="z5/σ", value_range=(0,50),
+        citation="Darukaa greenness stability = mean(z5/σ) from S2 NDVI.",
+        tier2_eligible=True, reference_radius_km=50.0, pillar=2,
+        metadata={"gee_image_fn": _img_hhi, "tnfd_dim": 2})
+
+    r.register(name="flii", display_name="Forest Landscape Integrity Index", source_type="gee",
+        extract_fn=extract_flii, unit="0–10", value_range=(0,10),
+        citation="Approx MODIS LC(1-10)+VIIRS. Grantham et al. (2020). DOI:10.1038/s41467-020-19493-3",
+        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
+        metadata={"gee_image_fn": _img_flii, "tnfd_dim": 2})
+
+    r.register(name="eii", display_name="Ecosystem Integrity Index", source_type="gee",
+        extract_fn=extract_eii, unit="index", value_range=(0,1),
+        citation="Hill et al. (2022). bioRxiv. DOI:10.1101/2022.08.21.504707. Landbanking 300m.",
+        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
+        metadata={"gee_image_fn": _img_eii, "tnfd_dim": 2})
+
+    r.register(name="eii_structural", display_name="EII: Structural Integrity", source_type="gee",
+        extract_fn=extract_eii_s, unit="index", value_range=(0,1),
+        citation="Hill et al. (2022). Core area. Kennedy et al. (2019). DOI:10.1111/gcb.14549",
+        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
+        metadata={"gee_image_fn": _img_eii_s, "tnfd_dim": 2})
+
+    r.register(name="eii_compositional", display_name="EII: Compositional Integrity", source_type="gee",
+        extract_fn=extract_eii_c, unit="index", value_range=(0,1),
+        citation="IO BII 300m. Newbold et al. (2016). DOI:10.1126/science.aaf2201",
+        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
+        metadata={"gee_image_fn": _img_eii_c, "tnfd_dim": 2})
+
+    r.register(name="eii_functional", display_name="EII: Functional Integrity", source_type="gee",
+        extract_fn=extract_eii_f, unit="index", value_range=(0,1),
+        citation="Actual/potential NPP. Hill et al. (2022).",
+        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
+        metadata={"gee_image_fn": _img_eii_f, "tnfd_dim": 2})
+
+    r.register(name="bii", display_name="Biodiversity Intactness Index", source_type="gee",
+        extract_fn=extract_bii, unit="index", value_range=(0,1),
+        citation="Newbold et al. (2016). Science. DOI:10.1126/science.aaf2201. IO 300m / PREDICTS fallback.",
+        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
+        metadata={"gee_image_fn": _img_bii, "tnfd_dim": 2})
+
+    r.register(name="pdf", display_name="Potentially Disappeared Fraction", source_type="gee",
+        extract_fn=extract_pdf, unit="fraction", value_range=(0,1),
+        citation="Huijbregts et al. (2017). ReCiPe2016. DOI:10.1007/s11367-016-1246-y",
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=2,
+        metadata={"gee_image_fn": _img_pdf, "tnfd_dim": 2})
+
+    r.register(name="aridity_index", display_name="Aridity Index", source_type="gee",
+        extract_fn=extract_aridity, unit="P/PET", value_range=(0,5),
+        citation="Zomer et al. (2022). DOI:10.1038/s41597-022-01493-1. CHIRPS+TerraClimate.",
+        tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=2,
+        metadata={"gee_image_fn": _img_aridity, "tnfd_dim": 2})
+
+    # ═══ DIM 3 — SPECIES POPULATION SIZE ═══
+    r.register(name="endemic_richness", display_name="Endemic Species Richness", source_type="gee",
+        extract_fn=extract_endemic_richness, unit="count", value_range=(0,500),
+        citation="IUCN mammal ranges. Range < 100,000 km².",
+        tier2_eligible=False, reference_radius_km=100.0, pillar=3,
+        metadata={"tnfd_dim": 3, "note": "Requires mammal asset"})
+
+    r.register(name="flagship_habitat", display_name="Flagship Habitat Viability", source_type="gee",
+        extract_fn=extract_flagship_habitat, unit="index", value_range=(0,1),
+        citation="Forest × elevation_suit × inverse_pressure. Bird threatened overlay.",
+        tier2_eligible=False, reference_radius_km=50.0, pillar=3,
+        metadata={"tnfd_dim": 3, "note": "Requires bird asset"})
+
+    # ═══ DIM 4 — SPECIES EXTINCTION RISK ═══
+    r.register(name="threatened_richness", display_name="Threatened Species Richness", source_type="gee",
+        extract_fn=extract_threatened_richness, unit="count", value_range=(0,500),
+        citation="IUCN Red List. CR/EN/VU mammals + birds.",
+        tier2_eligible=False, reference_radius_km=100.0, pillar=4,
+        metadata={"tnfd_dim": 4})
+
+    r.register(name="ceri", display_name="Composite Extinction-Risk Index", source_type="gee",
+        extract_fn=extract_ceri, unit="index", value_range=(0,1),
+        citation="Butchart et al. (2007). PLoS ONE. DOI:10.1371/journal.pone.0000140",
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=100.0, pillar=4,
+        metadata={"tnfd_dim": 4})
+
+    r.register(name="star_t", display_name="STAR_T (Threat Abatement)", source_type="gee",
+        extract_fn=extract_star_t, unit="score", value_range=(0,10),
+        citation="Mair et al. (2021). Nat Ecol Evol. DOI:10.1038/s41559-021-01432-0",
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=100.0, pillar=4,
+        metadata={"tnfd_dim": 4, "note": "Bird-based. Requires bird+DW+VIIRS."})
+
+    # ═══ THREATS & PRESSURES ═══
+    r.register(name="ghm", display_name="Global Human Modification", source_type="gee",
+        extract_fn=extract_ghm, unit="index", value_range=(0,1),
+        citation="Kennedy et al. (2019). DOI:10.1111/gcb.14549",
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=50.0, pillar=5,
+        metadata={"gee_image_fn": _img_ghm, "tnfd_dim": "threats"})
+
+    r.register(name="light_pollution", display_name="Light Pollution (VIIRS)", source_type="gee",
+        extract_fn=extract_light_pollution, unit="nW/cm²/sr", value_range=(0,500),
+        citation="Elvidge et al. (2017). DOI:10.1080/01431161.2017.1342050",
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        metadata={"gee_image_fn": _img_viirs, "tnfd_dim": "threats"})
+
+    r.register(name="hdi", display_name="Human Disturbance Index", source_type="gee",
+        extract_fn=extract_hdi, unit="index", value_range=(0,1),
+        citation="ESA WorldCover v200. DOI:10.5281/zenodo.7254221",
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        metadata={"gee_image_fn": _img_hdi, "tnfd_dim": "threats"})
+
+    r.register(name="lst_day", display_name="Daytime Surface Temperature", source_type="gee",
+        extract_fn=extract_lst_day, unit="°C", value_range=(-40,70),
+        citation="Wan et al. (2021). MOD11A1. DOI:10.5067/MODIS/MOD11A1.061",
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        metadata={"gee_image_fn": _img_lst_day, "tnfd_dim": "threats"})
+
+    r.register(name="lst_night", display_name="Nighttime Surface Temperature", source_type="gee",
+        extract_fn=extract_lst_night, unit="°C", value_range=(-40,50),
+        citation="Wan et al. (2021). MOD11A1 Night. DOI:10.5067/MODIS/MOD11A1.061",
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=25.0, pillar=5,
+        metadata={"gee_image_fn": _img_lst_night, "tnfd_dim": "threats"})
+
+    return r
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# IMAGE BUILDERS (for reference engine)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _img_natural_habitat(c):
+    import ee; y=c.ndvi_year
+    dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").select("label").mode()
+    return dw.remap([1,2,3,5],[1,1,1,1],0).multiply(100).rename("natural_habitat")
+
+def _img_natural_landcover(c):
+    import ee
+    lc=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
+    return lc.remap(list(range(1,12)),[1]*11,0).multiply(100).rename("natural_landcover")
+
+def _img_forest_loss(c):
+    import ee
+    gfc=ee.Image("UMD/hansen/global_forest_change_2024_v1_12")
+    f=gfc.select("treecover2000").gte(30); l=gfc.select("lossyear").gt(0)
+    return l.divide(f.max(1)).multiply(100).divide(24).updateMask(f).rename("forest_loss_rate")
+
+def _img_ndvi(c):
+    import ee; y=c.ndvi_year
+    def m(img):
+        scl=img.select('SCL'); g=scl.eq(2).Or(scl.eq(4)).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
+        return img.updateMask(g).divide(10000)
+    s2=ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterDate(f"{y}-01-01",f"{y}-12-31").filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE",c.ndvi_cloud_threshold)).map(m)
+    return s2.map(lambda i:i.normalizedDifference(["B8","B4"]).rename("NDVI")).median().select("NDVI")
+
+def _img_hhi(c):
+    import ee; y=c.ndvi_year
+    def m(img):
+        scl=img.select("SCL"); g=scl.eq(2).Or(scl.eq(4)).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
+        return img.updateMask(g).divide(10000)
+    ic=ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterDate(f"{y}-01-01",f"{y}-12-31").filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE",c.ndvi_cloud_threshold)).map(m).map(lambda i:i.normalizedDifference(["B8","B4"]).rename("NDVI"))
+    z5=ic.reduce(ee.Reducer.percentile([5])).rename("p5")
+    sig=ic.reduce(ee.Reducer.stdDev()).rename("sd")
+    cnt=ic.count().rename("n")
+    return z5.divide(sig).updateMask(cnt.gte(6).And(sig.neq(0))).rename("HHI")
+
+def _img_flii(c):
+    import ee
+    modis=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
+    forest=modis.gte(1).And(modis.lte(10))
+    y=c.ndvi_year
+    night=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad")
+    night=ee.ImageCollection(ee.Algorithms.If(night.size().gt(0),night,ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").sort("system:time_start",False).limit(12).select("avg_rad"))).mean()
+    nn=night.unitScale(0,60).clamp(0,1)
+    conn=forest.focal_min(2); frag=forest.subtract(conn).selfMask().unmask(0).unitScale(0,1)
+    p=nn.add(frag).unitScale(0,2).clamp(0,1)
+    return ee.Image(10).subtract(p.multiply(10)).updateMask(forest).rename("FLII")
+
+def _img_eii(c):
+    import ee
+    try: return ee.Image(_EII_ASSET).select("eii").rename("EII")
+    except: pass
+    s=ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM")
+    s=ee.Image.constant(1).subtract(s)
+    npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
+    f=npp.divide(2.0).min(1).max(0)
+    b=_img_bii(c)
+    if b: return s.min(b).min(f).rename("EII")
+    return s.min(f).rename("EII")
+
+def _img_eii_s(c):
+    import ee
+    try: return ee.Image(_EII_ASSET).select("structural_integrity").rename("EII_Structural")
+    except:
+        g=ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM")
+        return ee.Image.constant(1).subtract(g).rename("EII_Structural")
+
+def _img_eii_c(c):
+    import ee
+    try: return ee.Image(_EII_ASSET).select("compositional_integrity").rename("EII_Compositional")
+    except:
+        b=_img_bii(c); return b.rename("EII_Compositional") if b else None
+
+def _img_eii_f(c):
+    import ee
+    try: return ee.Image(_EII_ASSET).select("functional_integrity").rename("EII_Functional")
+    except:
+        npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
+        return npp.divide(2.0).min(1).max(0).rename("EII_Functional")
+
+def _img_bii(c):
+    import ee
+    try: return ee.Image(_EII_ASSET).select("compositional_integrity").rename("BII")
+    except: pass
+    a=getattr(c,"bii_gee_asset",None)
+    if a:
+        try: return ee.Image(a).select(0).divide(100).rename("BII")
+        except: pass
+    return None
+
+def _img_pdf(c):
+    import ee
+    lc=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
+    cf=lc.expression("b('LC_Type1')==12?0.30:b('LC_Type1')==13?0.50:b('LC_Type1')==10?0.05:b('LC_Type1')==7?0.20:b('LC_Type1')<=5?0.10:0").rename("PDF")
+    return cf.updateMask(cf)
+
+def _img_aridity(c):
+    import ee; y=c.ndvi_year
+    for yr in [y,y-1]:
+        pc=ee.ImageCollection("UCSB-CHG/CHIRPS/DAILY").filterDate(f"{yr}-01-01",f"{yr}-12-31")
+        pe=ee.ImageCollection("IDAHO_EPSCOR/TERRACLIMATE").filterDate(f"{yr}-01-01",f"{yr}-12-31").select("pet")
+        try:
+            if pc.size().gt(0).And(pe.size().gt(0)).getInfo():
+                return pc.sum().rename("p").divide(pe.sum().multiply(0.1).rename("e").max(1)).rename("Aridity_Index")
+        except: continue
+    return None
+
+def _img_ghm(c):
+    import ee; return ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM").rename("gHM")
+
+def _img_viirs(c):
+    import ee; y=c.ndvi_year
+    return ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean().rename("light_pollution")
+
+def _img_hdi(c):
+    import ee
+    wc=ee.Image("ESA/WorldCover/v200/2021").select("Map")
+    u=wc.eq(50).selfMask()
+    d=u.fastDistanceTransform(300,"pixels","squared_euclidean").sqrt().multiply(10)
+    return ee.Image.constant(1).subtract(d.divide(1500).min(1.0)).rename("HDI")
+
+def _img_lst_day(c):
+    import ee; y=c.lst_year
+    return ee.ImageCollection("MODIS/061/MOD11A1").filterDate(f"{y}-01-01",f"{y}-12-31").select("LST_Day_1km").mean().multiply(0.02).subtract(273.15).rename("LST_Day")
+
+def _img_lst_night(c):
+    import ee; y=c.lst_year
+    return ee.ImageCollection("MODIS/061/MOD11A1").filterDate(f"{y}-01-01",f"{y}-12-31").select("LST_Night_1km").mean().multiply(0.02).subtract(273.15).rename("LST_Night")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EXTRACTION FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════
+
+# Dim 1
+def extract_natural_habitat(g,c): return _reduce(_img_natural_habitat(c),g,10)
+def extract_natural_landcover(g,c): return _reduce(_img_natural_landcover(c),g,500)
+
+def extract_cpland(g,c):
+    import ee; eg=_to_ee(g); pa=c.raster_paths.get("pv_binary",_PV)
+    try:
+        img=ee.Image(pa).select(0); sm=img.projection().nominalScale().getInfo()
+        if sm<=0: return {"value":None,"pixels":None}
+        rp=int(math.ceil((10+0.5*sm)/sm))
+        core=img.eq(1).unmask(0).rename("b").reduceNeighborhood(reducer=ee.Reducer.min(),kernel=ee.Kernel.circle(rp,units="pixels")).rename("c")
+        ca=core.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=sm,maxPixels=1e13)
+        pa_m2=float(eg.area().getInfo())
+        if pa_m2==0: return {"value":None,"pixels":None}
+        return {"value":max(0,min(100,100*float(ee.Number(ca.get("c")).getInfo())/pa_m2)),"pixels":None}
+    except Exception as e: logger.warning(f"CPLAND: {e}"); return {"value":None,"pixels":None}
+
+def extract_forest_loss_rate(g,c):
+    import ee; eg=_to_ee(g)
+    gfc=ee.Image("UMD/hansen/global_forest_change_2024_v1_12").clip(eg)
+    f=gfc.select("treecover2000").gte(30); l=gfc.select("lossyear").gt(0); pa=ee.Image.pixelArea()
+    a0=pa.updateMask(f).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=30,maxPixels=1e13)
+    al=pa.updateMask(l).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=30,maxPixels=1e13)
+    try: return {"value":ee.Number(al.get("area")).divide(ee.Number(a0.get("area"))).multiply(100).divide(24).getInfo(),"pixels":None}
+    except: return {"value":None,"pixels":None}
+
+def extract_kba_overlap(g,c):
+    import ee; eg=_to_ee(g); kba=_load_fc(_KBA,c)
+    if not kba: return {"value":None,"pixels":None}
+    try:
+        sa=eg.area(1).divide(1e6); kf=kba.filterBounds(eg)
+        ov=kf.map(lambda f:f.intersection(eg,ee.ErrorMargin(100)))
+        oa=ov.geometry().area(100).divide(1e6)
+        return {"value":min(100,oa.divide(sa).multiply(100).getInfo()),"pixels":None}
+    except Exception as e: logger.warning(f"KBA: {e}"); return {"value":None,"pixels":None}
+
+# Dim 2
+def extract_ndvi(g,c): return _reduce(_img_ndvi(c),g,10)
+
+def extract_habitat_health(g,c):
+    img=_img_hhi(c)
+    return _reduce(img,g,10) if img else {"value":None,"pixels":None}
+
+def extract_flii(g,c):
+    img=_img_flii(c)
+    return _reduce(img,g,500) if img else {"value":None,"pixels":None}
+
+def extract_eii(g,c):
+    img=_img_eii(c)
+    return _reduce(img,g,300) if img else {"value":None,"pixels":None}
+
+def extract_eii_s(g,c): return _reduce(_img_eii_s(c),g,300)
+def extract_eii_c(g,c): return _reduce(_img_eii_c(c),g,300)
+def extract_eii_f(g,c): return _reduce(_img_eii_f(c),g,300)
+
+def extract_bii(g,c):
+    import ee; img=_img_bii(c)
+    if img:
+        r=_reduce(img,g,300)
+        if r.get("value") is not None: return r
+    rp=c.raster_paths.get("bii")
+    if rp:
+        try: return _local_raster(rp,g,1,0.01)
+        except: pass
+    return {"value":None,"pixels":None}
+
+def extract_pdf(g,c): return _reduce(_img_pdf(c),g,500)
+
+def extract_aridity(g,c):
+    img=_img_aridity(c)
+    return _reduce(img,g,5000) if img else {"value":None,"pixels":None}
+
+# Dim 3
+def extract_endemic_richness(g,c):
+    import ee; eg=_to_ee(g); fc=_load_fc(_MAMMALS,c)
+    if not fc: return {"value":None,"pixels":None}
+    try:
+        wa=fc.map(lambda f:f.set("rk2",f.geometry().area().divide(1e6)))
+        sr=wa.filter(ee.Filter.lt("rk2",100000)).filterBounds(eg).distinct("sci_name")
+        return {"value":sr.size().getInfo(),"pixels":None}
+    except Exception as e: logger.warning(f"Endemic: {e}"); return {"value":None,"pixels":None}
+
+def extract_flagship_habitat(g,c):
+    import ee; eg=_to_ee(g); birds=_load_fc(_BIRDS,c)
+    if not birds: return {"value":None,"pixels":None}
+    try:
+        y=c.ndvi_year
+        dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg).select("label").mode()
+        forest=dw.eq(1); dem=ee.Image("USGS/SRTMGL1_003")
+        es=dem.unitScale(0,2000).multiply(-1).add(1)
+        viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
+        hs=viirs.unitScale(0,50).multiply(-1).add(1)
+        hsi=forest.multiply(es).multiply(hs).rename("HSI")
+        val=hsi.reduceRegion(reducer=ee.Reducer.mean(),geometry=eg,scale=1000,maxPixels=1e13).get("HSI").getInfo()
+        return {"value":val,"pixels":None}
+    except Exception as e: logger.warning(f"Flagship: {e}"); return {"value":None,"pixels":None}
+
+# Dim 4
+def extract_threatened_richness(g,c):
+    import ee; eg=_to_ee(g); total=0
+    for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList_5")]:
+        fc=_load_fc(asset,c)
+        if not fc: continue
+        try: total+=fc.filter(ee.Filter.inList(cc,["CR","EN","VU"])).filterBounds(eg).distinct(nc).size().getInfo()
+        except Exception as e: logger.warning(f"Threatened({asset}): {e}")
+    return {"value":total if total>0 else None,"pixels":None}
+
+def extract_ceri(g,c):
+    import ee; eg=_to_ee(g); tn=0; tw=0
+    for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList_5")]:
+        fc=_load_fc(asset,c)
+        if not fc: continue
+        try:
+            def aw(f):
+                cat=ee.String(f.get(cc))
+                w=ee.Number(ee.Algorithms.If(cat.compareTo("EX").eq(0),5,ee.Algorithms.If(cat.compareTo("EW").eq(0),5,ee.Algorithms.If(cat.compareTo("CR").eq(0),4,ee.Algorithms.If(cat.compareTo("EN").eq(0),3,ee.Algorithms.If(cat.compareTo("VU").eq(0),2,ee.Algorithms.If(cat.compareTo("NT").eq(0),1,ee.Algorithms.If(cat.compareTo("LC").eq(0),0,0))))))))
+                return f.set("weight",w)
+            wf=fc.filterBounds(eg).map(aw).distinct(nc)
+            tn+=wf.size().getInfo(); tw+=wf.aggregate_sum("weight").getInfo()
+        except Exception as e: logger.warning(f"CERI({asset}): {e}")
+    if tn==0: return {"value":None,"pixels":None}
+    return {"value":tw/(tn*5),"pixels":None}
+
+def extract_star_t(g,c):
+    import ee; eg=_to_ee(g); birds=_load_fc(_BIRDS,c)
+    if not birds: return {"value":None,"pixels":None}
+    try:
+        y=c.ndvi_year
+        filt=birds.filter(ee.Filter.eq("presence",1)).filter(ee.Filter.eq("origin",1)).filter(ee.Filter.inList("RedList_5",["CR","EN","VU"]))
+        def aw(f):
+            cat=ee.String(f.get("RedList_5"))
+            w=ee.Number(ee.Algorithms.If(cat.equals("CR"),4,ee.Algorithms.If(cat.equals("EN"),3,ee.Algorithms.If(cat.equals("VU"),2,1))))
+            return f.set("weight",w)
+        wr=filt.map(aw); sr=ee.Image().float().paint(featureCollection=wr,color="weight")
+        dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg).select("label").mode()
+        hm=dw.remap([1,2,3,5],[1,1,1,1],0); bm=dw.eq(6)
+        bd=bm.reduceNeighborhood(reducer=ee.Reducer.mean(),kernel=ee.Kernel.circle(radius=1000,units="meters"))
+        viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
+        nn=viirs.unitScale(0,50); tp=bd.add(nn).divide(2)
+        st=sr.multiply(tp).multiply(hm).rename("STAR_T")
+        val=st.reduceRegion(reducer=ee.Reducer.mean(),geometry=eg,scale=1000,maxPixels=1e13).get("STAR_T").getInfo()
+        return {"value":val,"pixels":None}
+    except Exception as e: logger.warning(f"STAR_T: {e}"); return {"value":None,"pixels":None}
+
+# Threats
+def extract_ghm(g,c): return _reduce(_img_ghm(c),g,1000)
+def extract_light_pollution(g,c): return _reduce(_img_viirs(c),g,500)
+def extract_hdi(g,c): return _reduce(_img_hdi(c),g,10)
+def extract_lst_day(g,c): return _reduce(_img_lst_day(c),g,1000)
+def extract_lst_night(g,c): return _reduce(_img_lst_night(c),g,1000)
