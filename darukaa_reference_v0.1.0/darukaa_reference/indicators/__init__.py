@@ -22,9 +22,9 @@ from darukaa_reference.registry import IndicatorRegistry
 logger = logging.getLogger(__name__)
 
 _EII_ASSET = "projects/landler-open-data/assets/eii/global/eii_global_v1"
-_MAMMALS = "projects/gaurav-singh-007/assets/RedList_Mammals_Terrestrial"
-_BIRDS = "projects/gaurav-singh-007/assets/RedList_Bird_IUCN_Category"
-_KBA = "projects/gaurav-singh-007/assets/KBA_Global_POL_SEP25"
+_MAMMALS = "projects/darukaa-earth130226/assets/RedList_Mammals_Terrestrial"
+_BIRDS = "projects/darukaa-earth130226/assets/RedList_Bird_IUCN_Category"
+_KBA = "projects/darukaa-earth130226/assets/KBA_Global_POL_SEP25"
 _PV = "projects/darukaa-earth-product/assets/biodiversity_India_PV_Binary_2025_Full_Mosaic"
 _MSA = "projects/ee-jayankandir/assets/TerrestrialMSA_2015_World"
 
