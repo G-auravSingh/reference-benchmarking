@@ -878,7 +878,7 @@ def _build_flii_image(config: Config):
     modis = (ee.ImageCollection("MODIS/061/MCD12Q1")
              .sort("system:time_start", False)
              .first().select("LC_Type1"))
-    forest = modis.gte(1).And(modis.lte(5))
+    forest = modis.gte(1).And(modis.lte(10))  # IGBP 1-10: forests + shrublands + savannas + grasslands
 
     year = config.ndvi_year
     night = (ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG")
