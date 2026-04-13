@@ -456,35 +456,27 @@ class ReferenceSelector:
                     logger.info(f"  Tier 2 fallback 1: {result['n']} pixels (no LC mask)")
                     return result
 
-        # Fallback 2: Expand to full ecoregion (SEED-style cross-boundary)
-        if eco_id is not None and eco_id > 0:
-            logger.info(f"  Tier 2 fallback 2: expanding to ecoregion {eco_id}...")
-            try:
-                ecoregions = ee.FeatureCollection(self.config.ecoregion_gee_asset)
-                eco_feature = ecoregions.filter(ee.Filter.eq("ECO_ID", eco_id)).first()
-                eco_geom = eco_feature.geometry()
-                ghm_eco = ghm_raw
-                if elev_mask is not None:
-                    ghm_eco = ghm_eco.updateMask(elev_mask)
-                if lc_mask is not None:
-                    ghm_eco = ghm_eco.updateMask(lc_mask)
-                ghm_eco = ghm_eco.clip(eco_geom)
-                t_eco = self._dynamic_hmi_threshold(ghm_eco, eco_geom, hmi_ceiling)
-                if t_eco is not None:
-                    result = self._extract_tier2_stats(
-                        ghm_eco, t_eco, indicator_image, eco_geom
-                    )
-                    if result.get("n", 0) >= self.config.min_reference_pixels:
-                        logger.info(f"  Tier 2 fallback 2: {result['n']} pixels (ecoregion)")
-                        return result
-            except Exception as e:
-                logger.warning(f"  Ecoregion fallback failed: {e}")
-
-        logger.warning(
-            f"Tier 2: insufficient reference pixels for {spec.name}. "
-            f"Buffer={radius_km}km, ceiling={hmi_ceiling}."
-        )
-        return {}
+        # Fallback 2: Progressive buffer widening (more reliable than ecoregion geometry)
+        for multiplier in [2.0, 3.0, 4.0]:
+            wider_km = radius_km * multiplier
+            if wider_km > 200:
+                break
+            logger.info(f"  Tier 2 fallback 2: widening buffer to {wider_km}km...")
+            wider_zone = site_geometry.centroid().buffer(wider_km * 1000)
+            ghm_wider = ghm_raw
+            if elev_mask is not None:
+                ghm_wider = ghm_wider.updateMask(elev_mask)
+            if lc_mask is not None:
+                ghm_wider = ghm_wider.updateMask(lc_mask)
+            ghm_wider = ghm_wider.clip(wider_zone)
+            t_wider = self._dynamic_hmi_threshold(ghm_wider, wider_zone, hmi_ceiling)
+            if t_wider is not None:
+                result = self._extract_tier2_stats(
+                    ghm_wider, t_wider, indicator_image, wider_zone
+                )
+                if result.get("n", 0) >= self.config.min_reference_pixels:
+                    logger.info(f"  Tier 2 fallback 2: {result['n']} pixels at {wider_km}km")
+                    return result
 
     def _dynamic_hmi_threshold(self, ghm_image, geometry, ceiling: float) -> float:
         """
