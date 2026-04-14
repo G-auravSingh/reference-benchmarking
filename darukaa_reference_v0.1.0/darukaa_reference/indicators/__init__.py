@@ -115,7 +115,8 @@ def create_default_registry() -> IndicatorRegistry:
         extract_fn=extract_cpland, unit="%", value_range=(0,100),
         citation="McGarigal & Marks (1995). Darukaa PV binary.",
         tier2_eligible=False, reference_radius_km=30.0, pillar=1,
-        metadata={"tnfd_dim": 1, "note": "India-only PV binary asset"})
+        metadata={"tnfd_dim": 1, "note": "India-only PV binary asset",
+                  "gee_image_fn": _img_cpland_binary})
 
     r.register(name="forest_loss_rate", display_name="Habitat Loss Rate", source_type="gee",
         extract_fn=extract_forest_loss_rate, unit="% per year", value_range=(0,100),
@@ -195,20 +196,22 @@ def create_default_registry() -> IndicatorRegistry:
         extract_fn=extract_endemic_richness, unit="count", value_range=(0,500),
         citation="IUCN mammal ranges. Range < 100,000 km².",
         tier2_eligible=False, reference_radius_km=100.0, pillar=3,
-        metadata={"tnfd_dim": 3, "note": "Requires mammal asset"})
+        metadata={"tnfd_dim": 3, "note": "Requires mammal asset",
+                  "fc_tier1_fn": _fc_tier1_endemic_richness})
 
     r.register(name="flagship_habitat", display_name="Flagship Habitat Viability", source_type="gee",
         extract_fn=extract_flagship_habitat, unit="index", value_range=(0,1),
         citation="Forest × elevation_suit × inverse_pressure. Bird threatened overlay.",
         tier2_eligible=False, reference_radius_km=50.0, pillar=3,
-        metadata={"tnfd_dim": 3, "note": "Requires bird asset"})
+        metadata={"tnfd_dim": 3, "note": "Requires bird asset",
+                  "gee_image_fn": _img_flagship_hsi})
 
     # ═══ DIM 4 — SPECIES EXTINCTION RISK ═══
     r.register(name="threatened_richness", display_name="Threatened Species Richness", source_type="gee",
         extract_fn=extract_threatened_richness, unit="count", value_range=(0,500),
         citation="IUCN Red List. CR/EN/VU mammals + birds.",
-        tier2_eligible=False, reference_radius_km=100.0, pillar=4,
-        metadata={"tnfd_dim": 4})
+        tier2_eligible=False, higher_is_better=False, reference_radius_km=100.0, pillar=4,
+        metadata={"tnfd_dim": 4, "fc_tier1_fn": _fc_tier1_threatened_richness})
 
     r.register(name="ceri", display_name="Composite Extinction-Risk Index", source_type="gee",
         extract_fn=extract_ceri, unit="index", value_range=(0,1),
@@ -387,6 +390,68 @@ def _img_lst_day(c):
 def _img_lst_night(c):
     import ee; y=c.lst_year
     return ee.ImageCollection("MODIS/061/MOD11A1").filterDate(f"{y}-01-01",f"{y}-12-31").select("LST_Night_1km").mean().multiply(0.02).subtract(273.15).rename("LST_Night")
+
+
+
+# ── FC Tier 1 helpers (FeatureCollection-based regional reference) ─────────
+# These compute Tier 1 reference for indicators that have no raster image.
+# Called by reference.py when metadata["fc_tier1_fn"] is set.
+# Signature: fn(site_geometry_ee, region_ee, config) -> dict with mean/median/n
+
+def _fc_tier1_endemic_richness(site_geom, region, config):
+    """Tier 1 regional endemic species count: mean within buffer is not meaningful
+    for a count indicator. Instead, return the regional count (distinct endemic
+    species whose ranges overlap the buffer) as the reference denominator."""
+    import ee
+    from darukaa_reference.indicators import _load_fc, _MAMMALS, _to_ee
+    eg = _to_ee(site_geom) if not isinstance(site_geom, ee.Geometry) else site_geom
+    region_ee = region if isinstance(region, ee.Geometry) else _to_ee(region)
+    fc = _load_fc(_MAMMALS, config)
+    if not fc: return {}
+    try:
+        wa = fc.map(lambda f: f.set("rk2", f.geometry().area().divide(1e6)))
+        sr = wa.filter(ee.Filter.lt("rk2", 100000)).filterBounds(region_ee).distinct("sci_name")
+        n = sr.size().getInfo()
+        # Return as both mean and median so _parse_gee_stats-style dicts work
+        return {"mean": float(n), "median": float(n), "n": 1}
+    except Exception as e:
+        logger.warning(f"FC Tier1 endemic: {e}"); return {}
+
+def _fc_tier1_threatened_richness(site_geom, region, config):
+    """Tier 1 regional threatened species count within buffer."""
+    import ee
+    from darukaa_reference.indicators import _load_fc, _MAMMALS, _BIRDS, _to_ee
+    region_ee = region if isinstance(region, ee.Geometry) else _to_ee(region)
+    total = 0
+    for asset, nc, cc in [(_MAMMALS, "sci_name", "category"), (_BIRDS, "sci_name", "RedList_5")]:
+        fc = _load_fc(asset, config)
+        if not fc: continue
+        try:
+            total += fc.filter(ee.Filter.inList(cc, ["CR","EN","VU"])).filterBounds(region_ee).distinct(nc).size().getInfo()
+        except Exception as e:
+            logger.warning(f"FC Tier1 threatened({asset}): {e}")
+    if total == 0: return {}
+    return {"mean": float(total), "median": float(total), "n": 1}
+
+def _img_flagship_hsi(c):
+    """HSI image for flagship habitat — same as site extraction, used for Tier 1 buffer mean."""
+    import ee; y = c.ndvi_year
+    dw = ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01", f"{y}-12-31").select("label").mode()
+    forest = dw.eq(1)
+    dem = ee.Image("USGS/SRTMGL1_003")
+    es = dem.unitScale(0, 2000).multiply(-1).add(1)
+    viirs = ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01", f"{y}-12-31").select("avg_rad").mean()
+    hs = viirs.unitScale(0, 50).multiply(-1).add(1)
+    return forest.multiply(es).multiply(hs).rename("HSI")
+
+def _img_cpland_binary(c):
+    """PV binary image for CPLAND Tier 1 buffer mean (proportion of PV pixels in region)."""
+    import ee
+    pa = c.raster_paths.get("pv_binary", _PV)
+    try:
+        return ee.Image(pa).select(0).rename("cpland")
+    except Exception as e:
+        logger.warning(f"CPLAND binary image: {e}"); return None
 
 
 # ═══════════════════════════════════════════════════════════════════════
