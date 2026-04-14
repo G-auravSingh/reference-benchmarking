@@ -151,6 +151,10 @@ Numeric encoding: `VL=1 · L=2 · M=3 · H=4 · VH=5`
 | BII | > 80% | 60–80% | 40–60% | 20–40% | ≤ 20% | NHM / TNFD Annex 2 |
 | FLII | > 8.0 | 6.0–8.0 | 4.0–6.0 | 2.0–4.0 | ≤ 2.0 | Potapov et al. 2020 |
 | MSA | > 0.8 | 0.6–0.8 | 0.4–0.6 | 0.2–0.4 | ≤ 0.2 | GLOBIO4 |
+| Flagship Habitat | > 0.8 | 0.6–0.8 | 0.4–0.6 | 0.2–0.4 | ≤ 0.2 | HSI literature (higher=better) |
+| CERI | < 0.10 | 0.10–0.20 | 0.20–0.35 | 0.35–0.50 | > 0.50 | Butchart et al. 2007 (lower=better) |
+| STAR_T | 0 | 1–3 | 3–6 | 6–9 | > 9 | IUCN STAR methodology (lower=better) |
+| KBA/IBA Overlap | < 1% | 1–25% | 25–75% | 75–99% | 100% | TNFD/IBAT disclosure scheme |
 
 **Protocol B — Tier 2 intactness thresholds (applied to intactness %, direction already corrected):**
 ```
@@ -160,7 +164,11 @@ If Tier 2 unavailable, falls back to Tier 1 intactness with lower confidence fla
 
 **Protocol B v1.0 — Fixed, version-controlled thresholds.** Scientific basis: the ≥85% Very Low boundary is consistent with Newbold et al. (2016) planetary boundary for BII (≈90% intactness), adjusted to 85% to allow for measurement uncertainty. The 70/50/30 breaks correspond to noticeably impacted, substantially degraded, and severely impaired ecosystem condition respectively, consistent with GLOBIO4 and SBTN degradation literature. Thresholds are version-controlled and subject to empirical review when ≥10 Darukaa-monitored sites across ≥3 ecoregion types are available for calibration — not before.
 
-Protocol B applies to: natural_habitat, natural_landcover, cpland, forest_loss_rate, ndvi, habitat_health, eii (all components), pdf, aridity_index, endemic_richness, flagship_habitat, threatened_richness, ceri, star_t.
+Protocol B (Tier 2 intactness) applies to: natural_habitat, natural_landcover, forest_loss_rate, ndvi, habitat_health, eii (all components), pdf, aridity_index.
+
+Protocol A (published absolute thresholds) applies to: bii, flii, msa, flagship_habitat, ceri, star_t, kba_overlap.
+
+Protocol C (Tier 1 regional, same B thresholds) applies to count/connectivity indicators where absolute thresholds are ecoregion-dependent: cpland, endemic_richness, threatened_richness. Note: count indicators are subject to the Species-Area Relationship artefact — see Known Limitations.
 
 ### Tier 2 — Dimension Score (1–5)
 
@@ -260,6 +268,7 @@ class IndicatorSpec:
 - Elevation stratification (±`config.elevation_band_m`) applied in `_compute_tier2()`
 - Fallback cascade: drop LC mask → expand buffer (2×, 3×, 4× up to 200km)
 - `_intactness_ratio()` is directionality-aware: state=site/ref, pressure=ref/site
+- `_compute_tier1()` now checks `metadata["fc_tier1_fn"]` when `_get_indicator_image()` returns None — enables Tier 1 for FeatureCollection-based indicators (endemic richness, threatened richness) that have no raster image
 
 ---
 
@@ -304,11 +313,11 @@ All 25 indicators, no pipeline warnings. Post all bug fixes.
 ## Known Limitations & Open Issues
 
 **Methodological:**
-- Protocol B thresholds (≥85/70/50/30%) are provisional — validate against multi-site data before production
 - FLII is an approximation (MODIS LC + VIIRS), not the official Grantham et al. 2020 dataset
 - CPLAND is India-only (Darukaa PV binary mosaic)
 - LST: pipeline uses annual mean; Darukaa team scripts use summer-only (Apr–Jun) — decision pending
 - UHII and MSA (GLOBIO) are WIP, not yet registered
+- **Species-Area Relationship (SAR) artefact — count indicators:** Endemic Richness and Threatened Richness use raw species count in the Tier 1 buffer (100km radius) as regional reference. A small site polygon always has fewer species than a large buffer by area alone, producing artificially low intactness ratios. The correct fix is density-normalisation (species per km²) rather than raw count. Current Protocol C results for these two indicators should be interpreted with caution. Flagged for next methodology revision.
 
 **Engineering:**
 - Repo structure nested (`darukaa_reference_v0.1.0/darukaa_reference/`) — flat cleanup pending
