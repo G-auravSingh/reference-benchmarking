@@ -209,7 +209,18 @@ class ReferenceSelector:
         region = site_geometry.centroid().buffer(buffer_m)
 
         image = self._get_indicator_image(spec)
+
+        # FeatureCollection-based indicators (CERI, endemic richness, threatened
+        # richness, KBA, flagship) have no raster image but may provide a custom
+        # Tier 1 function via metadata["fc_tier1_fn"]. This function takes
+        # (site_geometry_ee, region_ee, config) and returns a stats dict directly.
         if image is None:
+            fc_tier1_fn = spec.metadata.get("fc_tier1_fn")
+            if fc_tier1_fn is not None:
+                try:
+                    return fc_tier1_fn(site_geometry, region, self.config)
+                except Exception as e:
+                    logger.warning(f"FC Tier 1 failed for {spec.name}: {e}")
             return {}
 
         stats = image.reduceRegion(
