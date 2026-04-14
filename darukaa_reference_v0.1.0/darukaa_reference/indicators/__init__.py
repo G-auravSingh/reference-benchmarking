@@ -1,15 +1,21 @@
 """
-darukaa_reference indicators — v6.0 (Aligned with State of Nature Module)
+darukaa_reference indicators — v6.1 (Aligned with State of Nature Module PRD v2.0)
 =============================================================
 
-29 ex-situ biodiversity indicators organized under the TNFD Annex 2
+25 ex-situ biodiversity indicators organized under the TNFD Annex 2
 measurement tree:
-    Dim 1 — Ecosystem Extent (5 metrics)
-    Dim 2 — Ecosystem Condition (10 metrics)
-    Dim 3 — Species Population Size (2 metrics)
-    Dim 4 — Species Extinction Risk (3 metrics)
-    Threats — Anthropogenic Pressures (5 metrics)
-    Composite — EII + components (4 metrics, within Dim 2)
+    Dim 1 — Ecosystem Extent        (5 indicators)
+    Dim 2 — Ecosystem Condition     (10 indicators, includes EII + components + BII)
+    Dim 3 — Species Population Size (2 indicators)
+    Dim 4 — Species Extinction Risk (3 indicators)
+    Threats — Pressures / context   (5 indicators, tier2_eligible=False, not in SoN score)
+
+Key design decisions:
+    - tier2_eligible=False for all threat/pressure indicators (ghm, light_pollution,
+      hdi, lst_day, lst_night) — Tier 2 HMI selection is circular for pressure metrics
+    - flii: reference_radius_km=150 (forest-only indicator needs wider search)
+    - ceri: ee.Filter.notNull([cat_col]) applied before bird .map() to prevent null crash
+    - Scoring: Protocol B v1.0 thresholds (>=85/70/50/30%) applied in SoN scoring layer
 """
 
 from __future__ import annotations
