@@ -423,7 +423,7 @@ def _fc_tier1_threatened_richness(site_geom, region, config):
     from darukaa_reference.indicators import _load_fc, _MAMMALS, _BIRDS, _to_ee
     region_ee = region if isinstance(region, ee.Geometry) else _to_ee(region)
     total = 0
-    for asset, nc, cc in [(_MAMMALS, "sci_name", "category"), (_BIRDS, "sci_name", "RedList_5")]:
+    for asset, nc, cc in [(_MAMMALS, "sci_name", "category"), (_BIRDS, "sci_name", "RedList__5")]:
         fc = _load_fc(asset, config)
         if not fc: continue
         try:
@@ -558,7 +558,7 @@ def extract_flagship_habitat(g,c):
 # Dim 4
 def extract_threatened_richness(g,c):
     import ee; eg=_to_ee(g); total=0
-    for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList_5")]:
+    for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList__5")]:
         fc=_load_fc(asset,c)
         if not fc: continue
         try: total+=fc.filter(ee.Filter.inList(cc,["CR","EN","VU"])).filterBounds(eg).distinct(nc).size().getInfo()
@@ -567,7 +567,7 @@ def extract_threatened_richness(g,c):
 
 def extract_ceri(g,c):
     import ee; eg=_to_ee(g); tn=0; tw=0
-    for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList_5")]:
+    for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList__5")]:
         fc=_load_fc(asset,c)
         if not fc: continue
         try:
@@ -586,9 +586,9 @@ def extract_star_t(g,c):
     if not birds: return {"value":None,"pixels":None}
     try:
         y=c.ndvi_year
-        filt=birds.filter(ee.Filter.eq("presence",1)).filter(ee.Filter.eq("origin",1)).filter(ee.Filter.inList("RedList_5",["CR","EN","VU"]))
+        filt=birds.filter(ee.Filter.eq("presence",1)).filter(ee.Filter.eq("origin",1)).filter(ee.Filter.inList("RedList__5",["CR","EN","VU"]))
         def aw(f):
-            cat=ee.String(f.get("RedList_5"))
+            cat=ee.String(f.get("RedList__5"))
             w=ee.Number(ee.Algorithms.If(cat.equals("CR"),4,ee.Algorithms.If(cat.equals("EN"),3,ee.Algorithms.If(cat.equals("VU"),2,1))))
             return f.set("weight",w)
         wr=filt.map(aw); sr=ee.Image().float().paint(featureCollection=wr,color="weight")
