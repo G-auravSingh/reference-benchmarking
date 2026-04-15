@@ -76,6 +76,10 @@ class ReferenceResult:
     tier2_intactness: Optional[float] = None
 
     metadata: Dict[str, Any] = field(default_factory=dict)
+    extraction_metadata: Dict[str, Any] = field(default_factory=dict)
+    # extraction_metadata: populated from extract_fn return dict["metadata"]
+    # Contains species lists for biodiversity indicators (threatened_richness,
+    # ceri, endemic_richness). Not all indicators populate this field.
 
 
 class ReferenceSelector:
@@ -124,6 +128,9 @@ class ReferenceSelector:
             if isinstance(extraction, dict):
                 result.site_value = extraction.get("value")
                 result.site_pixels = extraction.get("pixels")
+                # Capture species lists and other indicator-level metadata
+                if "metadata" in extraction and isinstance(extraction["metadata"], dict):
+                    result.extraction_metadata = extraction["metadata"]
             else:
                 result.site_value = float(extraction)
         except Exception as e:
