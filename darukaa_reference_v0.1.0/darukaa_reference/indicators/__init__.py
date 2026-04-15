@@ -1,5 +1,5 @@
 """
-darukaa_reference indicators — v6.1 (Aligned with State of Nature Module PRD v2.0)
+darukaa_reference indicators — v6.3 (Aligned with State of Nature Module PRD v2.0)
 =============================================================
 
 25 ex-situ biodiversity indicators organized under the TNFD Annex 2
@@ -365,6 +365,10 @@ def _img_aridity(c):
         pe=ee.ImageCollection("IDAHO_EPSCOR/TERRACLIMATE").filterDate(f"{yr}-01-01",f"{yr}-12-31").select("pet")
         try:
             if pc.size().gt(0).And(pe.size().gt(0)).getInfo():
+                # TerraClimate PET is stored in 0.1mm units — multiply by 0.1 to convert to mm.
+                # This is intentional. Without this conversion AI = ~10x too low.
+                # Soudipta's scripts omit this conversion (known discrepancy).
+                # Our value ~2.9 for Paglam is correct for humid NE India; ~0.29 is wrong.
                 return pc.sum().rename("p").divide(pe.sum().multiply(0.1).rename("e").max(1)).rename("Aridity_Index")
         except: continue
     return None
@@ -532,15 +536,39 @@ def extract_aridity(g,c):
 
 # Dim 3
 def extract_endemic_richness(g,c):
-    import ee; eg=_to_ee(g); fc=_load_fc(_MAMMALS,c)
-    if not fc: return {"value":None,"pixels":None}
-    try:
-        wa=fc.map(lambda f:f.set("rk2",f.geometry().area().divide(1e6)))
-        sr=wa.filter(ee.Filter.lt("rk2",100000)).filterBounds(eg).distinct("sci_name")
-        return {"value":sr.size().getInfo(),"pixels":None}
-    except Exception as e: logger.warning(f"Endemic: {e}"); return {"value":None,"pixels":None}
+    """Count small-ranged endemic species (range < 100,000 km²) at site.
+    Combines mammals (RedList_Mammals_Terrestrial) and birds (RedList_Bird_IUCN_Category).
+    Range computed from feature geometry area. Distinct by sci_name within each asset.
+    Not filtered by IUCN category — endemism is defined by range size, not threat status.
+    Note: raw count subject to Species-Area Relationship artefact — see README.
+    """
+    import ee; eg=_to_ee(g); total=0; species_list=[]
+    for asset,nc,group in [(_MAMMALS,"sci_name","mammal"),(_BIRDS,"sci_name","bird")]:
+        fc=_load_fc(asset,c)
+        if not fc: continue
+        try:
+            wa=fc.map(lambda f:f.set("rk2",f.geometry().area().divide(1e6)))
+            filtered=wa.filter(ee.Filter.lt("rk2",100000)).filterBounds(eg).distinct(nc)
+            n=filtered.size().getInfo(); total+=n
+            # Species list
+            names=filtered.reduceColumns(ee.Reducer.toList(),[nc]).get("list").getInfo()
+            for name in (names or []):
+                species_list.append({"name":name,"group":group})
+        except Exception as e: logger.warning(f"Endemic {group}: {e}")
+    return {"value":total if total>0 else None,"pixels":None,
+            "metadata":{"species_list":species_list,
+                        "n_mammals":sum(1 for s in species_list if s["group"]=="mammal"),
+                        "n_birds":sum(1 for s in species_list if s["group"]=="bird"),
+                        "range_threshold_km2":100000}}
 
 def extract_flagship_habitat(g,c):
+    """Flagship Habitat Viability Index.
+    Formula: HSI_mean × 0.6 + bird_suit × 0.4
+    where HSI = forest × elevation_suitability × inverse_light_pressure (0-1)
+    and bird_suit = min(threatened_bird_count / 50, 1.0)
+    The 50-species normalisation cap is based on Eastern Himalayan regional maximum.
+    Aligns with Soudipta's weighted composite; uses RedList__5 field (double underscore).
+    """
     import ee; eg=_to_ee(g); birds=_load_fc(_BIRDS,c)
     if not birds: return {"value":None,"pixels":None}
     try:
@@ -551,22 +579,49 @@ def extract_flagship_habitat(g,c):
         viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
         hs=viirs.unitScale(0,50).multiply(-1).add(1)
         hsi=forest.multiply(es).multiply(hs).rename("HSI")
-        val=hsi.reduceRegion(reducer=ee.Reducer.mean(),geometry=eg,scale=1000,maxPixels=1e13).get("HSI").getInfo()
-        return {"value":val,"pixels":None}
+        hsi_val=hsi.reduceRegion(reducer=ee.Reducer.mean(),geometry=eg,scale=1000,maxPixels=1e13).get("HSI").getInfo()
+        if hsi_val is None: return {"value":None,"pixels":None}
+        # Threatened bird count component (RedList__5 double underscore)
+        threatened_birds=birds.filter(ee.Filter.inList("RedList__5",["CR","EN","VU"])).filterBounds(eg).distinct("sci_name")
+        n_birds=threatened_birds.size().getInfo()
+        bird_suit=min(n_birds/50.0, 1.0)  # normalise to 0-1, cap at 50 species
+        final=float(hsi_val)*0.6 + bird_suit*0.4
+        return {"value":final,"pixels":None}
     except Exception as e: logger.warning(f"Flagship: {e}"); return {"value":None,"pixels":None}
 
 # Dim 4
 def extract_threatened_richness(g,c):
-    import ee; eg=_to_ee(g); total=0
+    """Count of threatened species (CR/EN/VU) with ranges overlapping the site.
+    Sources: IUCN mammal ranges (category field) + IUCN bird ranges (RedList__5 field).
+    NT excluded — count metric uses strict TNFD definition of threatened (CR/EN/VU only).
+    Returns species list in metadata for reporting transparency.
+    """
+    import ee; eg=_to_ee(g); total=0; species_list=[]
     for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList__5")]:
         fc=_load_fc(asset,c)
         if not fc: continue
-        try: total+=fc.filter(ee.Filter.inList(cc,["CR","EN","VU"])).filterBounds(eg).distinct(nc).size().getInfo()
+        try:
+            filtered=fc.filter(ee.Filter.inList(cc,["CR","EN","VU"])).filterBounds(eg).distinct(nc)
+            n=filtered.size().getInfo()
+            total+=n
+            # Collect species names + categories for reporting
+            props=filtered.reduceColumns(ee.Reducer.toList(2),[nc,cc]).get("list").getInfo()
+            for row in (props or []):
+                if len(row)>=2: species_list.append({"name":row[0],"category":row[1],"group":"mammal" if asset==_MAMMALS else "bird"})
         except Exception as e: logger.warning(f"Threatened({asset}): {e}")
-    return {"value":total if total>0 else None,"pixels":None}
+    return {"value":total if total>0 else None,"pixels":None,
+            "metadata":{"species_list":species_list,"n_mammals":sum(1 for s in species_list if s["group"]=="mammal"),
+                        "n_birds":sum(1 for s in species_list if s["group"]=="bird")}}
 
 def extract_ceri(g,c):
-    import ee; eg=_to_ee(g); tn=0; tw=0
+    """Composite Extinction-Risk Index (Butchart et al. 2007).
+    Includes all IUCN categories: EX/EW=5, CR=4, EN=3, VU=2, NT=1, LC=0.
+    NT intentionally included — CERI is a weighted index capturing full risk spectrum.
+    Sources: IUCN mammal ranges + IUCN bird ranges (both assets, all categories).
+    Formula: sum(weights) / (n_species * 5) → 0-1 scale.
+    """
+    import ee; eg=_to_ee(g); tn=0; tw=0; species_list=[]
+    WEIGHTS = {"EX":5,"EW":5,"CR":4,"EN":3,"VU":2,"NT":1,"LC":0}
     for asset,nc,cc in [(_MAMMALS,"sci_name","category"),(_BIRDS,"sci_name","RedList__5")]:
         fc=_load_fc(asset,c)
         if not fc: continue
@@ -576,10 +631,19 @@ def extract_ceri(g,c):
                 w=ee.Number(ee.Algorithms.If(cat.compareTo("EX").eq(0),5,ee.Algorithms.If(cat.compareTo("EW").eq(0),5,ee.Algorithms.If(cat.compareTo("CR").eq(0),4,ee.Algorithms.If(cat.compareTo("EN").eq(0),3,ee.Algorithms.If(cat.compareTo("VU").eq(0),2,ee.Algorithms.If(cat.compareTo("NT").eq(0),1,ee.Algorithms.If(cat.compareTo("LC").eq(0),0,0))))))))
                 return f.set("weight",w)
             wf=fc.filterBounds(eg).filter(ee.Filter.notNull([cc])).map(aw).distinct(nc)
-            tn+=wf.size().getInfo(); tw+=wf.aggregate_sum("weight").getInfo()
+            n=wf.size().getInfo(); tw_local=wf.aggregate_sum("weight").getInfo()
+            tn+=n; tw+=tw_local
+            # Species list for reporting
+            props=wf.reduceColumns(ee.Reducer.toList(2),[nc,cc]).get("list").getInfo()
+            for row in (props or []):
+                if len(row)>=2: species_list.append({"name":row[0],"category":row[1],"group":"mammal" if asset==_MAMMALS else "bird"})
         except Exception as e: logger.warning(f"CERI({asset}): {e}")
     if tn==0: return {"value":None,"pixels":None}
-    return {"value":tw/(tn*5),"pixels":None}
+    ceri_val=tw/(tn*5)
+    return {"value":ceri_val,"pixels":None,
+            "metadata":{"species_list":species_list,"n_species":tn,
+                        "categories_included":"EX/EW=5,CR=4,EN=3,VU=2,NT=1,LC=0",
+                        "note":"NT included in CERI (weighted index); excluded from Threatened Richness (count metric)"}}
 
 def extract_star_t(g,c):
     import ee; eg=_to_ee(g); birds=_load_fc(_BIRDS,c)
