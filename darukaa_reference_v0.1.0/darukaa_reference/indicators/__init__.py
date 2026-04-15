@@ -1,5 +1,5 @@
 """
-darukaa_reference indicators — v6.3 (Aligned with State of Nature Module PRD v2.0)
+darukaa_reference indicators — v6.1 (Aligned with State of Nature Module PRD v2.0)
 =============================================================
 
 25 ex-situ biodiversity indicators organized under the TNFD Annex 2
