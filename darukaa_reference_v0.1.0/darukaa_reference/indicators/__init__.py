@@ -353,27 +353,10 @@ def _img_bii(c):
     return None
 
 def _img_pdf(c):
-    """Potentially Disappeared Fraction using ReCiPe characterisation factors by MODIS LC.
-    CF values: forest (1-5)=0.10, savanna/woody (7-9)=0.20, grassland (10)=0.05,
-    cropland (12)=0.30, urban (13)=0.50, all others=0.00.
-    Note: CF=0 pixels (water, barren, wetland, snow) are included as 0, not masked.
-    Previously used updateMask(cf) which excluded CF=0 pixels entirely, causing None
-    for sites dominated by those land cover types (e.g., MER with shrubland-dominated LC).
-    """
     import ee
     lc=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
-    # Assign CFs — all unmatched classes get 0.0 (not masked)
-    cf=lc.expression(
-        "b('LC_Type1')<=5?0.10:"       # forest classes 1-5
-        "b('LC_Type1')==7?0.20:"        # open shrubland
-        "b('LC_Type1')==8?0.20:"        # woody savanna
-        "b('LC_Type1')==9?0.20:"        # savanna
-        "b('LC_Type1')==10?0.05:"       # grassland
-        "b('LC_Type1')==12?0.30:"       # cropland
-        "b('LC_Type1')==13?0.50:"       # urban
-        "0.0"                           # all others (water, barren, wetland, snow) = 0
-    ).rename("PDF")
-    return cf  # no masking — zero-CF sites correctly report PDF≈0
+    cf=lc.expression("b('LC_Type1')==12?0.30:b('LC_Type1')==13?0.50:b('LC_Type1')==10?0.05:b('LC_Type1')==7?0.20:b('LC_Type1')<=5?0.10:0").rename("PDF")
+    return cf.updateMask(cf)
 
 def _img_aridity(c):
     import ee; y=c.ndvi_year
@@ -420,25 +403,23 @@ def _img_lst_night(c):
 # Signature: fn(site_geometry_ee, region_ee, config) -> dict with mean/median/n
 
 def _fc_tier1_endemic_richness(site_geom, region, config):
-    """Tier 1 regional endemic species count (mammals + birds) within buffer.
-    Must match extract_endemic_richness scope — both taxonomic groups.
-    Uses same range threshold: < 100,000 km².
-    """
+    """Tier 1 regional endemic species count: mean within buffer is not meaningful
+    for a count indicator. Instead, return the regional count (distinct endemic
+    species whose ranges overlap the buffer) as the reference denominator."""
     import ee
-    from darukaa_reference.indicators import _load_fc, _MAMMALS, _BIRDS, _to_ee
+    from darukaa_reference.indicators import _load_fc, _MAMMALS, _to_ee
+    eg = _to_ee(site_geom) if not isinstance(site_geom, ee.Geometry) else site_geom
     region_ee = region if isinstance(region, ee.Geometry) else _to_ee(region)
-    total = 0
-    for asset in [_MAMMALS, _BIRDS]:
-        fc = _load_fc(asset, config)
-        if not fc: continue
-        try:
-            wa = fc.map(lambda f: f.set("rk2", f.geometry().area().divide(1e6)))
-            n = wa.filter(ee.Filter.lt("rk2", 100000)).filterBounds(region_ee).distinct("sci_name").size().getInfo()
-            total += n
-        except Exception as e:
-            logger.warning(f"FC Tier1 endemic ({'mammal' if asset==_MAMMALS else 'bird'}): {e}")
-    if total == 0: return {}
-    return {"mean": float(total), "median": float(total), "n": 1}
+    fc = _load_fc(_MAMMALS, config)
+    if not fc: return {}
+    try:
+        wa = fc.map(lambda f: f.set("rk2", f.geometry().area().divide(1e6)))
+        sr = wa.filter(ee.Filter.lt("rk2", 100000)).filterBounds(region_ee).distinct("sci_name")
+        n = sr.size().getInfo()
+        # Return as both mean and median so _parse_gee_stats-style dicts work
+        return {"mean": float(n), "median": float(n), "n": 1}
+    except Exception as e:
+        logger.warning(f"FC Tier1 endemic: {e}"); return {}
 
 def _fc_tier1_threatened_richness(site_geom, region, config):
     """Tier 1 regional threatened species count within buffer."""
@@ -581,17 +562,18 @@ def extract_endemic_richness(g,c):
                         "range_threshold_km2":100000}}
 
 def extract_flagship_habitat(g,c):
-    """Flagship Habitat Viability Index.
-    Formula: HSI_mean × 0.6 + bird_suit × 0.4
-    where HSI = forest × elevation_suitability × inverse_light_pressure (0-1)
-    and bird_suit = min(threatened_bird_count / 50, 1.0)
-    The 50-species normalisation cap is based on Eastern Himalayan regional maximum.
-    Aligns with Soudipta's weighted composite; uses RedList__5 field (double underscore).
+    """Flagship/Keystone Habitat Viability Index.
+    Formula: HSI × 0.6 + species_suit × 0.4
+    where HSI (0-1) = forest × elevation_suitability × inverse_light_pressure
+    and species_suit (0-1) = min((n_threatened_birds + n_threatened_mammals) / 50, 1.0)
+    Taxonomic scope: birds (CR/EN/VU, RedList__5) + mammals (CR/EN/VU, category).
+    Per Mair et al. (2021): STAR covers birds + mammals; consistent taxonomy applied here.
+    Normalisation ceiling 50 species is provisional (Eastern Himalayan context).
     """
-    import ee; eg=_to_ee(g); birds=_load_fc(_BIRDS,c)
-    if not birds: return {"value":None,"pixels":None}
+    import ee; eg=_to_ee(g)
     try:
         y=c.ndvi_year
+        # HSI component
         dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg).select("label").mode()
         forest=dw.eq(1); dem=ee.Image("USGS/SRTMGL1_003")
         es=dem.unitScale(0,2000).multiply(-1).add(1)
@@ -600,11 +582,16 @@ def extract_flagship_habitat(g,c):
         hsi=forest.multiply(es).multiply(hs).rename("HSI")
         hsi_val=hsi.reduceRegion(reducer=ee.Reducer.mean(),geometry=eg,scale=1000,maxPixels=1e13).get("HSI").getInfo()
         if hsi_val is None: return {"value":None,"pixels":None}
-        # Threatened bird count component (RedList__5 double underscore)
-        threatened_birds=birds.filter(ee.Filter.inList("RedList__5",["CR","EN","VU"])).filterBounds(eg).distinct("sci_name")
-        n_birds=threatened_birds.size().getInfo()
-        bird_suit=min(n_birds/50.0, 1.0)  # normalise to 0-1, cap at 50 species
-        final=float(hsi_val)*0.6 + bird_suit*0.4
+        # Threatened species count: birds + mammals
+        n_species = 0
+        birds=_load_fc(_BIRDS,c)
+        if birds:
+            n_species+=birds.filter(ee.Filter.inList("RedList__5",["CR","EN","VU"])).filterBounds(eg).distinct("sci_name").size().getInfo()
+        mammals=_load_fc(_MAMMALS,c)
+        if mammals:
+            n_species+=mammals.filter(ee.Filter.inList("category",["CR","EN","VU"])).filterBounds(eg).distinct("sci_name").size().getInfo()
+        species_suit=min(n_species/50.0, 1.0)
+        final=float(hsi_val)*0.6 + species_suit*0.4
         return {"value":final,"pixels":None}
     except Exception as e: logger.warning(f"Flagship: {e}"); return {"value":None,"pixels":None}
 
@@ -665,22 +652,51 @@ def extract_ceri(g,c):
                         "note":"NT included in CERI (weighted index); excluded from Threatened Richness (count metric)"}}
 
 def extract_star_t(g,c):
-    import ee; eg=_to_ee(g); birds=_load_fc(_BIRDS,c)
-    if not birds: return {"value":None,"pixels":None}
+    """STAR_T (Threat Abatement): species threat abatement score per Mair et al. (2021).
+    Taxonomic scope: birds + mammals (CR/EN/VU), per Mair et al. paper which covers
+    'terrestrial amphibians, birds and mammals'. Amphibians excluded — no GEE asset.
+    Presence=1, origin=1 filters applied to birds only (mammals asset has no these fields).
+    Red List weights: CR=4, EN=3, VU=2. Threat pressure = (built density + nightlights) / 2.
+    Habitat mask: Dynamic World trees/grass/wetland/shrub (classes 1,2,3,5).
+    """
+    import ee; eg=_to_ee(g)
+    y=c.ndvi_year
     try:
-        y=c.ndvi_year
-        filt=birds.filter(ee.Filter.eq("presence",1)).filter(ee.Filter.eq("origin",1)).filter(ee.Filter.inList("RedList__5",["CR","EN","VU"]))
-        def aw(f):
-            cat=ee.String(f.get("RedList__5"))
-            w=ee.Number(ee.Algorithms.If(cat.equals("CR"),4,ee.Algorithms.If(cat.equals("EN"),3,ee.Algorithms.If(cat.equals("VU"),2,1))))
-            return f.set("weight",w)
-        wr=filt.map(aw); sr=ee.Image().float().paint(featureCollection=wr,color="weight")
+        # Shared habitat + threat layers
         dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg).select("label").mode()
         hm=dw.remap([1,2,3,5],[1,1,1,1],0); bm=dw.eq(6)
         bd=bm.reduceNeighborhood(reducer=ee.Reducer.mean(),kernel=ee.Kernel.circle(radius=1000,units="meters"))
         viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
         nn=viirs.unitScale(0,50); tp=bd.add(nn).divide(2)
-        st=sr.multiply(tp).multiply(hm).rename("STAR_T")
+
+        # Accumulate weighted species raster across birds + mammals
+        combined_raster = ee.Image(0).float()
+
+        # Birds (CR/EN/VU, presence=1, origin=1)
+        birds=_load_fc(_BIRDS,c)
+        if birds:
+            filt_b=birds.filter(ee.Filter.eq("presence",1)).filter(ee.Filter.eq("origin",1)).filter(ee.Filter.inList("RedList__5",["CR","EN","VU"]))
+            def aw_b(f):
+                cat=ee.String(f.get("RedList__5"))
+                w=ee.Number(ee.Algorithms.If(cat.equals("CR"),4,ee.Algorithms.If(cat.equals("EN"),3,ee.Algorithms.If(cat.equals("VU"),2,1))))
+                return f.set("weight",w)
+            wr_b=filt_b.map(aw_b)
+            sr_b=ee.Image().float().paint(featureCollection=wr_b,color="weight")
+            combined_raster=combined_raster.add(sr_b.unmask(0))
+
+        # Mammals (CR/EN/VU — no presence/origin filter, different asset schema)
+        mammals=_load_fc(_MAMMALS,c)
+        if mammals:
+            filt_m=mammals.filter(ee.Filter.inList("category",["CR","EN","VU"]))
+            def aw_m(f):
+                cat=ee.String(f.get("category"))
+                w=ee.Number(ee.Algorithms.If(cat.equals("CR"),4,ee.Algorithms.If(cat.equals("EN"),3,ee.Algorithms.If(cat.equals("VU"),2,1))))
+                return f.set("weight",w)
+            wr_m=filt_m.map(aw_m)
+            sr_m=ee.Image().float().paint(featureCollection=wr_m,color="weight")
+            combined_raster=combined_raster.add(sr_m.unmask(0))
+
+        st=combined_raster.multiply(tp).multiply(hm).rename("STAR_T")
         val=st.reduceRegion(reducer=ee.Reducer.mean(),geometry=eg,scale=1000,maxPixels=1e13).get("STAR_T").getInfo()
         return {"value":val,"pixels":None}
     except Exception as e: logger.warning(f"STAR_T: {e}"); return {"value":None,"pixels":None}
