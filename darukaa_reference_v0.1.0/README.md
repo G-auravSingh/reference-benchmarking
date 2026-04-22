@@ -82,7 +82,7 @@ Ceiling is 0.10 — adapted from SEED's 0.05 for buffer-scale analysis. Correspo
 | Indicator | Source | Radius | Tier 2 | Notes |
 |-----------|--------|--------|--------|-------|
 | `endemic_richness` | IUCN mammals + IUCN birds (range < 100,000 km²) | 100 km | ✗ Protocol C | Both taxonomic groups |
-| `flagship_habitat` | HSI × 0.6 + normalised bird richness × 0.4 | 50 km | ✗ Protocol A | Composite; see below |
+| `flagship_habitat` | HSI × 0.6 + normalised species richness × 0.4 (birds + mammals) | 50 km | ✗ Protocol A | Composite; see below |
 
 ### Dim 4 — Species Extinction Risk (3)
 
@@ -90,7 +90,7 @@ Ceiling is 0.10 — adapted from SEED's 0.05 for buffer-scale analysis. Correspo
 |-----------|--------|--------|--------|------------|
 | `threatened_richness` | IUCN mammals + birds | 100 km | ✗ Protocol C | CR/EN/VU only |
 | `ceri` | IUCN mammals + birds (null-filtered) | 100 km | ✗ Protocol A | All: EX/EW/CR/EN/VU/NT/LC |
-| `star_t` | Bird ranges × habitat × threat pressure | 100 km | ✗ Protocol A | CR/EN/VU only |
+| `star_t` | Bird + mammal ranges × habitat × threat pressure | 100 km | ✗ Protocol A | CR/EN/VU only |
 
 **IUCN category consistency across indicators:**
 - `threatened_richness`, `star_t`, `star_r`: CR/EN/VU only — strict TNFD threatened definition, equal weight per species
@@ -117,7 +117,7 @@ All `tier2_eligible=False`. Not in SoN Score per TNFD Annex 2 design.
 
 where:
 - `HSI` (0–1) = forest × elevation_suitability × inverse_light_pressure — structural habitat quality
-- `bird_suit` (0–1) = min(n_threatened_birds_CR/EN/VU / 50, 1.0) — normalised threatened bird richness
+- `species_suit` (0–1) = min((n_threatened_birds_CR/EN/VU + n_threatened_mammals_CR/EN/VU) / 50, 1.0) — normalised threatened species richness (birds + mammals per Mair et al. 2021)
 
 **Rationale for composite:** Pure HSI answers "is this structurally suitable habitat?" The bird count component answers "do threatened species actually use it?" A site with HSI=0.93 and 0 threatened birds is ecologically different from one with HSI=0.93 and 45 threatened birds. The composite captures both dimensions.
 
@@ -325,7 +325,7 @@ darukaa_reference/
 
 **UHII** and **MSA (GLOBIO)** are WIP, not yet registered.
 
-**STAR_R** (restoration) not yet implemented in pipeline — bird-only in Soudipta's script; extending to mammals+birds is the next step.
+**STAR_R** (restoration) not yet implemented in pipeline. When implemented, use birds + mammals per Mair et al. (2021).
 
 **Bugs fixed (session record):**
 - HMI ceiling: 0.05 → 0.10
@@ -336,6 +336,8 @@ darukaa_reference/
 - Threatened richness: higher_is_better corrected to False
 - fc_tier1_fn hook added to reference.py for FeatureCollection Tier 1
 - Flagship habitat: pure HSI → normalised composite (HSI×0.6 + bird_norm×0.4)
+- STAR_T: extended to birds + mammals (per Mair et al. 2021 taxonomic scope)
+- Flagship: species_suit now uses birds + mammals CR/EN/VU count
 - Species lists now returned in extraction metadata
 - Aridity Index: our PET ×0.1 conversion confirmed correct; Soudipta's script missing conversion (10× error)
 
