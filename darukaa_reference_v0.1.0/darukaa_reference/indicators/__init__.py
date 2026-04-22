@@ -353,10 +353,25 @@ def _img_bii(c):
     return None
 
 def _img_pdf(c):
+    """Potentially Disappeared Fraction using ReCiPe characterisation factors by MODIS LC.
+    CF values: forest (1-5)=0.10, savanna/shrubland (7-9)=0.20, grassland (10)=0.05,
+    cropland (12)=0.30, urban (13)=0.50, all others (water, barren, wetland, snow)=0.00.
+    CF=0 pixels are included (not masked) so sites with unmatched LC classes return 0
+    rather than None. Previously updateMask(cf) caused None for non-forest sites (e.g. MER).
+    """
     import ee
     lc=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
-    cf=lc.expression("b('LC_Type1')==12?0.30:b('LC_Type1')==13?0.50:b('LC_Type1')==10?0.05:b('LC_Type1')==7?0.20:b('LC_Type1')<=5?0.10:0").rename("PDF")
-    return cf.updateMask(cf)
+    cf=lc.expression(
+        "b('LC_Type1')<=5?0.10:"
+        "b('LC_Type1')==7?0.20:"
+        "b('LC_Type1')==8?0.20:"
+        "b('LC_Type1')==9?0.20:"
+        "b('LC_Type1')==10?0.05:"
+        "b('LC_Type1')==12?0.30:"
+        "b('LC_Type1')==13?0.50:"
+        "0.0"
+    ).rename("PDF")
+    return cf  # no masking — CF=0 sites correctly return 0, not None
 
 def _img_aridity(c):
     import ee; y=c.ndvi_year
@@ -403,23 +418,25 @@ def _img_lst_night(c):
 # Signature: fn(site_geometry_ee, region_ee, config) -> dict with mean/median/n
 
 def _fc_tier1_endemic_richness(site_geom, region, config):
-    """Tier 1 regional endemic species count: mean within buffer is not meaningful
-    for a count indicator. Instead, return the regional count (distinct endemic
-    species whose ranges overlap the buffer) as the reference denominator."""
+    """Tier 1 regional endemic species count (mammals + birds) within buffer.
+    Must match extract_endemic_richness scope — both taxonomic groups.
+    Uses same range threshold: < 100,000 km².
+    """
     import ee
-    from darukaa_reference.indicators import _load_fc, _MAMMALS, _to_ee
-    eg = _to_ee(site_geom) if not isinstance(site_geom, ee.Geometry) else site_geom
+    from darukaa_reference.indicators import _load_fc, _MAMMALS, _BIRDS, _to_ee
     region_ee = region if isinstance(region, ee.Geometry) else _to_ee(region)
-    fc = _load_fc(_MAMMALS, config)
-    if not fc: return {}
-    try:
-        wa = fc.map(lambda f: f.set("rk2", f.geometry().area().divide(1e6)))
-        sr = wa.filter(ee.Filter.lt("rk2", 100000)).filterBounds(region_ee).distinct("sci_name")
-        n = sr.size().getInfo()
-        # Return as both mean and median so _parse_gee_stats-style dicts work
-        return {"mean": float(n), "median": float(n), "n": 1}
-    except Exception as e:
-        logger.warning(f"FC Tier1 endemic: {e}"); return {}
+    total = 0
+    for asset in [_MAMMALS, _BIRDS]:
+        fc = _load_fc(asset, config)
+        if not fc: continue
+        try:
+            wa = fc.map(lambda f: f.set("rk2", f.geometry().area().divide(1e6)))
+            n = wa.filter(ee.Filter.lt("rk2", 100000)).filterBounds(region_ee).distinct("sci_name").size().getInfo()
+            total += n
+        except Exception as e:
+            logger.warning(f"FC Tier1 endemic ({'mammal' if asset==_MAMMALS else 'bird'}): {e}")
+    if total == 0: return {}
+    return {"mean": float(total), "median": float(total), "n": 1}
 
 def _fc_tier1_threatened_richness(site_geom, region, config):
     """Tier 1 regional threatened species count within buffer."""
