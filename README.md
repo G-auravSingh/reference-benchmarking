@@ -205,6 +205,15 @@ Output: 0–10. Concern levels: 0–4=Very Low, 4–5=Low, 5–7=Moderate, 7–8
 
 **Threats excluded from SoN Score** per TNFD Annex 2. In-situ indicators (species richness, acoustic health) reported as standalone values — no spatial reference benchmark available from this pipeline.
 
+**Threat indicator categorical labels** (absolute thresholds, shown in notebook threat assessment block):
+
+| Indicator | Very Low | Low | Moderate | High | Very High | Source |
+|-----------|----------|-----|----------|------|-----------|--------|
+| gHM | < 0.10 | 0.10–0.25 | 0.25–0.40 | 0.40–0.60 | > 0.60 | Kennedy et al. 2019 |
+| Light Pollution (nW/cm²/sr) | < 0.05 | 0.05–0.5 | 0.5–5.0 | 5.0–50 | > 50 | Falchi et al. 2016 |
+| HDI | < 0.10 | 0.10–0.30 | 0.30–0.60 | 0.60–0.80 | > 0.80 | ESA WorldCover proxy |
+| LST Day/Night | Reported as ±°C deviation from Tier 1 regional mean | | | | | Context-dependent |
+
 ---
 
 ## GEE Assets
@@ -244,7 +253,7 @@ darukaa_reference/
 ├── reference.py         — Tier 1 + Tier 2 engine
 │                          • tier2_eligible check before Tier 2
 │                          • metadata["fc_tier1_fn"] hook for FeatureCollection Tier 1
-│                            (endemic richness, threatened richness — no raster image)
+│                            (endemic richness — mammals+birds, threatened richness — mammals+birds)
 │                          • metadata["gee_image_fn"] for custom image builders
 │                          • Fallback cascade: drop LC → expand buffer → warn
 └── indicators/__init__.py — 25 indicators, key decisions:
@@ -301,6 +310,8 @@ darukaa_reference/
 ---
 
 ## Known Limitations
+
+**PDF returning None for non-forest sites:** `_img_pdf` previously used `.updateMask(cf)` which masked pixels where characterisation factor (CF) = 0. Sites dominated by water, barren, wetland, or unmatched MODIS LC classes had no unmasked pixels → `reduceRegion` returned None. Fixed by removing the mask — CF=0 pixels now contribute 0 to the mean. A site with pure shrubland (CF=0.20) correctly returns PDF≈0.20; a site with water (CF=0) correctly returns PDF=0.00.
 
 **Species-Area Relationship (SAR) artefact — count indicators:** Endemic Richness and Threatened Richness Protocol C reference uses raw species count in the Tier 1 buffer (100km radius). A small site polygon always has fewer species than a large buffer. Fix is density normalisation (species/km²). Flagged for next methodology revision. Current Protocol C results for these indicators should carry interpretation caveats.
 
