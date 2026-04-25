@@ -26,6 +26,8 @@ For each site × indicator:
 
 **Tier 2 eligibility:** Threat/pressure indicators (`tier2_eligible=False`) skip Tier 2 entirely — using HMI to select "least-disturbed" reference pixels for indicators that *measure* human disturbance is circular. Tier 1 is their correct comparison.
 
+**Tier 2 behaviour for agricultural/modified landscapes:** For sites where gHM > 0.4 throughout the buffer (e.g., active agroforestry zones in Odisha), no pixels meet the HMI ≤ 0.10 ceiling. Tier 2 correctly returns `insufficient reference pixels` for all eligible indicators. This is expected behaviour — not a bug. Output reports: *"Tier 2 unavailable — no minimally-modified reference pixels within buffer. Tier 1 regional comparison applied."*
+
 ---
 
 ## Reference Selection Methodology
@@ -243,6 +245,59 @@ Output: 0–10. Concern levels: 0–4=Very Low, 4–5=Low, 5–7=Moderate, 7–8
 
 ---
 
+## Agroforestry Projects — Multi-Cluster Support
+
+For agroforestry projects with spatially dispersed farm parcels (e.g., 335 farms across multiple Odisha blocks), running a single union polygon through the pipeline produces ecologically incoherent results because the centroid buffer mixes many unrelated landscapes. The correct approach is DBSCAN cluster-based aggregation.
+
+**Workflow:**
+
+1. The generalised PAM site selection pipeline (separate codebase) runs DBSCAN (eps=2000m, min_samples=3) on all farm centroids and outputs N cluster KMLs + a `manifest.json` with per-cluster area weights.
+
+2. In the notebook, set `PROJECT_TYPE = "agroforestry"` and `MANIFEST_FILE` to your manifest path (Cell 8). The manifest format is:
+```json
+[{"cluster_id": "cluster_01", "kml_path": "/content/cluster_01.kml", "area_ha": 142.3}, ...]
+```
+
+3. Cell 10 loops over clusters internally, runs the full pipeline for each, then area-weighted aggregates into one project scorecard before passing to SoN scoring. No CSV round-trip required — the aggregation happens inside the notebook.
+
+**Area-weighted aggregation formula:**
+```
+project_value = Σ(cluster_value × area_ha) / Σ area_ha
+```
+Applied to `site_value`, `tier1_intactness`, and `tier2_intactness` for each indicator independently. Tier 2 aggregation only uses clusters where Tier 2 succeeded; clusters with Tier 2 failures contribute only to Tier 1 aggregation.
+
+**For conservation projects** (`PROJECT_TYPE = "conservation"`): notebook behaviour is unchanged — single KML, single pipeline run, no aggregation.
+
+---
+
+## Trajectory Tracking (Year 1+)
+
+Supports longitudinal monitoring for restoration and agroforestry projects. Scientifically aligned with SBTN AR3T Step 4 (trajectory reporting alongside status reporting).
+
+**Configuration:**
+- `IS_BASELINE_RUN = True` (Year 0): runs normally, saves `baseline_scorecard.csv` alongside other outputs
+- `IS_BASELINE_RUN = False` (Year 1+): loads `baseline_scorecard.csv`, computes trajectory columns per indicator
+
+**Trajectory columns added at Year 1+:**
+
+| Column | Definition |
+|--------|-----------|
+| `delta_site_value` | `current_site_value − baseline_site_value` |
+| `delta_intactness` | `current_intactness − baseline_intactness` (Tier 2 preferred, Tier 1 fallback) |
+| `trajectory_label` | `Improving` / `Stable` / `Declining` |
+
+**Thresholds for `trajectory_label`:**
+- Raster indices (NDVI, EII, BII, FLII, PDF, AI, HHI, CPLAND): ±2% intactness change
+- Protocol A / count indicators (CERI, STAR_T, Flagship, Endemic Richness, Threatened Richness): ±0.05 absolute change in site_value
+
+**Year 0:** Trajectory columns are blank. `baseline_scorecard.csv` is written to `OUTPUT_DIR`.
+
+**Year 1+:** Trajectory columns populated and printed in the notebook output. `trajectory.csv` downloaded alongside the main scorecard.
+
+**Protocol A/B/C thresholds and SoN formula are unchanged** — trajectory is an additional layer, not a replacement for the existing concern levels.
+
+---
+
 ## Package Architecture (current state)
 
 ```
@@ -340,6 +395,9 @@ darukaa_reference/
 - Flagship: species_suit now uses birds + mammals CR/EN/VU count
 - Species lists now returned in extraction metadata
 - Aridity Index: our PET ×0.1 conversion confirmed correct; Soudipta's script missing conversion (10× error)
+- Agroforestry multi-cluster support: Cell 10 now loops over DBSCAN cluster KMLs with area-weighted aggregation
+- Trajectory layer: Cells 16 + 20 now support baseline write (Year 0) and delta computation (Year 1+)
+- Tier 2 failure for agricultural landscapes documented as correct behaviour, not error
 
 ---
 
@@ -349,6 +407,15 @@ Working prototype. Validated on Paglam Community Reserve with 25 indicators, no 
 
 **Repository:** github.com/G-auravSingh/reference-benchmarking
 **Runtime:** Google Colab (`notebooks/run_pipeline.ipynb`)
+
+**Notebook cells changed in this release:**
+- **Cell 8 (Configuration):** Added `PROJECT_TYPE`, `IS_BASELINE_RUN`, `MANIFEST_FILE`, `BASELINE_FILE` config variables
+- **Cell 10 (Run pipeline):** Added agroforestry cluster loop + area-weighted aggregation; conservation path unchanged
+- **Cell 12 (Scorecard display):** Shows cluster metadata columns for agroforestry runs
+- **Cell 16 (Dimension scores):** Added trajectory computation block (baseline write + delta calculation)
+- **Cell 20 (Download):** Downloads `baseline_scorecard.csv` on Year 0 runs; downloads `trajectory.csv` on Year 1+ runs
+
+**Core package files unchanged:** `reference.py`, `registry.py`, `config.py`, `indicators/__init__.py`
 **Related:** State of Nature Module PRD v2.0 (`son_module_PRD_v2_0.html`)
 **License:** Internal use — Darukaa.Earth
 
@@ -372,3 +439,4 @@ Working prototype. Validated on Paglam Community Reserve with 25 indicators, no 
 - Huijbregts et al. (2017) Int J LCA DOI:10.1007/s11367-016-1246-y — PDF/ReCiPe
 - Farr et al. (2007) Reviews of Geophysics DOI:10.1029/2005RG000183 — SRTM
 - Dinerstein et al. (2017) BioScience DOI:10.1093/biosci/bix014 — Ecoregions
+- Mair et al. (2021) Nature Ecology & Evolution DOI:10.1038/s41559-021-01432-0 — STAR metric (birds + mammals scope)
