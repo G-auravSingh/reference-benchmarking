@@ -211,10 +211,11 @@ Output: 0–10. Concern levels: 0–4=Very Low, 4–5=Low, 5–7=Moderate, 7–8
 
 | Indicator | Very Low | Low | Moderate | High | Very High | Source |
 |-----------|----------|-----|----------|------|-----------|--------|
-| gHM | < 0.10 | 0.10–0.25 | 0.25–0.40 | 0.40–0.60 | > 0.60 | Kennedy et al. 2019 |
-| Light Pollution (nW/cm²/sr) | < 0.05 | 0.05–0.5 | 0.5–5.0 | 5.0–50 | > 50 | Falchi et al. 2016 |
-| HDI | < 0.10 | 0.10–0.30 | 0.30–0.60 | 0.60–0.80 | > 0.80 | ESA WorldCover proxy |
-| LST Day/Night | Reported as ±°C deviation from Tier 1 regional mean | | | | | Context-dependent |
+| gHM | 0.00–0.10 | 0.10–0.30 | 0.30–0.60 | 0.60–0.90 | 0.90–1.00 | Theobald et al. 2025 |
+| Light Pollution (nW·cm⁻²·sr⁻¹) | < 1.0 | 1.0–5.0 | 5.0–30.0 | 30.0–100.0 | > 100.0 | NASA Black Marble / VIIRS DNB |
+| HDI | < 0.50 | 0.50–0.60 | 0.60–0.70 | 0.70–0.80 | ≥ 0.80 | Mishra et al. 2017 |
+| LST Nighttime (°C) | < 22 | 22–26 | 26–30 | 30–34 | > 34 | KMC et al. 2025 |
+| LST Daytime (°C) | < 32 | 32–36 | 36–40 | 40–44 | > 44 | Muse, Clement & Mach 2024 |
 
 ---
 
