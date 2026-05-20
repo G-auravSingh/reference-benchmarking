@@ -275,7 +275,7 @@ def _img_natural_landcover(c):
 
 def _img_forest_loss(c):
     import ee
-    gfc=ee.Image("UMD/hansen/global_forest_change_2024_v1_13")
+    gfc=ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
     f=gfc.select("treecover2000").gte(30); l=gfc.select("lossyear").gt(0)
     return l.divide(f.max(1)).multiply(100).divide(24).updateMask(f).rename("forest_loss_rate")
 
@@ -498,7 +498,7 @@ def extract_cpland(g,c):
 
 def extract_forest_loss_rate(g,c):
     import ee; eg=_to_ee(g)
-    gfc=ee.Image("UMD/hansen/global_forest_change_2024_v1_13").clip(eg)
+    gfc=ee.Image("UMD/hansen/global_forest_change_2025_v1_13").clip(eg)
     f=gfc.select("treecover2000").gte(30); l=gfc.select("lossyear").gt(0); pa=ee.Image.pixelArea()
     a0=pa.updateMask(f).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=30,maxPixels=1e13)
     al=pa.updateMask(l).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=30,maxPixels=1e13)
