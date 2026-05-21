@@ -308,7 +308,10 @@ def _img_flii(c):
     nn=night.unitScale(0,60).clamp(0,1)
     conn=forest.focal_min(2); frag=forest.subtract(conn).selfMask().unmask(0).unitScale(0,1)
     p=nn.add(frag).unitScale(0,2).clamp(0,1)
-    return ee.Image(10).subtract(p.multiply(10)).updateMask(forest).rename("FLII")
+    #return ee.Image(10).subtract(p.multiply(10)).updateMask(forest).rename("FLII")
+    # REMOVED: .updateMask(forest) 
+    # This ensures a continuous landscape integrity surface is returned
+    return ee.Image(10).subtract(p.multiply(10)).rename("FLII")
 
 def _img_eii(c):
     import ee
@@ -522,10 +525,37 @@ def extract_habitat_health(g,c):
     img=_img_hhi(c)
     return _reduce(img,g,10) if img else {"value":None,"pixels":None}
 
-def extract_flii(g,c):
-    img=_img_flii(c)
-    return _reduce(img,g,500) if img else {"value":None,"pixels":None}
-
+#def extract_flii(g,c):
+#    img=_img_flii(c)
+#    return _reduce(img,g,500) if img else {"value":None,"pixels":None}
+def extract_flii(g, c):   
+    # Get the true, continuous landscape integrity matrix (NO hard mask)
+    img = _img_flii(c)   
+    if not img: 
+        return {"value": None, "pixels": None}
+        
+    # Calculate exact polygon area
+    area_ha = g.area().divide(10000)
+    
+    # DYNAMIC GEOMETRY RESOLUTION
+    # We use a GEE conditional to safely alter our sampling zone based on site scale
+    geometry_to_reduce = ee.Algorithms.If(
+        area_ha.lt(10),
+        # NANO SITES: Use center point to sample the single background macro-pixel it sits in.
+        # This completely prevents bleeding into neighboring sites.
+        g.centroid(1), 
+        ee.Algorithms.If(
+            area_ha.lt(100),
+            # MICRO SITES: Use the tight bounding box envelope to snap cleanly to pixel boundaries.
+            g.envelope(),
+            # MACRO SITES: Keep the exact pristine boundary.
+            g
+        )
+    )
+    
+    # Always match the scale parameter to the underlying dataset (MODIS = 500m)
+    return _reduce(img, ee.Geometry(geometry_to_reduce), 500)
+    
 def extract_eii(g,c):
     img=_img_eii(c)
     return _reduce(img,g,300) if img else {"value":None,"pixels":None}
