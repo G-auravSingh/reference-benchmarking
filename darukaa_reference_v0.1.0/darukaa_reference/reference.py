@@ -547,8 +547,17 @@ class ReferenceSelector:
 
         Both return 0–1 where 1.0 = equivalent to reference condition.
         """
-        if reference_value == 0 or site_value == 0:
+        # reference = 0: regional landscape has no signal — ratio undefined
+        if reference_value == 0:
             return None
+
+        # site_value = 0 for lower-is-better indicators (e.g. forest_loss_rate=0):
+        # zero loss/pressure is the best possible outcome → intactness = 100%
+        if site_value == 0:
+            if not higher_is_better:
+                return 1.0   # zero pressure = fully intact relative to reference
+            else:
+                return None  # zero value for higher-is-better is genuinely missing
 
         if higher_is_better:
             return min(site_value / reference_value, 1.0)
