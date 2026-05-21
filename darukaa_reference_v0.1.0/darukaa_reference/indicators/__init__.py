@@ -525,48 +525,9 @@ def extract_habitat_health(g,c):
     img=_img_hhi(c)
     return _reduce(img,g,10) if img else {"value":None,"pixels":None}
 
-#def extract_flii(g,c):
-#    img=_img_flii(c)
-#    return _reduce(img,g,500) if img else {"value":None,"pixels":None}
-def extract_flii(g, c):   
-    import ee
-    
-    # 1. Get the continuous landscape integrity matrix
-    img = _img_flii(c)   
-    if not img: 
-        return {"value": None, "pixels": None}
-        
-    # 2. Force casting to a pure server-side ee.Geometry to bypass wrapper issues
-    ee_geom = ee.Geometry(g)
-    
-    # 3. Use an un-nested, clean server-side fallback approach 
-    # instead of calling .area() or .centroid() methods on the wrapper object 'g'
-    area_ha = ee_geom.area().divide(10000)
-    
-    # We use a clean Python client-side evaluation or a safe dictionary lookup
-    # But since area_ha is an ee.Number, we can use ee.Image.where or 
-    # simply cast a clean bounding box envelope on the ee_geom directly
-    
-    # Let's check if the site is small by extracting its bounding box.
-    # For a completely fail-safe route that handles clustered nano/micro sites perfectly:
-    try:
-        # We fetch the envelope directly from the clean ee_geom
-        # If it's a micro/nano site, ee_geom.envelope() handles it perfectly without cross-contamination
-        geometry_to_reduce = ee.Algorithms.If(
-            area_ha.lt(100),
-            ee_geom.envelope(),
-            ee_geom
-        )
-        
-        # Explicitly wrap the server-side conditional result
-        final_geom = ee.Geometry(geometry_to_reduce)
-        
-    except Exception as e:
-        # Fallback to the pristine geometry if the server-side conditional trips a wrapper error
-        final_geom = ee_geom
-
-    # 4. Ship it to your reducer
-    return _reduce(img, final_geom, 500)
+def extract_flii(g,c):
+    img=_img_flii(c)
+    return _reduce(img,g,500) if img else {"value":None,"pixels":None}
     
 def extract_eii(g,c):
     img=_img_eii(c)
