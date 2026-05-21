@@ -370,6 +370,11 @@ darukaa_reference/
 **PDF returning None for non-forest sites:** `_img_pdf` previously used `.updateMask(cf)` which masked pixels where characterisation factor (CF) = 0. Sites dominated by water, barren, wetland, or unmatched MODIS LC classes had no unmasked pixels → `reduceRegion` returned None. Fixed by removing the mask — CF=0 pixels now contribute 0 to the mean. A site with pure shrubland (CF=0.20) correctly returns PDF≈0.20; a site with water (CF=0) correctly returns PDF=0.00.
 
 **Species-Area Relationship (SAR) artefact — count indicators:** Endemic Richness and Threatened Richness Protocol C reference uses raw species count in the Tier 1 buffer (100km radius). A small site polygon always has fewer species than a large buffer. Fix is density normalisation (species/km²). Flagged for next methodology revision. Current Protocol C results for these indicators should carry interpretation caveats.
+**`forest_loss_rate` Tier 2 warning always fires:** Hansen forest loss Tier 2 requires pixels with both forest baseline and HMI ≤ ceiling. In agricultural or mixed landscapes these rarely exist. This warning is expected correct behaviour, not a bug. The intactness ratio is now correctly set to 100% when site_value = 0 (zero forest loss at site), rather than returning `—`.
+
+**`interpretation` column — context-specific messages:** The scorecard now distinguishes: (a) Protocol A indicators — assessed via absolute threshold, no spatial reference needed; (b) reference = 0 — regional landscape has no signal in that metric (e.g. Natural Land Cover in agricultural buffer); (c) Tier 2 unavailable — Tier 1 comparison applied; (d) no data — check site polygon size or GEE asset coverage.
+
+**Minimum recommended site area: ~1 km²:** Sites smaller than 1 km² may return None for coarser-resolution indicators (MODIS 500m/1km, gHM 1km, FLII). A 0.5×0.5 km polygon at 1km resolution contains 0–1 pixels — insufficient for reliable statistics.
 
 **FLII** is an approximation (MODIS LC + VIIRS), not the official Grantham et al. 2020 dataset.
 
