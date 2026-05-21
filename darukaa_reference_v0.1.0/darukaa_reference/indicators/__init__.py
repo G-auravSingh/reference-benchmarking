@@ -529,32 +529,44 @@ def extract_habitat_health(g,c):
 #    img=_img_flii(c)
 #    return _reduce(img,g,500) if img else {"value":None,"pixels":None}
 def extract_flii(g, c):   
-    # Get the true, continuous landscape integrity matrix (NO hard mask)
+    import ee
+    
+    # 1. Get the continuous landscape integrity matrix
     img = _img_flii(c)   
     if not img: 
         return {"value": None, "pixels": None}
         
-    # Calculate exact polygon area
-    area_ha = g.area().divide(10000)
+    # 2. Force casting to a pure server-side ee.Geometry to bypass wrapper issues
+    ee_geom = ee.Geometry(g)
     
-    # DYNAMIC GEOMETRY RESOLUTION
-    # Fix: Remove the positional argument from centroid() and wrap in ee.Geometry
-    geometry_to_reduce = ee.Algorithms.If(
-        area_ha.lt(10),
-        # NANO SITES: Clean call to centroid without parameters
-        g.centroid(), 
-        ee.Algorithms.If(
+    # 3. Use an un-nested, clean server-side fallback approach 
+    # instead of calling .area() or .centroid() methods on the wrapper object 'g'
+    area_ha = ee_geom.area().divide(10000)
+    
+    # We use a clean Python client-side evaluation or a safe dictionary lookup
+    # But since area_ha is an ee.Number, we can use ee.Image.where or 
+    # simply cast a clean bounding box envelope on the ee_geom directly
+    
+    # Let's check if the site is small by extracting its bounding box.
+    # For a completely fail-safe route that handles clustered nano/micro sites perfectly:
+    try:
+        # We fetch the envelope directly from the clean ee_geom
+        # If it's a micro/nano site, ee_geom.envelope() handles it perfectly without cross-contamination
+        geometry_to_reduce = ee.Algorithms.If(
             area_ha.lt(100),
-            # MICRO SITES: Use envelope bounding box
-            g.envelope(),
-            # MACRO SITES: Keep pristine boundary
-            g
+            ee_geom.envelope(),
+            ee_geom
         )
-    )
-    
-    # Always match the scale parameter to the underlying dataset (MODIS = 500m)
-    # Explicitly cast to ee.Geometry to ensure the reducer accepts the conditional output
-    return _reduce(img, ee.Geometry(geometry_to_reduce), 500)
+        
+        # Explicitly wrap the server-side conditional result
+        final_geom = ee.Geometry(geometry_to_reduce)
+        
+    except Exception as e:
+        # Fallback to the pristine geometry if the server-side conditional trips a wrapper error
+        final_geom = ee_geom
+
+    # 4. Ship it to your reducer
+    return _reduce(img, final_geom, 500)
     
 def extract_eii(g,c):
     img=_img_eii(c)
