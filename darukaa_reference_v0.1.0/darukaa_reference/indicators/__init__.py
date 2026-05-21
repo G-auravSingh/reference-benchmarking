@@ -538,22 +538,22 @@ def extract_flii(g, c):
     area_ha = g.area().divide(10000)
     
     # DYNAMIC GEOMETRY RESOLUTION
-    # We use a GEE conditional to safely alter our sampling zone based on site scale
+    # Fix: Remove the positional argument from centroid() and wrap in ee.Geometry
     geometry_to_reduce = ee.Algorithms.If(
         area_ha.lt(10),
-        # NANO SITES: Use center point to sample the single background macro-pixel it sits in.
-        # This completely prevents bleeding into neighboring sites.
-        g.centroid(1), 
+        # NANO SITES: Clean call to centroid without parameters
+        g.centroid(), 
         ee.Algorithms.If(
             area_ha.lt(100),
-            # MICRO SITES: Use the tight bounding box envelope to snap cleanly to pixel boundaries.
+            # MICRO SITES: Use envelope bounding box
             g.envelope(),
-            # MACRO SITES: Keep the exact pristine boundary.
+            # MACRO SITES: Keep pristine boundary
             g
         )
     )
     
     # Always match the scale parameter to the underlying dataset (MODIS = 500m)
+    # Explicitly cast to ee.Geometry to ensure the reducer accepts the conditional output
     return _reduce(img, ee.Geometry(geometry_to_reduce), 500)
     
 def extract_eii(g,c):
