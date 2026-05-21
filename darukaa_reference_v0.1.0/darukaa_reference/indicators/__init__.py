@@ -300,18 +300,29 @@ def _img_hhi(c):
 
 def _img_flii(c):
     import ee
-    modis=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
-    forest=modis.gte(1).And(modis.lte(10))
-    y=c.ndvi_year
-    night=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad")
-    night=ee.ImageCollection(ee.Algorithms.If(night.size().gt(0),night,ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").sort("system:time_start",False).limit(12).select("avg_rad"))).mean()
-    nn=night.unitScale(0,60).clamp(0,1)
-    conn=forest.focal_min(2); frag=forest.subtract(conn).selfMask().unmask(0).unitScale(0,1)
-    p=nn.add(frag).unitScale(0,2).clamp(0,1)
-    #return ee.Image(10).subtract(p.multiply(10)).updateMask(forest).rename("FLII")
+    modis = ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start", False).first().select("LC_Type1")
+    
+    # MODIFIED: Include classes 1-10, class 12 (Croplands), and class 14 (Mosaics)
+    forest_mask = modis.gte(1).And(modis.lte(10))
+    mosaic_mask = modis.eq(14)
+    
+    # Combine them into a single valid baseline mask
+    forest = forest_mask.Or(mosaic_mask)
+    
+    y = c.ndvi_year
+    night = ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01", f"{y}-12-31").select("avg_rad")
+    night = ee.ImageCollection(ee.Algorithms.If(night.size().gt(0), night, ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").sort("system:time_start", False).limit(12).select("avg_rad"))).mean()
+    nn = night.unitScale(0, 60).clamp(0, 1)
+    
+    conn = forest.focal_min(2)
+    frag = forest.subtract(conn).selfMask().unmask(0).unitScale(0, 1)
+    p = nn.add(frag).unitScale(0, 2).clamp(0, 1)
+    
+    # Re-apply the updated mask to see if Site 4 finally yields a number
+    return ee.Image(10).subtract(p.multiply(10)).updateMask(forest).rename("FLII")
     # REMOVED: .updateMask(forest) 
     # This ensures a continuous landscape integrity surface is returned
-    return ee.Image(10).subtract(p.multiply(10)).rename("FLII")
+    #return ee.Image(10).subtract(p.multiply(10)).rename("FLII")
 
 def _img_eii(c):
     import ee
