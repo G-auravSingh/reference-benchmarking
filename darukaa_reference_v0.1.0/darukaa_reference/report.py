@@ -142,10 +142,11 @@ class ReportGenerator:
                 pillar_vals[r["pillar"]].append(r["tier2_intactness"])
 
         pillar_names = {
-            1: "Ecosystem Condition",
-            2: "Species Assemblage",
-            3: "Species/Population Status",
-            4: "Threats & Pressures",
+            1: "Ecosystem Extent",
+            2: "Ecosystem Condition",
+            3: "Species Population Size",
+            4: "Species Extinction Risk",
+            5: "Threats & Pressures (contextual)",
         }
 
         summaries = []
