@@ -1,5 +1,6 @@
 # ==============================================================================
 # Darukaa Reference Benchmarking Pipeline — Configuration
+# v6.5 — 44 indicators (terrestrial + aquatic/eDNA + plant species)
 # ==============================================================================
 
 gee:
@@ -8,13 +9,11 @@ gee:
   key_path: null                           # Optional: path to SA key JSON
 
 # Paths to locally-stored raster datasets
-# Download these before running the pipeline:
-#   GLOBIO4 MSA: https://dataportaal.pbl.nl/downloads/GLOBIO/
-#   SEED Index:  https://zenodo.org/records/13799961
 rasters:
   globio4_msa: "./data/globio4_msa_2015.tif"
   seed_biocomplexity: "./data/seed_biocomplexity_beta.tif"
-  # Add more local rasters here as needed
+  # eDNA observation points GEE asset (required for HSAS true score)
+  # edna_points_asset: "projects/your-project/assets/your_edna_points"
 
 # Tier 2 reference selection parameters
 # Methodology: McElderry et al. (2024) DOI:10.32942/X2689N
@@ -22,7 +21,8 @@ rasters:
 tier2:
   buffer_km: 100                           # Search radius for reference patches
   hmi_percentile: 5                        # Top N% least-disturbed pixels
-  min_pixels: 20                           # Minimum reference pixels for validity
+  min_pixels: 5                            # SEED minimum (was 20; SEED uses 5)
+  elevation_band_m: 300.0                  # ±m elevation filter for Tier 2
 
 # Remote sensing parameters
 ndvi_year: 2024
@@ -30,7 +30,6 @@ ndvi_cloud_threshold: 20                   # Max cloud cover % for Sentinel-2
 lst_year: 2024
 
 # Statistical comparison parameters
-# References: Cohen (1988), Hedges (1981), Davison & Hinkley (1998)
 statistics:
   bootstrap_n: 10000
   permutation_n: 10000
@@ -42,7 +41,7 @@ output:
   dir: "./output"
   format: "both"                           # "json", "csv", or "both"
 
-# Optional: restrict to specific indicators (empty = run all)
+# Optional: restrict to specific indicators (empty = run all 44)
 # indicators:
 #   - ndvi
 #   - bii
