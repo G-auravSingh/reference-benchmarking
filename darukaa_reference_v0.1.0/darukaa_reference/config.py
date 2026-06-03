@@ -59,9 +59,9 @@ class Config:
     srtm_gee_asset: str = "USGS/SRTMGL1_003"
 
     # Remote sensing parameters
-    ndvi_year: int = 2024
+    ndvi_year: int = 2025
     ndvi_cloud_threshold: float = 20.0  # max cloud cover %
-    lst_year: int = 2024
+    lst_year: int = 2025
 
     # Statistical parameters
     bootstrap_iterations: int = 10000
