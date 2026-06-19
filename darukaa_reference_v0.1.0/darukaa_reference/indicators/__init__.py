@@ -173,10 +173,10 @@ def _img_flii(c):
     modis=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
     forest_mask = modis.gte(1).And(modis.lte(10))
     mosaic_mask = modis.eq(14)
-    cropland_mask = modis.eq(12)
+    #cropland_mask = modis.eq(12)
     
     # Combine them
-    forest = forest_mask.Or(mosaic_mask).Or(cropland_mask)
+    forest = forest_mask.Or(mosaic_mask)
     y=c.ndvi_year
     night=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad")
     night=ee.ImageCollection(ee.Algorithms.If(night.size().gt(0),night,ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").sort("system:time_start",False).limit(12).select("avg_rad"))).mean()
