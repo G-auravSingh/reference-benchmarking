@@ -127,8 +127,21 @@ def _img_natural_habitat(c):
 
 def _img_natural_landcover(c):
     import ee
-    lc=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
-    return lc.remap(list(range(1,12)),[1]*11,0).multiply(100).rename("natural_landcover")
+    lc = ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start", False).first().select("LC_Type1")
+    
+    # Fractional Naturalness Weights:
+    # Classes 1-11 = 1.0 (100% natural)
+    # Class 14 (Mosaics) = 0.5 (50% natural)
+    # Class 12 (Croplands) = 0.0 (0% natural - strict baseline)
+    # All others = 0.0
+    
+    weights = lc.expression(
+        "b('LC_Type1') <= 11 ? 1.0 :"
+        "b('LC_Type1') == 14 ? 0.5 :"
+        "0.0"
+    ).rename("natural_landcover")
+    
+    return weights.multiply(100)
 
 def _img_forest_loss(c):
     import ee
@@ -158,7 +171,12 @@ def _img_hhi(c):
 def _img_flii(c):
     import ee
     modis=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
-    forest=modis.gte(1).And(modis.lte(10)).Or(modis.eq(14))
+    forest_mask = modis.gte(1).And(modis.lte(10))
+    mosaic_mask = modis.eq(14)
+    cropland_mask = modis.eq(12)
+    
+    # Combine them
+    forest = forest_mask.Or(mosaic_mask).Or(cropland_mask)
     y=c.ndvi_year
     night=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad")
     night=ee.ImageCollection(ee.Algorithms.If(night.size().gt(0),night,ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").sort("system:time_start",False).limit(12).select("avg_rad"))).mean()
@@ -210,11 +228,18 @@ def _img_bii(c):
 
 def _img_pdf(c):
     import ee
-    lc=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
-    cf=lc.expression(
-        "b('LC_Type1')<=5?0.10:b('LC_Type1')==7?0.20:b('LC_Type1')==8?0.20:"
-        "b('LC_Type1')==9?0.20:b('LC_Type1')==10?0.05:b('LC_Type1')==12?0.30:"
-        "b('LC_Type1')==13?0.50:0.0").rename("PDF")
+    lc = ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start", False).first().select("LC_Type1")
+    cf = lc.expression(
+        "b('LC_Type1') <= 5 ? 0.10 :"  # Forests
+        "b('LC_Type1') == 7 ? 0.20 :"  # Shrublands
+        "b('LC_Type1') == 8 ? 0.20 :"
+        "b('LC_Type1') == 9 ? 0.20 :"
+        "b('LC_Type1') == 10 ? 0.05 :" # Grasslands
+        "b('LC_Type1') == 12 ? 0.30 :" # Intensive Croplands
+        "b('LC_Type1') == 14 ? 0.15 :" # Mosaics / Agroforestry
+        "b('LC_Type1') == 13 ? 0.50 :" # Urban
+        "0.0"
+    ).rename("PDF")
     return cf
 
 def _img_aridity(c):
