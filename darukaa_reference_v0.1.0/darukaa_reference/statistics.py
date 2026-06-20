@@ -110,6 +110,7 @@ class StatisticalComparison:
             tier2_reference=ref_result.tier2_median,
             tier1_intactness=ref_result.tier1_intactness,
             tier2_intactness=ref_result.tier2_intactness,
+            metadata=getattr(ref_result, "extraction_metadata", {}) or {},   # added now
         )
 
         # If we have pixel-level data for both site and reference
