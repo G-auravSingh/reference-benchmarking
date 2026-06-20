@@ -97,6 +97,7 @@ class ReportGenerator:
                 ),
                 "permutation_p": _safe_round(comp.permutation_p_value, 6),
                 "interpretation": comp.interpretation,
+                "metadata": comp.metadata or {},   #added now
                 "eco_id": meta.get("ECO_ID"),
                 "eco_name": meta.get("ECO_NAME"),
                 "biome": meta.get("BIOME_NAME"),
