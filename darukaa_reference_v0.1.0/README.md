@@ -1,4 +1,4 @@
-# Darukaa Reference Benchmarking Pipeline V3.0
+# Darukaa Reference Benchmarking Pipeline V4.0
 
 **An indicator-agnostic framework for comparing project-site biodiversity metrics against ecoregion-specific reference benchmarks, feeding into the State of Nature Module scoring architecture.**
 
@@ -50,15 +50,15 @@ Ceiling is 0.10 — adapted from SEED's 0.05 for buffer-scale analysis. Correspo
 
 ---
 
-## Registered Indicators (44) (Latest version)
+## Registered Indicators (44) — v4.0
 
 ### Dim 1 — Ecosystem Extent (5)
 
 | Indicator | Source | Radius | Tier 2 | Direction |
 |-----------|--------|--------|--------|-----------|
 | `natural_habitat` | Dynamic World 10m | 50 km | ✓ | Higher=better |
-| `natural_landcover` | MODIS MCD12Q1 IGBP | 50 km | ✓ | Higher=better |
-| `cpland` | Darukaa PV binary (India-only) | 30 km | ✗ Protocol C | Higher=better |
+| `natural_landcover` | Dynamic World 10m | 50 km | ✓ | Higher=better |
+| `cpland` | Darukaa PV binary (India-only, native-resolution) | 30 km | ✗ Protocol C | Higher=better |
 | `forest_loss_rate` | Hansen GFC v1.12 (2001–2024) | 50 km | ✓ | Lower=better |
 | `kba_overlap` | IUCN KBA Global | 50 km | ✗ Protocol A | Higher=better |
 
@@ -70,13 +70,13 @@ Ceiling is 0.10 — adapted from SEED's 0.05 for buffer-scale analysis. Correspo
 |-----------|--------|--------|--------|-----------|
 | `ndvi` | Sentinel-2 SCL-masked, annual median | 50 km | ✓ | Protocol B |
 | `habitat_health` (HHI) | S2 NDVI time series z5/σ | 50 km | ✓ | Protocol B |
-| `flii` | MODIS LC + VIIRS (approx.) | **150 km** | ✓ | Protocol A (Potapov) |
+| `flii` | Dynamic World 10m forest mask + VIIRS (approx.) | **150 km** | ✓ | Protocol A (Potapov) |
 | `eii` | Landbanking Group 300m | 75 km | ✓ | Protocol B |
 | `eii_structural` | Landbanking 300m | 75 km | ✓ | Protocol B |
 | `eii_compositional` | Landbanking / IO BII 300m | 75 km | ✓ | Protocol B |
 | `eii_functional` | Landbanking / actual:potential NPP | 75 km | ✓ | Protocol B |
 | `bii` | IO 300m (primary) / PREDICTS NHM (fallback) | 75 km | ✓ | Protocol A (NHM) |
-| `pdf` | MODIS LC + ReCiPe CFs | 50 km | ✓ | Protocol B |
+| `pdf` | Dynamic World 10m + ReCiPe CFs | 50 km | ✓ | Protocol B |
 | `aridity_index` | CHIRPS + TerraClimate (PET ×0.1 mm) | 50 km | ✓ | Protocol B |
 
 **Aquatic & eDNA (8) -- aquatic sites only:**
@@ -108,22 +108,30 @@ Ceiling is 0.10 — adapted from SEED's 0.05 for buffer-scale analysis. Correspo
 
 **Note on SHDI:** This is the morphometric Shoreline Development Index (shape complexity). Do not confuse with `sdi` (Shoreline Disturbance Index, anthropogenic pressure, pillar 5).
 
+**Note on FLII applicability (v4.0):** FLII is conceptually a forest-integrity index. `extract_flii` now checks 10m forest-class fraction before computing; sites with <10% forest cover (e.g. active agroforestry/farmland) return `None` with explicit `metadata.note = "Not Applicable — non-forest site"` rather than a silently-failed null. Always check `metadata.applicable` before treating a missing FLII value as a data-quality issue.
+
+**Note on data-source consistency (v4.0):** Dynamic World V1 (10m) is the single canonical land-cover classification source for this entire module — `natural_habitat`, `natural_landcover`, `pdf`, `flii`, `hdi`, `sdi`, `hsas`, `iri`, `edpp`, `flagship_habitat`, `star_t` all share one helper (`_dw_mode`) and one set of named class constants (`DW_TREES`, `DW_CROPS`, `DW_BUILT`, etc. — see `darukaa_reference/indicators/__init__.py`). ESA WorldCover and MODIS MCD12Q1 have been fully retired from this pipeline as of v4.0. See "v4.0 — 10m Resolution Migration" below for rationale.
+
 ### Dim 3 — Species Population Size (3)
 
-| Indicator | Source | Radius | Tier 2 | Notes |
-|-----------|--------|--------|--------|-------|
-| `endemic_richness` | IUCN mammals + birds (range < 100,000 km²) | 100 km | ✗ Protocol C | Both groups; species list in metadata |
-| `flagship_habitat` | HSI × 0.6 + normalised species richness × 0.4 | 50 km | ✗ Protocol A | Composite; see methodology note |
-| `endemic_plant_richness` | IUCN Plant Redlist (range < 100,000 km²) | 100 km | ✗ Protocol C | species list in metadata |
+| Indicator | Source | Radius | Tier 2 | Direction | Notes |
+|-----------|--------|--------|--------|-----------|-------|
+| `endemic_richness` | IUCN mammals + birds (range < 100,000 km²) | 100 km | ✗ Protocol C | Higher=better (lower concern) | Both groups; species list in metadata |
+| `flagship_habitat` | HSI × 0.6 + normalised species richness × 0.4 | 50 km | ✗ Protocol A | Higher=better (lower concern) | Composite; see methodology note |
+| `endemic_plant_richness` | IUCN Plant Redlist (range < 100,000 km²) | 100 km | ✗ Protocol C | Higher=better (lower concern) | species list in metadata |
+
+**Conservation-priority vs. concern (v4.0 clarification):** A high `endemic_richness`/`endemic_plant_richness`/`flagship_habitat` value correctly scores LOW concern in the SoN axis — the presence of biodiversity is not itself a risk signal. Concern in this framework measures degradation/risk, not ecological significance. Sites with unusually high endemism should still be separately flagged for conservation-priority narrative reporting (see `conservation_priority_flag` in `endemic_richness` registry metadata) — that is a distinct claim ("this site is valuable, prioritize protecting it") from a concern score ("this site is degraded"). Conflating the two would invert the SoN score's purpose: a community reserve with 40 endemic species sitting inside intact forest is a conservation *success*, not a site "of concern."
 
 ### Dim 4 — Species Extinction Risk (4)
 
-| Indicator | Source | Radius | Tier 2 | Categories |
-|-----------|--------|--------|--------|------------|
-| `threatened_richness` | IUCN mammals + birds | 100 km | ✗ Protocol C | CR/EN/VU only |
-| `ceri` | IUCN mammals + birds (null-filtered) | 100 km | ✗ Protocol A | All: EX/EW/CR/EN/VU/NT/LC |
-| `star_t` | Bird + mammal ranges × habitat × threat pressure | 100 km | ✗ Protocol A | CR/EN/VU only |
-| `threatened_plant_richness` | IUCN Plant Redlist | 100 km | ✗ Protocol C | CR/EN/VU; species list in metadata |
+| Indicator | Source | Radius | Tier 2 | Direction | Categories |
+|-----------|--------|--------|--------|-----------|------------|
+| `threatened_richness` | IUCN mammals + birds | 100 km | ✗ Protocol C | Lower=better (more spp present = more concern) | CR/EN/VU only |
+| `ceri` | IUCN mammals + birds (null-filtered) | 100 km | ✗ Protocol A | Lower=better (higher weighted risk = more concern) | All: EX/EW/CR/EN/VU/NT/LC |
+| `star_t` | Bird + mammal ranges × habitat × threat pressure | 100 km | ✗ Protocol A | **Higher=better (v4.0 flip — see note)** | CR/EN/VU only |
+| `threatened_plant_richness` | IUCN Plant Redlist | 100 km | ✗ Protocol C | Lower=better (more spp present = more concern) | CR/EN/VU; species list in metadata |
+
+**STAR_T direction fix (v4.0):** Previously registered `higher_is_better=False`, which contradicted this pipeline's own documented interpretation. STAR_T measures threat-ABATEMENT OPPORTUNITY at a site — i.e. how much global extinction risk could be reduced by conservation action there — not threat presence. It is structurally a benefit/opportunity metric like `endemic_richness`, not a risk-presence metric like `threatened_richness` or `ceri`. A high STAR_T score means a site is a high-value conservation opportunity (lower concern); the previous `False` setting would have scored exactly those sites as high-concern, inverting the metric's intended meaning. Flipped to `higher_is_better=True` in v4.0.
 
 **IUCN category consistency across indicators:**
 - `threatened_richness`, `threatened_plant_richness`, `star_t`: CR/EN/VU only — strict TNFD threatened definition
@@ -138,7 +146,7 @@ All `tier2_eligible=False`. Not in SoN Score per TNFD Annex 2 design.
 |-----------|--------|--------|-------|
 | `ghm` | CSP/HM GlobalHumanModification 1km | 50 km | |
 | `light_pollution` | VIIRS DNB monthly | 25 km | |
-| `hdi` | ESA WorldCover urban distance | 25 km | |
+| `hdi` | Dynamic World 10m built-up distance | 25 km | |
 | `lst_day` | MODIS MOD11A1 daily, annual mean | 25 km | |
 | `lst_night` | MODIS MOD11A1 night, annual mean | 25 km | |
 | `sdi` | Sentinel-2 + Dynamic World shoreline disturbance | 10 km | disturbed fraction in 100m shore buffer |
@@ -155,7 +163,7 @@ The following were proposed but not registered. Documented here for traceability
 | Proposed | Reason | Already Covered By |
 |----------|--------|--------------------|
 | EVI | Redundant; same greenness concept from same sensor | `ndvi` (pillar 2); EVI used internally in `rci` |
-| Native Vegetation Cover (ESA WorldCover) | Redundant; third native-extent metric adds source noise | `natural_habitat` + `natural_landcover` (pillar 1) |
+| Native Vegetation Cover (ESA WorldCover) | Redundant; third native-extent metric adds source noise. **v4.0: ESA WorldCover fully retired from pipeline** (was previously used only by `hdi`; HDI now uses Dynamic World — see "v4.0 — 10m Resolution Migration") | `natural_habitat` + `natural_landcover` (pillar 1), both DW-based |
 | Plant Phenological Stability Index (PSI) | Redundant; PSI = mean/σ ≈ HHI = z5/σ — same NDVI stability concept | `habitat_health` (pillar 2) |
 | Vegetation Drought Stress Index | Deferred — may pick up later | — |
 | Burn Severity (dNBR) | Proposed in separate session; event-specific, not a standing indicator | — |
@@ -207,6 +215,80 @@ Uses pre-computed EII from `projects/landler-open-data/assets/eii/global/eii_glo
 
 ---
 
+## v4.0 — 10m Resolution Migration
+
+### Problem: "swallowed polygons"
+
+Several indicators (`natural_landcover`, `pdf`, `flii`) previously relied on MODIS MCD12Q1 (500m, ~25 ha/pixel) or ESA WorldCover (`hdi` only). For project sites smaller than one MODIS pixel — common in agroforestry/restoration contexts, e.g. several FCF Gujarat (Banaskantha) clusters at 2.7–5.2 ha — these indicators were effectively measuring the dominant land cover of a much larger surrounding neighbourhood, not the site itself. This produced internally contradictory results on the same pipeline run, e.g.:
+
+```
+Natural Land Cover Proportion — FCF Gujarat aggregated run:
+  site_value = 0.0%   tier2_reference = 100.0%
+```
+
+A site cannot legitimately have 0% natural cover while its own least-disturbed regional reference (drawn from the same buffer) reads 100% — this was a resolution artefact, not an ecological finding.
+
+### Fix: single canonical 10m source
+
+Dynamic World V1 (10m, Brown et al. 2022, DOI:10.1038/s41597-022-01307-4) is now the **only** land-cover classification source used across the module. ESA WorldCover and MODIS MCD12Q1 have been fully retired from indicator computation.
+
+**Why Dynamic World over ESA WorldCover, and why not both:**
+- ESA WorldCover has only 2 static epochs (v100=2020, v200=2021) — not a continuous monitoring product. A 5-year biannual M&E program requiring 10 comparable longitudinal timepoints cannot be anchored to a source with 2 total epochs; by the program's second cycle the "baseline" would already be 4 years stale.
+- Dynamic World has continuous near-real-time coverage since 2015 (~5-day Sentinel-2 revisit), matching the program's monitoring cadence.
+- Running two 10m classifiers in parallel for conceptually related indicators (e.g. one for `natural_habitat`, a different one for `natural_landcover`) produces persistent cross-indicator disagreement that is measurement noise, not ecological signal — confirmed by the contradiction above. A single classifier with one consistent class taxonomy avoids this.
+- ESA WorldCover's finer class taxonomy (11 classes vs. DW's 9, e.g. separate mangrove/wetland classes) was considered but not adopted as a parallel source, since no current indicator's scientific validity depends on that distinction; it can be revisited as a dedicated one-time stratification layer if a specific future indicator needs it.
+
+**Migrated indicators:**
+
+| Indicator | Was | Now | Reduce scale fixed |
+|---|---|---|---|
+| `natural_landcover` | MODIS MCD12Q1 500m | Dynamic World 10m | 500 → 10 |
+| `pdf` | MODIS MCD12Q1 500m | Dynamic World 10m | 500 → 10 |
+| `flii` | MODIS MCD12Q1 500m forest mask | Dynamic World 10m forest mask (`DW_TREES`) | 500 → 30 |
+| `hdi` | ESA WorldCover v200/2021 | Dynamic World 10m built-up class | already 10 |
+
+**Unchanged by design:**
+- `eii`, `eii_structural`, `eii_compositional`, `eii_functional`, `bii` — pre-computed composite indices from Landbanking/Impact Observatory at 300m. These are not raw classification outputs and cannot be recomputed at 10m without rebuilding someone else's published model. Native resolution is correct here.
+- `ghm` (1km, CSP/HM) — external pre-computed pressure index, same reasoning.
+- `cpland` — uses a dedicated Darukaa India PV-binary asset, not MODIS/DW. Its native resolution is auto-detected at runtime via `img.projection().nominalScale()`, so it was already resolution-correct prior to v4.0 and required no migration.
+
+### Single source of truth: shared helper and class constants
+
+Prior to v4.0, six different functions (`_img_natural_habitat`, `_img_sdi`, `_img_hsas`, `_img_iri`, `_img_edpp_bands`, `_img_flagship_hsi`) each independently called Dynamic World inline with hardcoded magic-number class IDs (e.g. `dw.eq(6)` for built-up, repeated six times with no shared definition). This meant a future change to DW's date range, cloud handling, or composite method would require finding and fixing six separate call sites — and any inconsistency between them (e.g. one function using `dw.eq(7)` for bare ground, another forgetting it) would silently produce different "bare ground" definitions across indicators.
+
+v4.0 introduces:
+```python
+_dw_mode(c, years_back=0)   # single shared DW annual-composite call site
+DW_TREES, DW_GRASS, DW_FLOODED_VEG, DW_CROPS, DW_SHRUB_SCRUB,
+DW_BUILT, DW_BARE, DW_SNOW_ICE, DW_WATER     # named class constants
+DW_NATURAL_CLASSES = [DW_TREES, DW_GRASS, DW_FLOODED_VEG, DW_SHRUB_SCRUB]
+```
+All classification-derived indicators now call `_dw_mode(c)` and reference the named constants rather than re-deriving class numbers inline. `natural_landcover`'s fractional-weighting scheme (1.0 natural / 0.5 "mixed" / 0.0 non-natural) is preserved from its prior MODIS implementation, with the MODIS mosaic class (14) — which has no Dynamic World equivalent, since DW is a hard per-pixel classifier with no IGBP-style mosaic category — approximated via a 3×3 focal-window heterogeneity check (a natural pixel adjacent to a non-natural pixel gets the 0.5 "mixed" weight).
+
+### FLII applicability precondition
+
+FLII is conceptually a forest-integrity index. Under the old MODIS-masked implementation, sites with no qualifying forest pixels (e.g. active agroforestry/farmland project sites — by definition non-forest) silently returned `None` via mask failure, with no indication of *why*. This looked like a pipeline bug rather than a methodological limitation, and was the literal symptom that surfaced on the FCF Gujarat agroforestry run (`Forest Landscape Integrity Index | — | 9.83 | 4.97`: reference computed, site value null).
+
+`extract_flii` (v4.0) now explicitly checks 10m forest-class fraction before computing FLII. Below 10% forest cover, it returns:
+```python
+{"value": None, "pixels": None,
+ "metadata": {"applicable": False, "forest_fraction": 0.0XX,
+              "note": "Not Applicable — site is X% forest ..."}}
+```
+Report layers should check `metadata.applicable` and render "Not Applicable — non-forest land use" rather than treating this as missing/failed data.
+
+### Direction-flag (`higher_is_better`) audit
+
+Three corrections made in v4.0, after cross-checking every Pillar 3/4 indicator's documented interpretation against the underlying ecological logic — see Dim 3 and Dim 4 sections above for full detail:
+
+1. **`star_t`: `False` → `True`.** This was the one genuine bug. STAR_T measures threat-abatement *opportunity*, not threat presence; higher = more conservation upside = lower concern. The prior `False` setting contradicted this pipeline's own documented interpretation and would have inverted the metric.
+2. **`endemic_richness`, `flagship_habitat`: made explicit (`True`).** Both were relying on the dataclass default rather than an explicit flag. Confirmed correct as-is — high endemism/habitat-suitability scores correctly indicate low concern (ecological value, not risk).
+3. **`threatened_richness`, `threatened_plant_richness`, `ceri`: confirmed already correct (`False`).** No change — these genuinely are risk-presence metrics where more = more concern.
+
+A conceptual distinction worth restating: **"ecologically valuable" and "concerning" are not the same claim.** A site with 40 endemic species inside an intact reserve should score low concern (it's a conservation success, not a risk), while that same fact — high endemism — is still worth surfacing separately in narrative reporting as a conservation-priority signal. Conflating the two by scoring high endemism as "high concern" would invert the SoN score's purpose.
+
+---
+
 ## State of Nature Scoring
 
 ### Threshold Protocols
@@ -220,7 +302,7 @@ Uses pre-computed EII from `projects/landler-open-data/assets/eii/global/eii_glo
 | MSA | >0.8 | 0.6–0.8 | 0.4–0.6 | 0.2–0.4 | ≤0.2 | GLOBIO4 |
 | Flagship Habitat | >0.8 | 0.6–0.8 | 0.4–0.6 | 0.2–0.4 | ≤0.2 | HSI literature |
 | CERI | <0.10 | 0.10–0.20 | 0.20–0.35 | 0.35–0.50 | >0.50 | Butchart et al. 2007 |
-| STAR_T | 0 | 1–3 | 3–6 | 6–9 | >9 | IUCN STAR methodology |
+| STAR_T | >9 | 6–9 | 3–6 | 1–3 | 0 | IUCN STAR methodology (v4.0: direction flipped — see Dim 4 note above) |
 | KBA/IBA Overlap | <1% | 1–25% | 25–75% | 75–99% | 100% | TNFD/IBAT disclosure scheme |
 
 **Protocol B v1.0 — Fixed, version-controlled thresholds (applied to Tier 2 intactness %):**
@@ -420,15 +502,15 @@ darukaa_reference/
 
 **STSI is site-relative:** Not comparable across sites. Use only for within-site temporal comparison or relative pixel mapping.
 
-**FLII** is an approximation (MODIS LC + VIIRS), not the official Grantham et al. 2020 dataset.
+**FLII** is an approximation (Dynamic World 10m forest mask + VIIRS), not the official Grantham et al. 2020 dataset. As of v4.0, returns explicit "Not Applicable" (not silent `None`) on non-forest sites below 10% forest-class fraction — see "v4.0 — 10m Resolution Migration" above.
 
 **CPLAND** is India-only (Darukaa PV binary).
 
 **CHM / GEDI coverage gaps:** GEDI L2A has latitudinal coverage limits and cloud/vegetation penetration gaps. Sites with sparse GEDI passes may return None.
 
-**LAI MODIS 500m:** Sites smaller than ~1 km² may have insufficient pixels.
+**LAI MODIS 500m:** Sites smaller than ~1 km² may have insufficient pixels. (LAI remains on MODIS — it is a structural canopy index sourced from a dedicated product, MCD15A3H, not a classification layer, so it was out of scope for the v4.0 DW migration.)
 
-**Minimum recommended site area: ~1 km²:** Sites smaller than 1 km² may return None for coarser-resolution indicators (MODIS 500m/1km, gHM 1km, FLII). A 0.5×0.5 km polygon at 1km resolution contains 0–1 pixels — insufficient for reliable statistics.
+**Minimum recommended site area: ~1 km²:** Sites smaller than 1 km² may return None for remaining coarser-resolution indicators (LAI/MODIS 500m, gHM 1km). As of v4.0, `natural_landcover`, `pdf`, `flii`, and `hdi` no longer have this limitation — they now resolve reliably down to single-DW-pixel scale (~0.01 ha).
 
 **Flagship Habitat** normalisation ceiling (50 threatened birds) is provisional. Requires validation across Eastern Himalayan and other ecoregion types.
 
@@ -436,7 +518,7 @@ darukaa_reference/
 
 **UHII**, **MSA (GLOBIO)**, **STAR_R** (restoration), and **Vegetation Drought Stress Index** are WIP or deferred — not yet registered.
 
-**PDF returning None for non-forest sites:** `_img_pdf` previously used `.updateMask(cf)` which masked pixels where characterisation factor (CF) = 0. Sites dominated by water, barren, wetland, or unmatched MODIS LC classes had no unmasked pixels → `reduceRegion` returned None. Fixed by removing the mask — CF=0 pixels now contribute 0 to the mean. A site with pure shrubland (CF=0.20) correctly returns PDF≈0.20; a site with water (CF=0) correctly returns PDF=0.00.
+**PDF returning None for non-forest sites (resolved in v4.0):** `_img_pdf` previously used MODIS LC and, before that, masked CF=0 pixels entirely, causing water/barren/unmatched-class sites to return None. As of v4.0, PDF runs on Dynamic World 10m with no mask — CF=0 pixels (water, bare, snow/ice) correctly contribute 0 to the mean rather than being excluded.
 
 **Species-Area Relationship (SAR) artefact — count indicators:** Endemic Richness and Threatened Richness Protocol C reference uses raw species count in the Tier 1 buffer (100km radius). A small site polygon always has fewer species than a large buffer. Fix is density normalisation (species/km²). Flagged for next methodology revision. Current Protocol C results for these indicators should carry interpretation caveats.
 **`forest_loss_rate` Tier 2 warning always fires:** Hansen forest loss Tier 2 requires pixels with both forest baseline and HMI ≤ ceiling. In agricultural or mixed landscapes these rarely exist. This warning is expected correct behaviour, not a bug. The intactness ratio is now correctly set to 100% when site_value = 0 (zero forest loss at site), rather than returning `—`.
@@ -448,11 +530,11 @@ darukaa_reference/
 
 ## Status
 
-Working prototype. Validated on Paglam Community Reserve (25 terrestrial indicators). Aquatic/eDNA suite and terrestrial vegetation/plant suite are code-complete but not yet validated on field sites.
+Working prototype. Validated on Paglam Community Reserve (25 terrestrial indicators, pre-v4.0). Aquatic/eDNA suite and terrestrial vegetation/plant suite are code-complete but not yet validated on field sites. v4.0 resolution migration and direction-flag fixes are code-complete and registry-validated; pending a fresh end-to-end run against FCF Gujarat (Banaskantha) to confirm the "swallowed polygon" contradiction is resolved in practice.
 
 **Repository:** github.com/G-auravSingh/reference-benchmarking
 **Runtime:** Google Colab (`notebooks/run_pipeline.ipynb`)
-**Only file modified across v6.4 and v6.5:** `darukaa_reference/indicators/__init__.py`
+**Files touched in v4.0:** `darukaa_reference/indicators/__init__.py` (10m DW migration, FLII precondition, direction-flag fixes), `README.md` (this file)
 **Related:** State of Nature Module PRD v2.0 (`son_module_PRD_v2_0.html`)
 **License:** Internal use — Darukaa.Earth
 
