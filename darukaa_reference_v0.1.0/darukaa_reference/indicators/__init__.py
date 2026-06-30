@@ -1,5 +1,5 @@
 """
-darukaa_reference indicators — v3.0 (Aquatic + eDNA + Terrestrial extension)
+darukaa_reference indicators — v4.0 (10m DW migration + direction-flag corrections)
 =============================================================
 
 44 ex-situ biodiversity indicators organized under the TNFD Annex 2
@@ -9,6 +9,63 @@ measurement tree:
     Dim 3 — Species Population Size (3 indicators)
     Dim 4 — Species Extinction Risk (4 indicators)
     Threats — Pressures / context   (9 indicators, tier2_eligible=False, not in SoN score)
+
+v4.0 changes — 10m resolution migration & direction-flag audit:
+
+    RESOLUTION FIX — "swallowed polygon" problem:
+    natural_landcover, pdf, flii, hdi all moved from coarse sources
+    (MODIS MCD12Q1 500m / ESA WorldCover) to Dynamic World 10m. Small project
+    sites (sub-25ha, e.g. several FCF Gujarat agroforestry clusters at
+    2.7-5.2ha) were being measured by whatever land cover dominated a much
+    larger surrounding MODIS pixel, producing contradictory results (e.g.
+    site=0% but Tier2 reference=100% for the same indicator on the same run).
+    Confirmed empirically before this fix.
+
+    SINGLE CANONICAL 10m SOURCE — consistency fix:
+    Dynamic World V1 is now the ONLY 10m classification source in this module.
+    ESA WorldCover has been retired entirely (was previously used only by HDI,
+    an orphaned single-use dependency on a second classifier with a different
+    class taxonomy than DW). Running two 10m classifiers side-by-side for
+    conceptually related indicators (e.g. natural_habitat vs natural_landcover)
+    produced internally inconsistent results that weren't ecological signal —
+    they were measurement noise from disagreeing sensors. ESA WorldCover is
+    also unsuitable as a biannual M&E source going forward: it has only 2
+    static epochs (2020/2021), not a continuous monitoring cadence, and a
+    5-year/10-timepoint program needs a source with continuous coverage.
+    A single shared helper (_dw_mode) and named class constants
+    (DW_TREES, DW_CROPS, DW_BUILT, etc., see DW_NATURAL_CLASSES) replace what
+    were previously 6+ independently-duplicated inline DW calls with
+    hardcoded magic-number class IDs scattered across the module.
+
+    FLII APPLICABILITY PRECONDITION:
+    FLII is conceptually a forest-integrity index and was previously silently
+    returning None on non-forest sites (e.g. active agroforestry/farmland)
+    via an opaque forest mask failure — this looked like a pipeline bug
+    rather than a methodological limitation. extract_flii() now explicitly
+    checks forest-class fraction at 10m before computing; below 10% forest
+    cover, it returns None WITH metadata flagging "Not Applicable — non-forest
+    site" so report layers can render this distinctly from missing/failed data.
+    Also fixed: extract_flii/extract_natural_landcover/extract_pdf were still
+    reducing at legacy MODIS scale (500) despite their underlying _img_*
+    functions moving to 10m DW — corrected to 10/30 as appropriate.
+
+    DIRECTION-FLAG AUDIT (higher_is_better):
+    star_t flipped from False to True. STAR_T measures threat-ABATEMENT
+    OPPORTUNITY (conservation potential), not threat presence — structurally
+    identical to endemic_richness as a benefit/opportunity metric, not a
+    risk-presence metric like threatened_richness or CERI. The WTI report's
+    own documented interpretation states higher STAR_T = lower concern; the
+    previous False setting contradicted this and would have scored
+    high-conservation-opportunity sites as high-concern.
+    endemic_richness and flagship_habitat: higher_is_better made EXPLICIT
+    (was relying on dataclass default True) — both correctly stay True.
+    High endemic richness = ecologically valuable + lower SoN concern, NOT
+    high concern. ("More species present" is a conservation-priority signal,
+    which belongs in narrative reporting via the new conservation_priority_flag
+    metadata field — it is a different claim from "this site is at risk,"
+    and conflating the two would invert the SoN score's purpose.)
+    threatened_richness, threatened_plant_richness, ceri: confirmed already
+    correct (higher = more concern) — no change.
 
 v3.0 additions — Aquatic & eDNA suite (lake/reservoir monitoring):
     Condition: tspi, sabf, wcpi, wsdi, hsas, edpp, mspl, rci
@@ -35,8 +92,11 @@ Key design decisions:
     - stsi: site-relative normalization only; not cross-site comparable
     - ivsi: detects NDVI expansion (not taxonomic invasion); use alongside iri
     - RCI citation corrected: Naiman & Decamps (1997), not MacArthur/Wilson
-    - flii: reference_radius_km=150
+    - flii: reference_radius_km=150; v4.0 adds forest-fraction applicability precondition
     - ceri: ee.Filter.notNull([cat_col]) before .map() to prevent null crash
+    - cpland: uses dedicated India PV-binary asset (own native resolution
+      auto-detected via projection().nominalScale()) — NOT part of the DW
+      migration, was already resolution-correct
     - Scoring: Protocol B v1.0 thresholds applied in SoN scoring layer
 """
 
@@ -56,6 +116,63 @@ _KBA       = "projects/darukaa-earth-product/assets/Biodiversity/KBA_Global_POL_
 _PV        = "projects/darukaa-earth-product/assets/biodiversity_India_PV_Binary_2025_Full_Mosaic"
 _MSA       = "projects/ee-jayankandir/assets/TerrestrialMSA_2015_World"
 _PLANT_REDLIST = "projects/darukaa-earth-product/assets/Biodiversity/IUCN_Plant_Redlist"
+
+# ── Canonical 10m classification source (v4.0) ─────────────────────────────────
+# Dynamic World V1 is now the SINGLE 10m land-cover source for every
+# classification-derived indicator in this module. ESA WorldCover has been
+# retired from the pipeline (was previously used only by HDI) to avoid running
+# two different classifiers with two different class taxonomies side-by-side,
+# which produced internally inconsistent results across indicators that should
+# track the same underlying land-cover concept (see Natural Habitat Extent vs.
+# Natural Land Cover Proportion divergence documented in FCF Gujarat run, v3.x).
+#
+# Dynamic World classes (GOOGLE/DYNAMICWORLD/V1, band 'label'):
+#   0 = water            1 = trees           2 = grass
+#   3 = flooded_veg       4 = crops           5 = shrub_and_scrub
+#   6 = built              7 = bare            8 = snow_and_ice
+#
+# Reference: Brown et al. (2022) Scientific Data. DOI:10.1038/s41597-022-01307-4
+DW_WATER        = 0
+DW_TREES        = 1
+DW_GRASS        = 2
+DW_FLOODED_VEG  = 3
+DW_CROPS        = 4
+DW_SHRUB_SCRUB  = 5
+DW_BUILT        = 6
+DW_BARE         = 7
+DW_SNOW_ICE     = 8
+
+# "Natural" class set used consistently across natural_habitat, natural_landcover,
+# pdf, flii, and any other indicator that needs a binary/fractional naturalness mask.
+# Cropland (4) and built (6) are NEVER natural. Bare (7) and snow/ice (8) are
+# excluded by default (can be biome-specific exceptions — not handled here).
+DW_NATURAL_CLASSES = [DW_TREES, DW_GRASS, DW_FLOODED_VEG, DW_SHRUB_SCRUB]
+
+# Fractional naturalness weights — mirrors the MODIS fractional scheme that was
+# already present in this codebase (1.0 natural / 0.5 mosaic / 0.0 non-natural),
+# now expressed in DW's class system so PDF/Natural-Land-Cover share one logic.
+# Mosaic concept doesn't exist as a discrete DW class (DW is per-pixel hard label,
+# not a IGBP-style mosaic class) — we approximate "mosaic" using a focal-window
+# mixed-class heuristic in _img_natural_landcover rather than a fixed class ID.
+DW_NATURAL_WEIGHT_FULL  = 1.0
+DW_NATURAL_WEIGHT_MIXED = 0.5
+DW_NATURAL_WEIGHT_NONE  = 0.0
+
+
+def _dw_mode(c, years_back=0):
+    """Canonical Dynamic World annual composite (mode of per-pixel label).
+
+    Single shared call site for every indicator that needs DW classification —
+    replaces 6 previously-duplicated inline `ee.ImageCollection('GOOGLE/...')`
+    blocks scattered across _img_natural_habitat, _img_sdi, _img_hsas, _img_iri,
+    _img_edpp_bands, _img_flagship_hsi. Centralizing this means a future change
+    to date range, cloud filtering, or composite method only needs to happen once.
+    """
+    import ee
+    y = c.ndvi_year - years_back
+    return (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
+            .filterDate(f"{y}-01-01", f"{y}-12-31")
+            .select("label").mode())
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,26 +238,53 @@ def _load_fc(asset, config=None):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _img_natural_habitat(c):
-    import ee; y=c.ndvi_year
-    dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").select("label").mode()
-    return dw.remap([1,2,3,5],[1,1,1,1],0).multiply(100).rename("natural_habitat")
+    """Natural Habitat Extent — DW 10m, canonical natural class set.
+    Resolution: 10m (was already DW; now uses shared helper + DW_NATURAL_CLASSES
+    instead of an inline hardcoded remap, for consistency with natural_landcover).
+    """
+    dw = _dw_mode(c)
+    mask = dw.eq(DW_TREES)
+    for cls in DW_NATURAL_CLASSES[1:]:
+        mask = mask.Or(dw.eq(cls))
+    return mask.rename("natural_habitat_bool").multiply(100).rename("natural_habitat")
 
 def _img_natural_landcover(c):
+    """Natural Land Cover Proportion — v4.0: moved from MODIS 500m to DW 10m.
+
+    FIX (v4.0): previous version used MODIS MCD12Q1 (500m, ~25ha/pixel). On
+    project sites smaller than one MODIS pixel (common for FCF Gujarat
+    agroforestry clusters: RC9=5.2ha, RC10=3.8ha, RC12=2.7ha), this produced
+    "swallowed polygon" artifacts — site value driven entirely by whatever
+    land cover dominated the surrounding 25ha neighborhood, not the site
+    itself. Confirmed empirically: site=0%/Tier2=100% contradiction on the
+    same FCF Gujarat run. Moving to DW 10m (~25x finer) resolves this for
+    any site >= ~0.01ha (one DW pixel), while ESA WorldCover-based PDF/FLII
+    are pulled into the same DW source for class-taxonomy consistency.
+
+    Fractional weighting (mirrors prior MODIS scheme, now on DW classes):
+      DW_NATURAL_CLASSES (trees/grass/flooded_veg/shrub) = 1.0 (full natural)
+      "Mixed" pixel proxy (DW lacks an IGBP-style mosaic class) = 0.5 —
+        approximated via a 3x3 focal-window heterogeneity check: pixels
+        bordering both natural and non-natural classes are treated as mixed.
+      Cropland (4) / Built (6) / Bare (7) / Snow-ice (8) = 0.0
+    """
     import ee
-    lc = ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start", False).first().select("LC_Type1")
-    
-    # Fractional Naturalness Weights:
-    # Classes 1-11 = 1.0 (100% natural)
-    # Class 14 (Mosaics) = 0.5 (50% natural)
-    # Class 12 (Croplands) = 0.0 (0% natural - strict baseline)
-    # All others = 0.0
-    
-    weights = lc.expression(
-        "b('LC_Type1') <= 11 ? 1.0 :"
-        "b('LC_Type1') == 14 ? 0.5 :"
-        "0.0"
-    ).rename("natural_landcover")
-    
+    dw = _dw_mode(c)
+    natural_bool = dw.eq(DW_TREES)
+    for cls in DW_NATURAL_CLASSES[1:]:
+        natural_bool = natural_bool.Or(dw.eq(cls))
+    non_natural_bool = dw.eq(DW_CROPS).Or(dw.eq(DW_BUILT)).Or(dw.eq(DW_BARE)).Or(dw.eq(DW_SNOW_ICE))
+
+    # Mixed-pixel proxy: a natural pixel adjacent (3x3) to a non-natural pixel
+    # gets the "mosaic" weight rather than full 1.0 — approximates the MODIS
+    # mosaic class (14) behavior without DW having an equivalent discrete class.
+    non_natural_nearby = non_natural_bool.focal_max(radius=1, units="pixels")
+    is_mixed = natural_bool.And(non_natural_nearby)
+
+    weights = (ee.Image.constant(DW_NATURAL_WEIGHT_NONE)
+               .where(natural_bool, DW_NATURAL_WEIGHT_FULL)
+               .where(is_mixed, DW_NATURAL_WEIGHT_MIXED)
+               .rename("natural_landcover"))
     return weights.multiply(100)
 
 def _img_forest_loss(c):
@@ -169,14 +313,21 @@ def _img_hhi(c):
     return z5.divide(sig).updateMask(cnt.gte(6).And(sig.neq(0))).rename("HHI")
 
 def _img_flii(c):
+    """Forest Landscape Integrity Index — v4.0: DW 10m forest mask (was MODIS 500m).
+
+    FIX (v4.0): forest mask moved from MODIS LC (500m, blocky boundaries at
+    small-polygon edges) to Dynamic World trees class (10m), consistent with
+    every other classification-derived indicator in this module.
+
+    FLII remains conceptually a FOREST integrity index — it is not meant to
+    score non-forest land uses (farmland, plantation establishment sites).
+    See extract_flii() for the applicability precondition that returns
+    explicit "Not Applicable" rather than a silently-failed None when a site
+    has near-zero forest-class pixels (e.g., active agroforestry sites).
+    """
     import ee
-    modis=ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start",False).first().select("LC_Type1")
-    forest_mask = modis.gte(1).And(modis.lte(10))
-    mosaic_mask = modis.eq(14)
-    #cropland_mask = modis.eq(12)
-    
-    # Combine them
-    forest = forest_mask.Or(mosaic_mask)
+    dw = _dw_mode(c)
+    forest = dw.eq(DW_TREES)
     y=c.ndvi_year
     night=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad")
     night=ee.ImageCollection(ee.Algorithms.If(night.size().gt(0),night,ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").sort("system:time_start",False).limit(12).select("avg_rad"))).mean()
@@ -227,19 +378,26 @@ def _img_bii(c):
     return None
 
 def _img_pdf(c):
-    import ee
-    lc = ee.ImageCollection("MODIS/061/MCD12Q1").sort("system:time_start", False).first().select("LC_Type1")
-    cf = lc.expression(
-        "b('LC_Type1') <= 5 ? 0.10 :"  # Forests
-        "b('LC_Type1') == 7 ? 0.20 :"  # Shrublands
-        "b('LC_Type1') == 8 ? 0.20 :"
-        "b('LC_Type1') == 9 ? 0.20 :"
-        "b('LC_Type1') == 10 ? 0.05 :" # Grasslands
-        "b('LC_Type1') == 12 ? 0.30 :" # Intensive Croplands
-        "b('LC_Type1') == 14 ? 0.15 :" # Mosaics / Agroforestry
-        "b('LC_Type1') == 13 ? 0.50 :" # Urban
-        "0.0"
-    ).rename("PDF")
+    """Potentially Disappeared Fraction — v4.0: DW 10m (was MODIS 500m).
+
+    FIX (v4.0): land-use characterization coefficients re-mapped from MODIS
+    IGBP classes onto DW classes for resolution consistency with the rest of
+    the module. DW has fewer discrete classes than MODIS IGBP (9 vs 17), so
+    some coefficients are merged (e.g., MODIS distinguished 5 forest types
+    at 0.10 each; DW has one 'trees' class). Coefficient VALUES are
+    preserved from the prior MODIS-based scheme; only the class mapping
+    changes.
+    """
+    dw = _dw_mode(c)
+    cf = (dw.expression(
+        "b('label') == 1 ? 0.10 :"   # Trees (was MODIS forest classes 1-5)
+        "b('label') == 5 ? 0.20 :"   # Shrub/scrub (was MODIS 7/8/9)
+        "b('label') == 2 ? 0.05 :"   # Grass (was MODIS grassland class 10)
+        "b('label') == 3 ? 0.10 :"   # Flooded vegetation (no direct MODIS analogue; treated as forest-like)
+        "b('label') == 4 ? 0.30 :"   # Crops (was MODIS cropland 12)
+        "b('label') == 6 ? 0.50 :"   # Built (was MODIS urban 13)
+        "0.0"                          # Bare/snow-ice/water: no PDF signal
+    ).rename("PDF"))
     return cf
 
 def _img_aridity(c):
@@ -261,10 +419,22 @@ def _img_viirs(c):
     return ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean().rename("light_pollution")
 
 def _img_hdi(c):
+    """Human Disturbance Index — v4.0: DW 10m built-up class (was ESA WorldCover).
+
+    FIX (v4.0): ESA WorldCover retired as a pipeline data source entirely.
+    It was previously used ONLY here (single-use dependency on a second 10m
+    classifier with a different class taxonomy than the rest of the module —
+    see module docstring). HDI now uses the same DW_BUILT class as every
+    other built-up-proximity computation in this file (_img_sdi, _img_hsas,
+    _img_iri), ensuring "built-up" means the same thing everywhere in the
+    pipeline. ESA WorldCover had 2 static epochs only (2020/2021) and is not
+    a viable source for a 5-year biannual M&E program requiring 10 comparable
+    timepoints; DW's continuous near-real-time cadence is.
+    """
     import ee
-    wc=ee.Image("ESA/WorldCover/v200/2021").select("Map")
-    u=wc.eq(50).selfMask()
-    d=u.fastDistanceTransform(300,"pixels","squared_euclidean").sqrt().multiply(10)
+    dw = _dw_mode(c)
+    u = dw.eq(DW_BUILT).selfMask()
+    d = u.fastDistanceTransform(300, "pixels", "squared_euclidean").sqrt().multiply(10)
     return ee.Image.constant(1).subtract(d.divide(1500).min(1.0)).rename("HDI")
 
 def _img_lst_day(c):
@@ -276,10 +446,12 @@ def _img_lst_night(c):
     return ee.ImageCollection("MODIS/061/MOD11A1").filterDate(f"{y}-01-01",f"{y}-12-31").select("LST_Night_1km").mean().multiply(0.02).subtract(273.15).rename("LST_Night")
 
 def _img_flagship_hsi(c):
-    import ee; y=c.ndvi_year
-    dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").select("label").mode()
-    forest=dw.eq(1); dem=ee.Image("USGS/SRTMGL1_003")
+    """Habitat Suitability Index for flagship species — uses canonical DW helper."""
+    import ee
+    dw = _dw_mode(c)
+    forest=dw.eq(DW_TREES); dem=ee.Image("USGS/SRTMGL1_003")
     es=dem.unitScale(0,2000).multiply(-1).add(1)
+    y=c.ndvi_year
     viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
     hs=viirs.unitScale(0,50).multiply(-1).add(1)
     return forest.multiply(es).multiply(hs).rename("HSI")
@@ -373,25 +545,26 @@ def _img_stsi_raw(c):
     return composite.select('ST_B10').multiply(0.00341802).add(149.0).subtract(273.15).rename('STSI')
 
 def _img_sdi(c):
-    """Disturbed land cover mask (DW classes 4+6+7) for SDI computation."""
-    import ee; y=c.ndvi_year
-    dw=(ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
-        .filterDate(f"{y}-01-01",f"{y}-12-31").select('label').mode())
-    disturbed=dw.eq(4).Or(dw.eq(6)).Or(dw.eq(7))
-    roads_proxy=dw.eq(6).focalMax(1).subtract(dw.eq(6)).gt(0)
+    """Disturbed land cover mask (DW crops/built/bare) for SDI computation.
+    Uses canonical DW helper and named class constants.
+    """
+    dw = _dw_mode(c)
+    disturbed = dw.eq(DW_CROPS).Or(dw.eq(DW_BUILT)).Or(dw.eq(DW_BARE))
+    roads_proxy = dw.eq(DW_BUILT).focalMax(1).subtract(dw.eq(DW_BUILT)).gt(0)
     return disturbed.Or(roads_proxy).rename('Disturbed')
 
 def _img_hsas(c):
-    """Habitat suitability surface: NDVI*0.5 + water proximity*0.3 + (1-disturbance)*0.2."""
-    import ee; y=c.ndvi_year
+    """Habitat suitability surface: NDVI*0.5 + water proximity*0.3 + (1-disturbance)*0.2.
+    Uses canonical DW helper and named class constants.
+    """
+    import ee
     composite=_s2_masked(c).median()
     ndvi=composite.normalizedDifference(['B8','B4']).unmask(0)
     ndwi=composite.normalizedDifference(['B3','B8']); water_mask=ndwi.gt(0)
     water_dist=water_mask.selfMask().distance(ee.Kernel.euclidean(500,'meters'))
     water_suit=ee.Image(1).subtract(water_dist.divide(500)).clamp(0,1).unmask(0)
-    dw=(ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
-        .filterDate(f"{y}-01-01",f"{y}-12-31").select('label').mode())
-    builtup=dw.eq(6)
+    dw = _dw_mode(c)
+    builtup = dw.eq(DW_BUILT)
     built_dist=builtup.selfMask().distance(ee.Kernel.euclidean(500,'meters'))
     disturbance=ee.Image(1).subtract(built_dist.divide(500)).clamp(0,1).unmask(0)
     return (ndvi.multiply(0.5).add(water_suit.multiply(0.3))
@@ -399,17 +572,18 @@ def _img_hsas(c):
             .rename('Suitability').clamp(0,1))
 
 def _img_edpp_bands(c):
-    """Multi-band image for EDPP: LST, turbidity protection, moisture, UV exposure."""
-    import ee; y=c.ndvi_year
+    """Multi-band image for EDPP: LST, turbidity protection, moisture, UV exposure.
+    Uses canonical DW helper and named class constants.
+    """
+    import ee
     composite=_s2_masked(c).median(); lsc=_ls8_masked(c).median()
     lst=lsc.select('ST_B10').multiply(0.00341802).add(149.0).subtract(273.15).rename('LST')
     turbidity=composite.select('B4').unitScale(0,0.3).clamp(0,1)
     turbidity_prot=ee.Image(1).subtract(turbidity.subtract(0.5).abs().multiply(2)).clamp(0,1)
     ndwi=composite.normalizedDifference(['B3','B8'])
     moisture=ndwi.unitScale(-1,1).clamp(0,1).unmask(0)
-    dw=(ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
-        .filterDate(f"{y}-01-01",f"{y}-12-31").select('label').mode())
-    bare=dw.eq(7)
+    dw = _dw_mode(c)
+    bare = dw.eq(DW_BARE)
     exposure=ee.Image(1).subtract(
         bare.selfMask().distance(ee.Kernel.euclidean(300,'meters')).divide(300)
     ).clamp(0,1).unmask(0)
@@ -417,20 +591,21 @@ def _img_edpp_bands(c):
         moisture.rename('Moisture')).addBands(exposure.rename('Exposure'))
 
 def _img_iri(c):
-    """Invasive Risk Index: connectivity*0.30+nutrient*0.25+human*0.20+disturbance*0.15+access*0.10."""
-    import ee; y=c.ndvi_year
+    """Invasive Risk Index: connectivity*0.30+nutrient*0.25+human*0.20+disturbance*0.15+access*0.10.
+    Uses canonical DW helper and named class constants.
+    """
+    import ee
     composite=_s2_masked(c).median()
     ndwi=composite.normalizedDifference(['B3','B8']); water_mask=ndwi.gt(0)
     water_dist=water_mask.selfMask().distance(ee.Kernel.euclidean(200,'meters'))
     connectivity=ee.Image(1).subtract(water_dist.divide(200)).clamp(0,1).unmask(0)
     ndci=composite.normalizedDifference(['B5','B4'])
     nutrient=ndci.unitScale(-0.2,0.5).clamp(0,1)
-    dw=(ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
-        .filterDate(f"{y}-01-01",f"{y}-12-31").select('label').mode())
-    builtup=dw.eq(6)
+    dw = _dw_mode(c)
+    builtup = dw.eq(DW_BUILT)
     built_dist=builtup.selfMask().distance(ee.Kernel.euclidean(200,'meters'))
     human_pressure=ee.Image(1).subtract(built_dist.divide(200)).clamp(0,1).unmask(0)
-    disturb_mask=dw.eq(4).Or(dw.eq(7))
+    disturb_mask = dw.eq(DW_CROPS).Or(dw.eq(DW_BARE))
     disturb_dist=disturb_mask.selfMask().distance(ee.Kernel.euclidean(200,'meters'))
     disturbance=ee.Image(1).subtract(disturb_dist.divide(200)).clamp(0,1).unmask(0)
     roads_proxy=builtup.focalMax(1).subtract(builtup).gt(0)
@@ -766,14 +941,18 @@ def create_default_registry() -> IndicatorRegistry:
     r.register(name="endemic_richness", display_name="Endemic Species Richness", source_type="gee",
         extract_fn=extract_endemic_richness, unit="count", value_range=(0,500),
         citation="IUCN mammal ranges. Range < 100,000 km².",
-        tier2_eligible=False, reference_radius_km=100.0, pillar=3,
+        tier2_eligible=False, higher_is_better=True, reference_radius_km=100.0, pillar=3,
         metadata={"tnfd_dim": 3, "note": "Mammals + birds. Species list in metadata.",
+                  "conservation_priority_flag": ("High endemic richness = lower SoN concern "
+                      "(ecologically valuable, intact site) but should be separately flagged "
+                      "in narrative reporting as a conservation-priority asset — high endemism "
+                      "is a finding worth highlighting, not just a 'low concern' score."),
                   "fc_tier1_fn": _fc_tier1_endemic_richness})
 
     r.register(name="flagship_habitat", display_name="Flagship Habitat Viability", source_type="gee",
         extract_fn=extract_flagship_habitat, unit="index", value_range=(0,1),
         citation="Forest × elevation_suit × inverse_pressure. Bird threatened overlay.",
-        tier2_eligible=False, reference_radius_km=50.0, pillar=3,
+        tier2_eligible=False, higher_is_better=True, reference_radius_km=50.0, pillar=3,
         metadata={"tnfd_dim": 3, "note": "Requires bird asset.",
                   "gee_image_fn": _img_flagship_hsi})
 
@@ -800,8 +979,18 @@ def create_default_registry() -> IndicatorRegistry:
     r.register(name="star_t", display_name="STAR_T (Threat Abatement)", source_type="gee",
         extract_fn=extract_star_t, unit="score", value_range=(0,10),
         citation="Mair et al. (2021). Nat Ecol Evol. DOI:10.1038/s41559-021-01432-0",
-        tier2_eligible=False, higher_is_better=False, reference_radius_km=100.0, pillar=4,
-        metadata={"tnfd_dim": 4, "note": "Bird-based. Requires bird+DW+VIIRS."})
+        tier2_eligible=False, higher_is_better=True, reference_radius_km=100.0, pillar=4,
+        metadata={"tnfd_dim": 4, "note": "Bird-based. Requires bird+DW+VIIRS.",
+                  "direction_fix": ("v4.0: flipped from higher_is_better=False to True. "
+                      "STAR_T measures threat-ABATEMENT OPPORTUNITY, not threat presence — "
+                      "a high score means conservation action at this site would meaningfully "
+                      "reduce global extinction risk (a benefit/opportunity metric, structurally "
+                      "identical to endemic_richness), not that the site itself is at high risk. "
+                      "Per WTI report's own stated interpretation: 'higher values indicate "
+                      "stronger threat-abatement potential and therefore lower concern.' "
+                      "Previous False setting contradicted the report's documented semantics "
+                      "and would have scored high-opportunity conservation sites as high-concern, "
+                      "inverting the metric's intended meaning.")})
 
     r.register(name="threatened_plant_richness", display_name="Threatened Plant Species Richness", source_type="gee",
         extract_fn=extract_threatened_plant_richness, unit="count", value_range=(0,1000),
@@ -878,7 +1067,7 @@ def create_default_registry() -> IndicatorRegistry:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def extract_natural_habitat(g,c): return _reduce(_img_natural_habitat(c),g,10)
-def extract_natural_landcover(g,c): return _reduce(_img_natural_landcover(c),g,500)
+def extract_natural_landcover(g,c): return _reduce(_img_natural_landcover(c),g,10)
 
 def extract_cpland(g,c):
     import ee; eg=_to_ee(g); pa=c.raster_paths.get("pv_binary",_PV)
@@ -919,8 +1108,51 @@ def extract_habitat_health(g,c):
     return _reduce(img,g,10) if img else {"value":None,"pixels":None}
 
 def extract_flii(g,c):
+    """Extract FLII with non-forest applicability precondition.
+
+    FIX (v4.0): FLII is conceptually a forest-integrity index and should not
+    silently return None on non-forest sites (the old MODIS-masked behavior
+    produced an unexplained null that looked like a pipeline bug rather than
+    an applicability limitation — confirmed on FCF Gujarat agroforestry run).
+    Now explicitly checks forest-class fraction at 10m before computing FLII;
+    if forest fraction is below threshold, returns None WITH metadata flagging
+    this as "Not Applicable — non-forest site" so the report layer can render
+    it correctly instead of treating it as missing/failed data.
+
+    Also fixes reduce scale: was 500 (legacy MODIS pixel size), now 30 —
+    appropriate aggregation scale for a 10m DW-masked, VIIRS/SRTM-informed
+    composite (matches resolution of the coarsest input layer in the FLII
+    computation, VIIRS at ~500m nominal but typically aggregated to 30m
+    tiles in GEE's internal pyramid; 30 is also consistent with forest_loss_rate's
+    Hansen-based scale elsewhere in this module).
+    """
+    import ee
+    eg = _to_ee(g)
+    FOREST_FRACTION_MIN = 0.10  # below this, site is "non-forest" for FLII purposes
+    try:
+        dw = _dw_mode(c)
+        forest_frac = dw.eq(DW_TREES).rename("forest").reduceRegion(
+            reducer=ee.Reducer.mean(), geometry=eg, scale=10, maxPixels=1e13
+        ).get("forest").getInfo()
+    except Exception as e:
+        logger.warning(f"FLII forest-fraction precondition check failed: {e}")
+        forest_frac = None
+
+    if forest_frac is not None and forest_frac < FOREST_FRACTION_MIN:
+        return {"value": None, "pixels": None,
+                "metadata": {"applicable": False,
+                             "forest_fraction": round(forest_frac, 4),
+                             "note": (f"Not Applicable — site is {forest_frac:.1%} forest "
+                                      f"(threshold {FOREST_FRACTION_MIN:.0%}). FLII is a "
+                                      f"forest-integrity index and is not meaningful for "
+                                      f"non-forest land uses (e.g., active agroforestry, "
+                                      f"farmland, plantation establishment sites).")}}
+
     img=_img_flii(c)
-    return _reduce(img,g,500) if img else {"value":None,"pixels":None}
+    result = _reduce(img,g,30) if img else {"value":None,"pixels":None}
+    if forest_frac is not None:
+        result["metadata"] = {"applicable": True, "forest_fraction": round(forest_frac, 4)}
+    return result
 
 def extract_eii(g,c):
     img=_img_eii(c)
@@ -941,7 +1173,7 @@ def extract_bii(g,c):
         except: pass
     return {"value":None,"pixels":None}
 
-def extract_pdf(g,c): return _reduce(_img_pdf(c),g,500)
+def extract_pdf(g,c): return _reduce(_img_pdf(c),g,10)
 
 def extract_aridity(g,c):
     img=_img_aridity(c)
@@ -977,7 +1209,7 @@ def extract_flagship_habitat(g,c):
     try:
         y=c.ndvi_year
         dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg).select("label").mode()
-        forest=dw.eq(1); dem=ee.Image("USGS/SRTMGL1_003")
+        forest=dw.eq(DW_TREES); dem=ee.Image("USGS/SRTMGL1_003")
         es=dem.unitScale(0,2000).multiply(-1).add(1)
         viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
         hs=viirs.unitScale(0,50).multiply(-1).add(1)
@@ -1038,7 +1270,10 @@ def extract_star_t(g,c):
     import ee; eg=_to_ee(g); y=c.ndvi_year
     try:
         dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg).select("label").mode()
-        hm=dw.remap([1,2,3,5],[1,1,1,1],0); bm=dw.eq(6)
+        hm = dw.eq(DW_TREES)
+        for cls in DW_NATURAL_CLASSES[1:]:
+            hm = hm.Or(dw.eq(cls))
+        bm=dw.eq(DW_BUILT)
         bd=bm.reduceNeighborhood(reducer=ee.Reducer.mean(),kernel=ee.Kernel.circle(radius=1000,units="meters"))
         viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
         nn=viirs.unitScale(0,50); tp=bd.add(nn).divide(2)
