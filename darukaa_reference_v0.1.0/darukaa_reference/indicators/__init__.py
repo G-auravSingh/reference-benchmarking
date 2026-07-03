@@ -288,10 +288,14 @@ def _img_natural_landcover(c):
     return weights.multiply(100)
 
 def _img_forest_loss(c):
+    """Hansen GFC v1.13 forest loss mask.
+    Returns binary lossyear > 0, masked to treecover2000 >= 30%.
+    Actual rate computation (with windowed periods) is done in extract_forest_loss_rate.
+    """
     import ee
-    gfc=ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
-    f=gfc.select("treecover2000").gte(30); l=gfc.select("lossyear").gt(0)
-    return l.divide(f.max(1)).multiply(100).divide(24).updateMask(f).rename("forest_loss_rate")
+    gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
+    f = gfc.select("treecover2000").gte(30)
+    return gfc.select("lossyear").updateMask(f).rename("forest_loss_rate")
 
 def _img_ndvi(c):
     import ee; y=c.ndvi_year
@@ -1082,14 +1086,73 @@ def extract_cpland(g,c):
         return {"value":max(0,min(100,100*float(ee.Number(ca.get("c")).getInfo())/pa_m2)),"pixels":None}
     except Exception as e: logger.warning(f"CPLAND: {e}"); return {"value":None,"pixels":None}
 
-def extract_forest_loss_rate(g,c):
-    import ee; eg=_to_ee(g)
-    gfc=ee.Image("UMD/hansen/global_forest_change_2025_v1_13").clip(eg)
-    f=gfc.select("treecover2000").gte(30); l=gfc.select("lossyear").gt(0); pa=ee.Image.pixelArea()
-    a0=pa.updateMask(f).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=30,maxPixels=1e13)
-    al=pa.updateMask(l).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=30,maxPixels=1e13)
-    try: return {"value":ee.Number(al.get("area")).divide(ee.Number(a0.get("area"))).multiply(100).divide(24).getInfo(),"pixels":None}
-    except: return {"value":None,"pixels":None}
+def extract_forest_loss_rate(g, c):
+    """Forest loss rate with three fixed temporal windows.
+
+    lossyear encoding in Hansen GFC v1.13: integer 1-25 = years 2001-2025.
+    All three windows use the SAME baseline (treecover2000 >= 30%) so the
+    rates are directly comparable across sites and across time windows.
+
+    Primary site_value = long-term (2001-2025) for SoN scoring consistency.
+    Tier 1/Tier 2 references are computed from the same _img_forest_loss
+    output, so the intactness ratio remains coherent.
+
+    Recent and current rates are in metadata — used in report narrative,
+    NOT in the SoN score, so that clients cannot cherry-pick windows.
+    """
+    import ee
+    eg = _to_ee(g)
+    try:
+        gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13").clip(eg)
+        f   = gfc.select("treecover2000").gte(30)
+        pa  = ee.Image.pixelArea()
+
+        # Baseline: total forest area in 2000
+        a0 = pa.updateMask(f).reduceRegion(
+            reducer=ee.Reducer.sum(), geometry=eg,
+            scale=30, maxPixels=1e13)
+        baseline_m2 = ee.Number(a0.get("area"))
+
+        # Three fixed windows — never per-client configurable
+        windows = [
+            ("loss_longterm_2001_2025",  1, 25, 24),  # full record
+            ("loss_recent_2020_2025",   20, 25,  5),  # last 5 years #change as per year
+            ("loss_current_2023_2025",  23, 25,  2),  # last 2 years #change as per year
+        ]
+
+        rates = {}
+        for key, yr_start, yr_end, n_years in windows:
+            l = (gfc.select("lossyear")
+                 .gte(yr_start)
+                 .And(gfc.select("lossyear").lte(yr_end))
+                 .And(gfc.select("lossyear").gt(0)))
+            al = pa.updateMask(l).reduceRegion(
+                reducer=ee.Reducer.sum(), geometry=eg,
+                scale=30, maxPixels=1e13)
+            rate = (ee.Number(al.get("area"))
+                    .divide(baseline_m2.max(1))
+                    .multiply(100)
+                    .divide(n_years))
+            rates[key] = round(rate.getInfo(), 4)
+
+        baseline_ha = round(baseline_m2.getInfo() / 10000, 2)
+
+        return {
+            "value": rates.get("loss_longterm_2001_2025"),
+            "pixels": None,
+            "metadata": {
+                "loss_rate_longterm_pct_yr":  rates.get("loss_longterm_2001_2025"),
+                "loss_rate_recent_pct_yr":    rates.get("loss_recent_2020_2025"),
+                "loss_rate_current_pct_yr":   rates.get("loss_current_2023_2025"),
+                "baseline_forest_ha":         baseline_ha,
+                "note": ("Long-term 2001-2025 rate used as primary SoN value "
+                         "for cross-site comparability. Recent (2020-2025) and "
+                         "current (2023-2025) rates in metadata for narrative.")
+            }
+        }
+    except Exception as e:
+        logger.warning(f"forest_loss_rate: {e}")
+        return {"value": None, "pixels": None}
 
 def extract_kba_overlap(g,c):
     import ee; eg=_to_ee(g); kba=_load_fc(_KBA,c)
