@@ -773,11 +773,21 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"tnfd_dim": 1, "note": "India-only PV binary asset",
                   "gee_image_fn": _img_cpland_binary})
 
-    r.register(name="forest_loss_rate", display_name="Habitat Loss Rate", source_type="gee",
+    r.register(name="forest_loss_rate", display_name="Tree Cover Loss Rate", source_type="gee",
         extract_fn=extract_forest_loss_rate, unit="% per year", value_range=(0,100),
-        citation="Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.12.",
+        citation="Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
+             "NOTE: metric detects loss of tree canopy ≥30% density only. "
+             "Does not capture grassland, shrub, or open-woodland degradation. "
+             "For mixed grassland-forest landscapes, interpret alongside NDVI "
+             "and habitat_health indicators for full habitat trajectory picture.",
         tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=1,
-        metadata={"gee_image_fn": _img_forest_loss, "tnfd_dim": 1})
+        metadata={"gee_image_fn": _img_forest_loss, "tnfd_dim": 1, "display_name_report": "Tree Cover Loss Rate (Hansen GFC)", "scope_note": ("Measures annual rate of tree canopy loss (≥30% density threshold). "
+                       "Sites with low baseline forest cover (<5 ha) will show "
+                       "arithmetically inflated percentage rates — interpret absolute "
+                       "area lost (ha/yr) alongside the percentage rate. "
+                       "Does NOT capture grassland, shrubland, or riparian vegetation "
+                       "dynamics — use ndvi_trend and habitat_health for those signals."),
+        "min_reliable_baseline_ha": 5.0,})
 
     r.register(name="kba_overlap", display_name="KBA/IBA Overlap", source_type="gee",
         extract_fn=extract_kba_overlap, unit="%", value_range=(0,100),
@@ -1136,6 +1146,9 @@ def extract_forest_loss_rate(g, c):
             rates[key] = round(rate.getInfo(), 4)
 
         baseline_ha = round(baseline_m2.getInfo() / 10000, 2)
+        # Flag unreliable results from near-zero baselines
+        # < 5 ha of baseline forest → percentage rates are arithmetically unstable
+        low_baseline = baseline_ha < 5.0
 
         return {
             "value": rates.get("loss_longterm_2001_2025"),
@@ -1145,9 +1158,19 @@ def extract_forest_loss_rate(g, c):
                 "loss_rate_recent_pct_yr":    rates.get("loss_recent_2020_2025"),
                 "loss_rate_current_pct_yr":   rates.get("loss_current_2023_2025"),
                 "baseline_forest_ha":         baseline_ha,
+                "low_baseline_flag":     low_baseline,
                 "note": ("Long-term 2001-2025 rate used as primary SoN value "
                          "for cross-site comparability. Recent (2020-2025) and "
-                         "current (2023-2025) rates in metadata for narrative.")
+                         "current (2023-2025) rates in metadata for narrative."), 
+                "low_baseline_note": (
+                        f"Baseline forest cover is only {baseline_ha:.1f} ha. "
+                        f"Percentage loss rates are arithmetically unstable at this scale — "
+                        f"a loss of 1 ha represents {round(100/max(baseline_ha,0.01),0):.0f}% of baseline. "
+                        f"Report absolute area lost (ha/yr) rather than percentage rate for this site. "
+                        f"This site is likely a non-forest or mixed-cover landscape; "
+                        f"NDVI trend and habitat_health are more ecologically appropriate "
+                        f"indicators of habitat trajectory here."
+                ) if low_baseline else None,
             }
         }
     except Exception as e:
