@@ -1,0 +1,42 @@
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+<Placemark>
+<name>NGO 100H</name><description>&#x3C;table border="1" cellpadding="4" cellspacing="0">&#x3C;tr>&#x3C;th align="left">AltMode&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Area_ha&#x3C;/th>&#x3C;td>101&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Base&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Clamped&#x3C;/th>&#x3C;td>-1&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Extruded&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">FolderPath&#x3C;/th>&#x3C;td>Document&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Name&#x3C;/th>&#x3C;td>NGO 100H&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Shape_Area&#x3C;/th>&#x3C;td>0.0000892675082949&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Shape_Leng&#x3C;/th>&#x3C;td>5637.82226625&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">SymbolID&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;/table></description><ExtendedData>
+  <Data name="AltMode"><value>0</value></Data>
+  <Data name="Area_ha"><value>101</value></Data>
+  <Data name="Base"><value>0</value></Data>
+  <Data name="Clamped"><value>-1</value></Data>
+  <Data name="Extruded"><value>0</value></Data>
+  <Data name="FolderPath"><value>Document</value></Data>
+  <Data name="Name"><value>NGO 100H</value></Data>
+  <Data name="Shape_Area"><value>0.0000892675082949</value></Data>
+  <Data name="Shape_Leng"><value>5637.82226625</value></Data>
+  <Data name="SymbolID"><value>0</value></Data></ExtendedData>
+  <Polygon>
+<outerBoundaryIs>
+  <LinearRing><coordinates>81.23452719300008,23.747051302000045
+81.23471595300003,23.748810992000074
+81.23526077700006,23.750729929000045
+81.23540796300006,23.753040104000036
+81.23738542200005,23.752867947000027
+81.23839024500006,23.75280196800003
+81.23924285200009,23.752890655000044
+81.23987283600007,23.747899233000055
+81.24271296000006,23.744650180000065
+81.24354980900006,23.741416697000034
+81.24347873000005,23.740413123000053
+81.24305795900005,23.73834364800007
+81.24247960700006,23.73644846800005
+81.24139834200008,23.736929401000054
+81.24027349100004,23.73746404200006
+81.23926498000003,23.738029372000028
+81.23818337900008,23.738386615000024
+81.23609025000007,23.73914406600005
+81.23387876900006,23.739826320000077
+81.23445544400005,23.74161065900006
+81.23494360600006,23.743417992000047
+81.23944804100006,23.742857903000072
+81.23951878400004,23.74475851400007
+81.23786754900004,23.74499574300006
+81.23646542400007,23.74588910800003
+81.23517930500003,23.746522224000046
+81.23452719300008,23.747051302000045</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>

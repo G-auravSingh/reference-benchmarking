@@ -1,0 +1,29 @@
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+<Placemark>
+<name>AAMANAR 15.00 HECTOR PLANTATION BY NGO</name><description>&#x3C;table border="1" cellpadding="4" cellspacing="0">&#x3C;tr>&#x3C;th align="left">AltMode&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Base&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Clamped&#x3C;/th>&#x3C;td>-1&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Extruded&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">FolderPath&#x3C;/th>&#x3C;td>Document&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Name&#x3C;/th>&#x3C;td>AAMANAR 15.00 HECTOR PLANTATION BY NGO&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Shape_Area&#x3C;/th>&#x3C;td>0.0000136704194095&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">Shape_Leng&#x3C;/th>&#x3C;td>0.0150573403384&#x3C;/td>&#x3C;/tr>&#x3C;tr>&#x3C;th align="left">SymbolID&#x3C;/th>&#x3C;td>0&#x3C;/td>&#x3C;/tr>&#x3C;/table></description><ExtendedData>
+  <Data name="AltMode"><value>0</value></Data>
+  <Data name="Base"><value>0</value></Data>
+  <Data name="Clamped"><value>-1</value></Data>
+  <Data name="Extruded"><value>0</value></Data>
+  <Data name="FolderPath"><value>Document</value></Data>
+  <Data name="Name"><value>AAMANAR 15.00 HECTOR PLANTATION BY NGO</value></Data>
+  <Data name="Shape_Area"><value>0.0000136704194095</value></Data>
+  <Data name="Shape_Leng"><value>0.0150573403384</value></Data>
+  <Data name="SymbolID"><value>0</value></Data></ExtendedData>
+  <Polygon>
+<outerBoundaryIs>
+  <LinearRing><coordinates>81.22878525400006,23.803110613000058
+81.22841846200004,23.802432985000053
+81.22799735500007,23.80228574100005
+81.22777640800007,23.801457183000025
+81.22644804400005,23.800667272000055
+81.22586734600003,23.799908033000065
+81.22525110800007,23.799715998000067
+81.22392945000007,23.800082275000022
+81.22435323900004,23.802141871000064
+81.22506469500007,23.804152661000046
+81.22649934100008,23.804008794000026
+81.22783742800004,23.803903270000035
+81.22853245600004,23.80373516800006
+81.22873932100003,23.803579643000038
+81.22878525400006,23.803110613000058</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>
