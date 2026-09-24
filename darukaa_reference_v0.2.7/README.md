@@ -219,15 +219,30 @@ for every project — that's what keeps results comparable. What changes by arch
   a bespoke script — it reads that project's real `tile_manifest.json` directly (the
   exact handoff format the site-selection pipeline already produces, one real
   dissolved GeoJSON tile per EMU/zone) and runs it through the same
-  `run_multi_tile_project` path:
+  `run_multi_tile_project` path.
+
+  **The two pipelines' outputs now live in this same repository** (client-requested:
+  "reduce this manual downloading and uploading process... the two pipelines can be
+  connected") — so the manifest is already on disk the moment this repo is cloned,
+  with no zip/upload step in between:
 
   ```bash
-  python run_project_from_manifest.py --manifest <path>/outputs/07_reference_handoff/tile_manifest.json
+  python run_project_from_manifest.py --project TataMotors_Pimpri
   ```
 
-  Verified directly against all four real, current site-selection projects' manifests
-  before shipping — Tata Motors' 9 real zones, Soulforest's 7 real EMUs, and GV/Soova's
-  6 real EMUs each all load and dissolve correctly through this exact path. For Tata
+  `--project <name>` searches this repo for that project's real handoff automatically
+  (see `find_manifest_by_project_name` in the script) — it doesn't require knowing the
+  exact nested path the site-selection folder happens to be pushed under, which is
+  real (not guaranteed to stay fixed): the current push sits at
+  `Darukaa_SiteSelection_pipeline_vAug2026/Darukaa_SiteSelection_pipeline/`
+  `Darukaa_SiteSelection/projects/<name>/...`. Use `--manifest <exact path>` instead
+  if you want to point at a specific manifest directly (e.g. one outside this repo).
+
+  Verified directly, by name alone, for all four real, current site-selection
+  projects before shipping this — Tata Motors' 9 real zones, Soulforest's 7 real
+  EMUs, GV's 6, and Soova's 5 (its EMU count changed in the latest site-selection
+  push — this reads whatever the current real manifest says, not a remembered
+  count) all resolve and dissolve to their correct real areas. For Tata Motors,
   Motors specifically, this means the pipeline genuinely runs once per real zone (9
   independent runs), not once over the whole 126.66 ha campus — the project-level
   report is built FROM those 9 real per-zone results via the same non-compensatory

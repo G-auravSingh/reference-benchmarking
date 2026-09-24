@@ -27,14 +27,17 @@ only): build a manifest.json by hand in the same shape (see
 corbett_sites/manifest_example.json) and point this script at it.
 
 USAGE (Colab):
-    1. Clone this repo; %cd into darukaa_reference_v0.2.7
+    1. Clone this repo (contains BOTH pipelines now — no separate zip/
+       upload step for the handoff between them);
+       %cd into darukaa_reference_v0.2.7
     2. !pip install -r requirements.txt
     3. import ee; ee.Authenticate(); ee.Initialize(project="<your-real-gee-project>")
     4. Edit config.yaml: set gee.project to the same real id.
-    5. Upload the project's real outputs/07_reference_handoff/ folder
-       (tile_manifest.json + tiles/*.geojson) — from the site-selection
-       pipeline's own output, unmodified.
-    6. python run_project_from_manifest.py --manifest <path>/tile_manifest.json
+    5. python run_project_from_manifest.py --project TataMotors_Pimpri
+       (searches this repo for that project's real site-selection handoff
+       automatically — see find_manifest_by_project_name below. Use
+       --manifest <exact path> instead if you'd rather point at a
+       specific file directly, e.g. a manifest that isn't in this repo.)
 
 Verified structurally (not assumed) before shipping: all 4 site-selection
 projects' real, current manifests (Tata Motors 9 zones, Soulforest 7 EMUs,
@@ -98,14 +101,65 @@ def resolve_tile_paths(manifest: dict, manifest_path: Path) -> list[str]:
     return resolved
 
 
+def find_manifest_by_project_name(repo_root: Path, project_name: str) -> Path:
+    """REAL CONNECTION (client-requested: 'reduce this manual downloading
+    and uploading process... the two pipelines can be connected'). With
+    the site-selection pipeline pushed into this same repository, its
+    real outputs/07_reference_handoff/tile_manifest.json for any project
+    are already sitting on disk the moment this repo is cloned — no zip,
+    no manual upload, no copy step at all. This searches for it by
+    project name alone, rather than requiring the exact nested path
+    (which varies by how the site-selection folder happens to be named/
+    zipped — confirmed directly: the real pushed copy sits under a
+    doubly-nested Darukaa_SiteSelection_pipeline_vAug2026/.../
+    Darukaa_SiteSelection/ path, not a fixed, predictable one), so this
+    stays robust even if that nesting changes on a future push.
+
+    Searches the whole repo (this file's own parent tree) for
+    projects/<project_name>/outputs/07_reference_handoff/tile_manifest.json
+    under ANY site-selection folder present, and requires exactly one
+    real match — ambiguity (e.g. two different site-selection checkouts
+    both containing the same project name) is a real problem to surface
+    and resolve explicitly, never silently guessed at."""
+    pattern = f"projects/{project_name}/outputs/07_reference_handoff/tile_manifest.json"
+    matches = [p for p in repo_root.rglob("tile_manifest.json")
+              if str(p.relative_to(repo_root)).replace("\\", "/").endswith(pattern)]
+    if not matches:
+        raise FileNotFoundError(
+            f"No tile_manifest.json found for project '{project_name}' anywhere under "
+            f"{repo_root}. Expected a real path ending in '{pattern}' — confirm the "
+            f"site-selection pipeline's real output for this project has been pushed "
+            f"to this repo, and that '{project_name}' matches its real project folder "
+            f"name exactly (case-sensitive)."
+        )
+    if len(matches) > 1:
+        raise ValueError(
+            f"Found {len(matches)} different real tile_manifest.json files for project "
+            f"'{project_name}' — ambiguous, not resolved automatically:\n"
+            + "\n".join(f"  {m}" for m in matches)
+            + f"\nPass --manifest with the exact one you want instead of --project."
+        )
+    return matches[0]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run darukaa_reference against a real project tile manifest.")
-    parser.add_argument("--manifest", required=True, help="Path to the project's tile_manifest.json")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--manifest", help="Exact path to a project's tile_manifest.json")
+    group.add_argument("--project", help="Real project name (e.g. TataMotors_Pimpri) — "
+                       "searches this repo for its site-selection handoff automatically, "
+                       "no manual path/zip/upload needed when both pipelines share a repo")
     parser.add_argument("--output-dir", default=None, help="Output dir (default: ./outputs/<project_name>)")
     parser.add_argument("--config", default=str(Path(__file__).resolve().parent / "config.yaml"))
     args = parser.parse_args()
 
-    manifest_path = Path(args.manifest).resolve()
+    if args.project:
+        repo_root = Path(__file__).resolve().parent.parent  # this repo's real root
+        manifest_path = find_manifest_by_project_name(repo_root, args.project).resolve()
+        logger.info("Found real manifest for '%s' at: %s", args.project, manifest_path)
+    else:
+        manifest_path = Path(args.manifest).resolve()
+
     manifest = load_manifest(manifest_path)
     tile_paths = resolve_tile_paths(manifest, manifest_path)
 

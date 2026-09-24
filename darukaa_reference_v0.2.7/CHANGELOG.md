@@ -56,6 +56,40 @@ a v0.2.7 test run's rendered report still said "Pipeline v0.2.5"). Fixed to refe
 the package's own real `__version__` instead of a separate hardcoded string, so this
 specific drift cannot recur on a future release.
 
+## [Unreleased, this session pt.2] -- The two pipelines are now genuinely connected
+
+Client-requested directly: "reduce this manual downloading and uploading process...
+the two pipelines can be connected." The site-selection pipeline's real output is now
+pushed into this same repository, and `run_project_from_manifest.py` gained a real
+`--project <name>` mode (`find_manifest_by_project_name`) that searches this repo for
+that project's real `outputs/07_reference_handoff/tile_manifest.json` automatically --
+no manual zip, no manual upload, no exact-path lookup required. Deliberately searches
+by project name rather than assuming a fixed nested path, since the real pushed copy
+sits under a specific, not-guaranteed-stable nesting
+(`Darukaa_SiteSelection_pipeline_vAug2026/.../Darukaa_SiteSelection/projects/<name>/...`)
+-- this stays robust if that nesting changes on a future push. Ambiguity (two real
+manifests matching the same project name) is surfaced as a real error, never silently
+guessed at.
+
+Verified directly, by name alone, for all four real, current site-selection projects
+now that both pipelines share a repo: Tata Motors (9 zones), Soulforest (7 EMUs), GV
+(6 EMUs), and Soova (5 EMUs -- its real count changed in the latest site-selection
+push since this was last checked; this resolver reads whatever the current real
+manifest says, never a remembered figure).
+
+The GEE step inside the site-selection pipeline itself (`02_covariates`, the
+GEE-Code-Editor paste/run/download workflow) remains manual by explicit client
+decision for now -- this connects the HANDOFF between the two pipelines, not that
+separate, older workflow.
+
+A real, separate finding while verifying this, not yet acted on: Tata Motors' real
+`07_reference_handoff/tiles/` folder in the pushed site-selection output contains 146
+files, but only the 9 real `EMU_*.geojson` files are referenced by the current
+manifest -- the other 137 (`SEG01.geojson` ... `SEG137.geojson`) are orphaned,
+stale tiles from before the zone-is-emu redesign. Harmless (never read by this
+resolver, which only opens what the manifest lists), but worth a real cleanup pass
+on the site-selection side.
+
 ## [0.2.7] -- SHI placeholder, richness area-normalisation, Corbett's 4 real sites verified
 
 ### C3 fauna pillar — real research done before any code change
