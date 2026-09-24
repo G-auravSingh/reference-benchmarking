@@ -1563,7 +1563,19 @@ not unavailable.
 - **Aquatic covariates** are ingested per-project (real per-project
   waterbody data confirmed, not the earlier hardcoded-asset bug) but not
   yet rolled into `05_metrics_rollup` or shown on the field map.
-- **Tata Motors** has not been ported into this pipeline — stays on
-  `Darukaa_SiteSelectionPipeline_v6.0`'s `run_project.py` for now.
-- **`darukaa_reference` handoff** (original architecture plan's "Phase 4")
-  — not started.
+- **Tata Motors** — CORRECTED, this line was stale: ported into this
+  pipeline and working (zone_is_emu, zone_scoped_continuous regime) for
+  many releases now; see the real history throughout this changelog.
+  Real remaining Tata Motors item instead: 137 orphaned, stale
+  `SEG01.geojson`...`SEG137.geojson` tile files sit alongside the real 9
+  current `EMU_*.geojson` tiles in `outputs/07_reference_handoff/tiles/`
+  — harmless (nothing reads them; `tile_manifest.json` only lists the 9
+  real ones) but worth a real cleanup pass.
+- **`darukaa_reference` handoff** — CORRECTED, this line was stale: not
+  only started but real, tested, and connected — `07_reference_handoff`
+  now feeds `darukaa_reference`'s own `run_project_from_manifest.py`
+  directly (`--project <name>`, both pipelines in one repository), for
+  all four real projects (Tata Motors, Soulforest, GV, Soova), plus a
+  real, separate aquatic-tile extraction for Tata Motors' own water
+  bodies (`extract_aquatic_tiles.py`). See `darukaa_reference`'s own
+  CHANGELOG.md for the full, real history of this connection.

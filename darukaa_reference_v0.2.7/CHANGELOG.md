@@ -3,7 +3,9 @@
 Format: Keep a Changelog; SemVer. Every entry cites a change-set (CS-xx) and, where
 applicable, the reviewer comment (Cxx) and HMI/SEED audit fix (F-HMI-x).
 
-## [Unreleased, this session] -- Generalised project runner; client/product-facing report rebuild; a real version-drift bug fixed
+## [0.2.7] -- Real site-selection integration, client-facing report rebuild, and a connected multi-pipeline handoff
+
+*(Consolidated: every real change below shipped within the 0.2.7 line -- this changelog previously fragmented them across two stray "Unreleased" headers plus a separate dated entry, none of which corresponded to any real, different package version. `darukaa_reference.__version__` has been 0.2.7 throughout all of it; this is now the single, accurate record.)*
 
 ### A real, generalised runner replacing bespoke per-project scripts
 `run_project_from_manifest.py` reads ANY project's real `tile_manifest.json` directly
@@ -56,7 +58,6 @@ a v0.2.7 test run's rendered report still said "Pipeline v0.2.5"). Fixed to refe
 the package's own real `__version__` instead of a separate hardcoded string, so this
 specific drift cannot recur on a future release.
 
-## [Unreleased, this session pt.2] -- The two pipelines are now genuinely connected
 
 Client-requested directly: "reduce this manual downloading and uploading process...
 the two pipelines can be connected." The site-selection pipeline's real output is now
@@ -90,7 +91,48 @@ stale tiles from before the zone-is-emu redesign. Harmless (never read by this
 resolver, which only opens what the manifest lists), but worth a real cleanup pass
 on the site-selection side.
 
-## [0.2.7] -- SHI placeholder, richness area-normalisation, Corbett's 4 real sites verified
+### Real module/realm-based indicator filtering (completes an existing, unwired hook)
+`config.realm` ("terrestrial"|"aquatic"|"mixed") was already loaded and logged every
+run but never actually used to filter anything -- found directly, not assumed, before
+completing it. `Pipeline.run()` now filters the active indicator set by realm against
+each indicator's own real module tag -- "terrestrial" (default) excludes aquatic-module
+indicators, "aquatic" keeps core+aquatic, "mixed" keeps everything -- fully backward
+compatible, no existing run's behaviour changes unless realm is explicitly set.
+`run_project_from_manifest.py` auto-detects realm="aquatic" from the real project name
+(e.g. TataMotors_Pimpri_Aquatic) rather than relying on a user remembering to hand-edit
+a shared config.yaml between runs -- a forgotten edit there would have silently
+filtered OUT every real aquatic indicator from an aquatic run. Verified directly
+(unit-level, since live GEE ecoregion resolution blocks a full run in this sandbox
+regardless of this change): realm filtering against the real, current registry gives
+terrestrial 35/44 (0 aquatic), aquatic 42/44 (9/9 real aquatic indicators present),
+mixed 44/44.
+
+### A real, honest answer on aquatic reference comparison (client asked directly)
+Checked every real aquatic-module indicator's actual registration before answering:
+wcpi, wsdi, hsas, edpp, mspl, and rci are ALL registered `tier2_eligible=False` --
+none currently get a reference comparison or a concern level; they are real,
+site-relative context values only (`wcpi`'s own citation note says so explicitly:
+"Not comparable across sites"). The underlying Tier-2 stratification mechanism itself
+was traced and confirmed sound for a real waterbody regardless (it stratifies the
+reference pool by the site's OWN Dynamic World land-cover class, so a lake would
+correctly draw other water pixels as reference, not terrestrial ones) -- but that
+mechanism never runs for these six indicators today. Promoting any of them to scored
+would be real, new, deliberate work (including validating their 10km default
+reference radius against how sparsely real water bodies are actually distributed),
+not a default to flip on.
+
+### Real aquatic tile extraction for Tata Motors' real water bodies
+Confirmed directly against the raw KML: Tata Motors has 6 real, named water body
+placemarks (Lake Suman 8.47ha, Lake Sharma 3.61ha, Ponds 1-4) that were only ever
+used to build the hard exclusion mask during site selection -- never available as
+their own assessable tiles, so the real aquatic-module indicators above have never
+had anything to run against for this project. `extract_aquatic_tiles.py` (in the
+site-selection repo, alongside Tata Motors' own project folder) extracts them
+directly using that pipeline's own proven `kml_utils.parse_kml`, and writes a real,
+separate `tile_manifest.json` ("TataMotors_Pimpri_Aquatic") in the exact schema the
+terrestrial handoff uses -- runnable via the same `--project` path, verified directly
+alongside the terrestrial manifest with no collision between the two.
+
 
 ### C3 fauna pillar — real research done before any code change
 Explored external ESG/EIA/TNFD-aligned species metrics directly (not from memory)

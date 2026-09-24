@@ -117,7 +117,12 @@ and `custom_ingestion.py` for the thin adapter.
 See `CHANGELOG.md`'s "Open" section for the live list — as of this
 writing, that includes: a real, unresolved tension between EMU spatial
 compactness and the device-coverage guarantee (surfaced directly on real
-data, not resolved — see `METHODOLOGY.md` §3), aquatic covariates not yet
-rolled into the metrics rollup, and the `darukaa_reference` handoff (Phase 4
-of the original architecture plan, EMU tile export is built — see
-`07_reference_handoff` — but the consuming side of the handoff is not).
+data, not resolved — see `METHODOLOGY.md` §3), and aquatic covariates not
+yet rolled into the metrics rollup. The `darukaa_reference` handoff
+(Phase 4 of the original architecture plan) is real, tested, and
+connected now — not just the EMU tile export (`07_reference_handoff`),
+but the consuming side too: `darukaa_reference`'s own
+`run_project_from_manifest.py` reads it directly by project name, no
+manual handoff step, for all four real projects here plus a dedicated
+aquatic-tile extraction for Tata Motors' own water bodies. See
+`darukaa_reference`'s own README/CHANGELOG for the real, current detail.
