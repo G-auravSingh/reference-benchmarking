@@ -58,6 +58,7 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+import dataclasses
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -215,12 +216,31 @@ def run_multi_tile_project(config: Config,
                            tile_labels: Optional[List[str]] = None,
                            project_name: str = "project",
                            output_dir: Optional[str] = None,
-                           continue_on_tile_failure: bool = True) -> Dict:
+                           continue_on_tile_failure: bool = True,
+                           tile_realms: Optional[List[str]] = None) -> Dict:
     """Run darukaa_reference once per tile and combine the results project-wide.
 
     tile_paths   : one KML/GeoJSON/shapefile per tile (each may contain many parcels —
                    they are dissolved into one geometry per tile automatically).
     tile_labels  : optional; defaults to tile_01, tile_02, ... in input order.
+    tile_realms  : REAL FEATURE (client-requested directly: "if any project
+                   involves both aquatic + terrestrial the report can't be
+                   separate one"). Optional; one realm per tile, same
+                   length/order as tile_paths, e.g. 9x "terrestrial" +
+                   6x "aquatic" for a combined Tata Motors run (9 real
+                   zones + 6 real water bodies as ONE project). Each
+                   tile gets its own real config.realm override (via
+                   dataclasses.replace — never mutates the shared config
+                   object other tiles still use) before its own Pipeline
+                   runs, so a terrestrial zone correctly gets terrestrial-
+                   applicable indicators and an aquatic tile correctly
+                   gets aquatic-applicable ones (see registry.py's
+                   applicable_realms) — never the same, single project-
+                   wide indicator set blindly applied to every tile
+                   regardless of what it actually is. None (the default)
+                   uses config.realm for every tile unchanged, exactly
+                   the prior behaviour for every existing single-realm
+                   project.
     output_dir   : defaults to config.output_dir. Writes:
                      <output_dir>/<project_name>_project.{json,csv,html}
                      <output_dir>/<project_name>_tiles/<tile_label>.{json,csv,html}
@@ -235,6 +255,8 @@ def run_multi_tile_project(config: Config,
         tile_labels = [f"tile_{i+1:02d}" for i in range(len(tile_paths))]
     if len(tile_labels) != len(tile_paths):
         raise ValueError("tile_labels must match tile_paths in length if provided.")
+    if tile_realms is not None and len(tile_realms) != len(tile_paths):
+        raise ValueError("tile_realms must match tile_paths in length if provided.")
 
     out_dir = Path(output_dir or config.output_dir)
     tiles_dir = out_dir / f"{project_name}_tiles"
@@ -245,14 +267,18 @@ def run_multi_tile_project(config: Config,
     failed_tiles: Dict[str, str] = {}
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        for path, label in zip(tile_paths, tile_labels):
+        for i, (path, label) in enumerate(zip(tile_paths, tile_labels)):
             logger.info(f"\n{'='*60}\nTILE: {label} ({path})\n{'='*60}")
             try:
                 geojson_path, area_ha = _dissolve_tile_to_geojson(path, label, tmp_dir)
                 tile_areas_ha[label] = area_ha
                 logger.info(f"  Dissolved to one geometry, area={area_ha:.2f} ha")
 
-                pipe = Pipeline(config, registry)
+                tile_config = config
+                if tile_realms is not None:
+                    tile_config = dataclasses.replace(config, realm=tile_realms[i])
+                    logger.info(f"  Realm for this tile: {tile_config.realm}")
+                pipe = Pipeline(tile_config, registry)
                 rep = pipe.run(site_path=geojson_path,
                               output_path=str(tiles_dir / label))
                 tile_reports[label] = rep

@@ -176,6 +176,15 @@ def main():
                        help="Overrides auto-detection (which only triggers on a project name "
                        "containing 'aquatic'). 'terrestrial' excludes aquatic-module indicators, "
                        "'aquatic' keeps only core+aquatic, 'mixed' keeps everything.")
+    parser.add_argument("--no-combine", action="store_true",
+                       help="Client-requested directly: 'if any project involves both aquatic + "
+                       "terrestrial the report can't be a separate one.' By default, running a "
+                       "real project (e.g. TataMotors_Pimpri) automatically finds and merges in "
+                       "its real '<project>_Aquatic' companion manifest if one exists, producing "
+                       "ONE combined report -- each tile still gets its own correct realm (see "
+                       "tile_realms in run_multi_tile_project), never one project-wide setting "
+                       "blindly applied to every tile. Pass this flag to force a standalone, "
+                       "terrestrial-only run even when a real aquatic companion exists.")
     args = parser.parse_args()
 
     if args.project:
@@ -184,9 +193,42 @@ def main():
         logger.info("Found real manifest for '%s' at: %s", args.project, manifest_path)
     else:
         manifest_path = Path(args.manifest).resolve()
+        repo_root = manifest_path.parent  # combining needs a repo root to search from too
 
     manifest = load_manifest(manifest_path)
     tile_paths = resolve_tile_paths(manifest, manifest_path)
+    tile_labels = list(manifest["tile_labels"])
+    project_name = manifest["project_name"]
+    # REAL BUG CAUGHT BEFORE SHIPPING (found by re-reading this against
+    # the standalone-aquatic-run case, not assumed correct): a flat
+    # "terrestrial" default here would have been wrong for a manifest
+    # that IS itself the aquatic one (e.g. --project
+    # TataMotors_Pimpri_Aquatic run directly) -- the combining block
+    # below never runs for that case, so this initial default has to
+    # already reflect the loaded manifest's own real realm.
+    is_already_aquatic = "aquatic" in project_name.lower()
+    tile_realms = ["aquatic" if is_already_aquatic else "terrestrial"] * len(tile_paths)
+
+    # REAL COMBINING LOGIC (client-requested directly, see --no-combine's
+    # help text for the exact wording). Only attempted when the manifest
+    # just loaded doesn't already self-describe as aquatic (an aquatic
+    # manifest run directly, e.g. --project TataMotors_Pimpri_Aquatic,
+    # stays standalone -- combining only ever happens starting from the
+    # terrestrial/base side, so running the aquatic project alone still
+    # gives a real, separate result exactly as before).
+    if not is_already_aquatic and not args.no_combine:
+        aquatic_project_name = f"{project_name}_Aquatic"
+        try:
+            aquatic_manifest_path = find_manifest_by_project_name(repo_root, aquatic_project_name).resolve()
+            aquatic_manifest = load_manifest(aquatic_manifest_path)
+            aquatic_tile_paths = resolve_tile_paths(aquatic_manifest, aquatic_manifest_path)
+            logger.info("Found real aquatic companion '%s' (%d tile(s)) -- combining into one project.",
+                       aquatic_project_name, len(aquatic_tile_paths))
+            tile_paths += aquatic_tile_paths
+            tile_labels += aquatic_manifest["tile_labels"]
+            tile_realms += ["aquatic"] * len(aquatic_tile_paths)
+        except FileNotFoundError:
+            pass  # no real aquatic companion for this project -- stays a standalone terrestrial run
 
     missing = [p for p in tile_paths if not Path(p).exists()]
     if missing:
@@ -197,7 +239,6 @@ def main():
         )
 
     project_name = manifest["project_name"]
-    tile_labels = manifest["tile_labels"]
     output_dir = args.output_dir or f"./outputs/{project_name}"
 
     config = Config.from_yaml(args.config)
@@ -208,31 +249,25 @@ def main():
             "live Earth Engine data."
         )
 
-    # REAL FIX: config.realm drives the new module-based indicator filter
-    # in pipeline.py (Pipeline.run) — but config.yaml is shared across
-    # every project's run, and a user re-running this script for a
-    # different project would have no reason to remember to hand-edit
-    # realm between a terrestrial and an aquatic run. Manually forgetting
-    # that edit would silently filter OUT every real aquatic indicator
-    # from an aquatic run (realm='terrestrial' excludes module='aquatic'
-    # entirely) — a genuinely dangerous silent failure, not a loud one.
-    # Auto-detected here from the real, declared project_name instead, so
-    # this can't be gotten wrong by omission. An explicit --realm flag
-    # still wins if given, for the real edge case of a project name that
-    # doesn't happen to signal its own realm.
+    # REAL FIX (round 2): a single project-wide config.realm was correct
+    # for a project that's genuinely all-one-realm, but wrong the moment
+    # a project combines terrestrial zones and aquatic water bodies (the
+    # combining logic above) — each tile needs its OWN correct realm, not
+    # one shared setting. tile_realms (built above) is now the real,
+    # authoritative per-tile signal; an explicit --realm flag still
+    # overrides every tile uniformly, for the case a user genuinely wants
+    # that instead of the default per-tile behaviour.
     if args.realm:
-        config.realm = args.realm
-    elif "aquatic" in project_name.lower():
-        config.realm = "aquatic"
-        logger.info("Auto-detected realm='aquatic' from project name '%s'.", project_name)
+        tile_realms = [args.realm] * len(tile_paths)
     registry = create_default_registry()
 
-    logger.info("Running %s — %d real zone(s)/tile(s): %s",
+    logger.info("Running %s — %d real tile(s): %s",
                 project_name, len(tile_labels), ", ".join(tile_labels))
+    logger.info("Realms: %s", dict(zip(tile_labels, tile_realms)))
     result = run_multi_tile_project(
         config, registry, tile_paths, tile_labels,
         project_name=project_name, output_dir=output_dir,
-        continue_on_tile_failure=True,
+        continue_on_tile_failure=True, tile_realms=tile_realms,
     )
 
     logger.info("Done. Project-level report: %s/%s_project.json / .html", output_dir, project_name)
