@@ -164,22 +164,31 @@ config = Config(
 )
 ```
 
-**`realm` — which of the 12 currently-scored indicators actually run, checked
-individually against real extraction logic, not guessed from a name or module tag**
-(client-requested directly: "our pipeline should be clean from all angles... not
-confusing"):
+**`realm` — which indicators actually run in each realm, checked individually against
+real extraction logic for every one of the 45 registered indicators (not just the
+scored subset), not guessed from a name or module tag** (client-caught directly: "we
+have many more indicators right which would go in the report even if they are not
+scored... so we need to check everything for them as well" — correct: the pipeline
+computes every registered, active indicator by default, "scored" only means "gets a
+reference benchmark," and any of them can be promoted to scored at runtime via
+`contracts.request_activation` — so every one needed a real, checked answer, not just
+today's default-scored 12):
 
 | Indicator | terrestrial | aquatic | Why |
 |---|---|---|---|
-| `natural_habitat`, `cpland`, `forest_loss_rate`, `chm`, `bii`, `eii`, `flii` | yes | no | Land/vegetation-specific — checked directly: e.g. `DW_NATURAL_CLASSES` excludes water entirely, so a pristine lake would wrongly show ~0% "natural"; canopy height and forest loss are trivially ~0 on open water; BII's PREDICTS model is explicitly terrestrial. `eii` excluded as a conservative default — its real water-pixel behaviour isn't verifiable without live GEE access yet. |
-| `ghm`, `hdi`, `light_pollution` | yes | yes | Landscape-wide human-pressure surfaces — genuinely meaningful for a water body's surroundings, same as for land. |
-| `jrc_water_persistence` | yes | yes | Water-specific by definition (was actually mistagged `module="core"` instead of `"aquatic"` — a real tagging gap found and fixed). |
-| `tspi` | no | yes | Aquatic-only by definition (trophic state / algae proxy — meaningless on land). |
+| `natural_habitat`, `natural_landcover`, `cpland`, `forest_loss_rate`, `chm`, `bii`, `eii`, `eii_structural`, `eii_compositional`, `eii_functional`, `flii`, `ndvi`, `habitat_health`, `pdf`, `lai`, `flagship_habitat`, `star_t`, `ivsi` | yes | no | Land/vegetation-specific — checked directly: `DW_NATURAL_CLASSES` (checked directly) excludes water entirely, so a pristine lake would wrongly show ~0% "natural"/"habitat suitability"; canopy height, leaf area, and forest loss are trivially ~0 on open water; NDVI/HHI/PDF/IVSI are vegetation-greenness-based; BII's PREDICTS model is explicitly terrestrial. `eii` and its 3 sub-components excluded as a conservative default — real water-pixel behaviour isn't verifiable without live GEE access yet. |
+| `ghm`, `hdi`, `light_pollution`, `aridity_index`, `lst_day`, `lst_night` | yes | yes | Landscape-wide context surfaces — genuinely meaningful for a water body's surroundings (and water surface temperature is itself a real, meaningful signal), same as for land. |
+| `jrc_water_persistence`, `rci`, `riparian_ndvi_trend` | yes | yes | Water-specific or water-finding by definition/design — `jrc_water_persistence` and `rci`/`riparian_ndvi_trend` were actually mistagged `module="core"` (the latter two explicitly locate the water body within the site geometry first, then compute a 100m riparian buffer around it — essentially aquatic-specific, not just tolerant of it). |
+| `endemic_richness`, `threatened_richness`, `endemic_plant_richness`, `threatened_plant_richness`, `ceri`, `shi`, `kba_overlap`, `iri` | yes | yes | Real species-range-overlap or geometric-overlap logic — genuinely meaningful for water-dependent species and real wetland/lake-containing KBAs too (all screening/context-tier regardless of realm — see §7). |
+| `tspi`, `sabf`, `wcpi`, `wsdi`, `hsas`, `edpp`, `mspl`, `shdi`, `sdi` | no | yes | Aquatic-only by definition (trophic state, water clarity/quality, surface dynamics — meaningless on land). |
 
 `realm="mixed"` runs every indicator regardless of this table — useful for a genuinely
 uncertain site, but the result will include some indicators that don't really apply;
 prefer `terrestrial`/`aquatic` (or let a combined multi-tile run set this per-tile
 automatically — see §4a's multi-tile section) whenever you know which one you have.
+Promoting a screening/context indicator to scored status (`request_activation`) never
+bypasses this table — confirmed directly: activating a land-specific indicator still
+correctly excludes it from an aquatic run.
 
 **Does the archetype/project-type change how you run this?** The fixed core constructs
 (C1 landscape, C2 vegetation, C3 fauna, C4 pressure) and the scoring logic are the same
