@@ -3,6 +3,59 @@
 Format: Keep a Changelog; SemVer. Every entry cites a change-set (CS-xx) and, where
 applicable, the reviewer comment (Cxx) and HMI/SEED audit fix (F-HMI-x).
 
+## [Unreleased, this session] -- Generalised project runner; client/product-facing report rebuild; a real version-drift bug fixed
+
+### A real, generalised runner replacing bespoke per-project scripts
+`run_project_from_manifest.py` reads ANY project's real `tile_manifest.json` directly
+-- the exact handoff format the site-selection pipeline's `07_reference_handoff` stage
+already produces for every archetype -- and runs it through `run_multi_tile_project`.
+Verified directly against all four real, current site-selection projects' manifests
+before shipping (not assumed from the format alone): Tata Motors' 9 real zones,
+Soulforest's 7 real EMUs, and GV/Soova's 6 real EMUs each all load and dissolve to
+their correct real areas (e.g. Tata Motors' Wildlife zone -> 3.78ha, Soulforest's
+Fruit Forest -> 9.29ha), and the full pipeline runs cleanly through ecoregion
+resolution before stopping at exactly the live-GEE-credentials boundary on every one
+-- confirming this script's only real remaining requirement, for any of these four
+projects, is live GEE authentication in the session running it.
+
+For Tata Motors specifically, this confirms directly what the client asked: the
+pipeline genuinely runs once per real zone (9 independent runs), not once over the
+whole 126.66 ha campus -- the project-level report is built FROM those 9 real
+per-zone results via non-compensatory aggregation, not a single run over the
+dissolved boundary.
+
+### HTML report rebuilt for client/product-facing use (client-reported: needs to be
+scientifically rigorous, self-explanatory to a first-time reader, and reliable for a
+product team to theme/consume on a platform built against an older methodology)
+- Real executive summary in plain language, archetype-aware, before any table.
+- A genuine embedded methodology primer (profile-first scoring, non-compensatory
+  aggregation, condition/pressure separation, evidence tiers) -- not a citation list
+  standing in for an explanation.
+- Real inline SVG visuals (no external JS dependency, stays a single self-contained
+  file): a ranked per-zone bar chart and a condition x pressure quadrant plot.
+- **A real bug found and fixed during development, not shipped blind**: the
+  quadrant plot's direct text labels overlapped illegibly whenever several zones
+  scored similarly -- confirmed by rendering an actual 9-zone test report in a real
+  headless-Chromium browser (not just checked for Python syntax), which also caught
+  that the LibreOffice-based PDF converter used for an earlier visual check was
+  itself misrendering flexbox spacing that a real browser handles correctly --
+  re-verified with the right tool before concluding anything was actually broken.
+  Fixed with numbered markers + a legend, which cannot overlap regardless of how
+  tightly real zones cluster.
+- A real per-zone breakdown section for any multi-tile/multi-zone project: every real
+  zone's own independent result, not just the project-level aggregate on top of them.
+- Semantic `.dk-*` CSS classes throughout, replacing inline styles, so a product team
+  can reliably theme or scrape specific values.
+- Every evidence-grading and transparency feature from the previous version preserved
+  exactly -- additive design work, not a reduction in scientific rigor.
+
+### A real, separate bug found while verifying the above
+The report footer's `pipeline_version` was hardcoded to `"0.2.5"` in `report.py` --
+silently two real versions stale by the time this was checked (confirmed directly:
+a v0.2.7 test run's rendered report still said "Pipeline v0.2.5"). Fixed to reference
+the package's own real `__version__` instead of a separate hardcoded string, so this
+specific drift cannot recur on a future release.
+
 ## [0.2.7] -- SHI placeholder, richness area-normalisation, Corbett's 4 real sites verified
 
 ### C3 fauna pillar — real research done before any code change

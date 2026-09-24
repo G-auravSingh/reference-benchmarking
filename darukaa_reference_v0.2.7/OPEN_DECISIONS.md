@@ -13,6 +13,7 @@ unless marked BLOCKING. Closed items are kept for provenance.
 | OD-C5 | Agroforestry uses **BAU counterfactual** reference (additionality), not naturalness | Aura, Phase 2 |
 | OD-C6 | Toggle architecture: `registered` / `active` / computed `eligible`; **active ⟹ eligible** | Aura, Phase 2 (implemented Batch 1) |
 | OD-C7 | HMI ceiling restored to **0.05** (SEED max) | HMI audit, Batch 1 |
+| OD-8 | `pnv_to_dw_crosswalk` biome codes verified against the live PNV asset's actual band/class metadata (20 `biome_type` classes, band `biome_type`) — codes and names confirmed correct; `pnv_to_dw_crosswalk_verified=True` set in config.py | 2026-08-22, live GEE check (config.py's own inline comment has the full note — this entry was verified before this log was updated to say so) |
 | OD-C8 | Scoring logic lives **in the pipeline** (no separate SoN Module doc); PRD is generated if needed | Aura, Phase 4 |
 | OD-C9 | Site-selection Phase 3b = **spatial tiling** (DBSCAN) for large multi-site AOIs, NOT the SEED reference; rename `reference_cluster_*` → `assessment_cluster_*` | Aura, Phase 4 |
 | OD-C10 | Corporate/solar/mining/materials modules **registered-inactive** by default | Aura, Phase 4 |
@@ -31,7 +32,6 @@ unless marked BLOCKING. Closed items are kept for provenance.
 | OD-2 | Confirm **equal-weight default** across the 4 components as the published Darukaa standard | open, assumed yes | Aura |
 | OD-6 | Confirm **foundation-model embedding asset** for site-selection stratification at implementation | open, asset-agnostic default | Methods |
 | OD-7 | Raw **carbon workbook** arithmetic (where applicable) handled manually, outside pipeline scope | open, manual/separate | Methods |
-| OD-8 | Verify `pnv_to_dw_crosswalk` biome codes against the live PNV asset legend in the GEE Code Editor; correct if wrong; set `pnv_to_dw_crosswalk_verified=True` | BLOCKING for the PNV correction to be trustworthy | Aura, first live run |
 | OD-9 | Calibrate `seed_kernel_delta` via `estimators.fit_delta_diagonal` against real (indicator z-score, HMI) pairs from a live GEE run | open, needs real data | Methods, post live run |
 | OD-10 | Decide whether to invest in "full" Mahalanobis covariance (co-located multi-band reference sampling) vs keep "diagonal" as the standing default | open, low urgency | Methods |
 | OD-11 | Known gap: pasture/grazing land has no distinct Dynamic World class and is not reliably captured by the default artificial-class list (crops, built) | open, documented | Methods |

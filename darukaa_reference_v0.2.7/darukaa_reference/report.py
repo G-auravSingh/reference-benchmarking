@@ -132,7 +132,13 @@ class ReportGenerator:
         report = {
             "meta": {
                 "generated_at": datetime.utcnow().isoformat() + "Z",
-                "pipeline_version": "0.2.5",
+                # REAL FIX: this was hardcoded to "0.2.5" and had silently
+                # drifted two versions stale — confirmed directly while
+                # testing the report rebuild (the rendered footer still
+                # said "Pipeline v0.2.5" on a v0.2.7 run). Now references
+                # the package's own __version__, so this can't drift out
+                # of sync with a real release again.
+                "pipeline_version": __import__("darukaa_reference").__version__,
                 "n_sites": len(set(r["site_id"] for r in rows)),
                 "n_indicators": len(set(r["indicator"] for r in rows)),
                 "tier2_hmi_percentile": self.config.hmi_percentile_threshold,

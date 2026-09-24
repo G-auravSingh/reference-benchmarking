@@ -64,7 +64,10 @@ darukaa_reference/
 ├── project_aggregation.py # Multi-tile driver for agroforestry/large multi-parcel
 │                          #   projects: runs each tile, combines non-compensatorily
 ├── report.py              # Assembles the report dict (JSON/CSV source of truth)
-├── html_report.py         # Renders the evidence-graded HTML from that dict
+├── html_report.py         # Renders the client/product-facing HTML report — executive
+│                          #   summary, plain-language methodology primer, per-zone SVG
+│                          #   visuals (ranked bar chart, condition x pressure quadrant),
+│                          #   evidence-graded scorecard. See §4a below.
 ├── pipeline.py            # Orchestrates all of the above; the thing you actually run
 ├── ecoregion.py           # Ecoregion (RESOLVE) lookup helper
 └── site_loader.py         # KML/KMZ/shapefile ingestion
@@ -94,7 +97,43 @@ python example_run.py --site your_site.kml --gee-project your-gee-project-id
 ```
 
 Every run writes `outputs/benchmark_scorecard.{json,csv,html}`. **Open the `.html`** —
-that's the evidence-graded report a client would see.
+that's the client/product-facing report.
+
+## 4a. The HTML report — what changed and why
+
+Rebuilt (v0.2.7) to be genuinely self-explanatory to a first-time reader and reliable
+for a product team to theme or consume, not just internally correct:
+
+- **Executive summary in plain language** before any table — states the project's
+  archetype-appropriate framing, its non-compensatory headline, and the confidence
+  behind it, in real sentences.
+- **An embedded methodology primer** — not a citation list standing in for an
+  explanation. Explains profile-first scoring, why the worst-scoring component sets
+  the score (non-compensatory), why condition and pressure stay structurally separate,
+  and what an evidence tier means — in the report itself, so it never depends on the
+  reader having read a separate document first.
+- **Real inline SVG visuals**, no external chart library dependency (the report stays
+  a single self-contained file): a ranked per-zone bar chart (worst zone at the top,
+  a dashed reference line at "at reference") and a condition x pressure quadrant plot.
+  For a multi-zone project, points use numbered markers with a legend rather than
+  direct text labels — confirmed directly (rendered in an actual browser during
+  development, not assumed) that direct labels overlap illegibly whenever several
+  zones score similarly, which is a common real pattern, not a rare edge case.
+- **A real per-zone breakdown section** for any multi-tile/multi-zone project (Tata
+  Motors' 9 zones, Soulforest's 7 EMUs, Corbett's 4 sites): shows every real zone's own
+  independent result, not just the project-level aggregate — the pipeline genuinely
+  ran once per zone, and the report now shows that work, not just the number it
+  produced.
+- **Semantic CSS classes** (`.dk-*` prefix, no inline styles in the body markup) so a
+  product team can reliably theme or scrape specific values, rather than needing to
+  parse inline style attributes.
+- Every evidence-grading, transparency, and honesty feature from the previous version
+  is preserved exactly — this is additive design work, not a reduction in rigor.
+
+Verified by rendering real (synthetic but schema-accurate) single-site and 9-zone
+project-level reports through an actual headless-Chromium browser during development,
+not just checked for Python syntax — including catching and fixing the label-overlap
+issue above before it shipped.
 
 ## 5. Configuration — the options that matter
 
@@ -173,6 +212,32 @@ for every project — that's what keeps results comparable. What changes by arch
   through ecoregion resolution before stopping at exactly the live-GEE-credentials
   boundary, with a clear error — confirming the only remaining requirement to get a
   real result is authenticating GEE in the session running it.
+
+  **For any project that already has a site-selection pipeline run** (Tata Motors,
+  Soulforest, GV, Soova, or any future project using that pipeline's own
+  `07_reference_handoff` stage): use `run_project_from_manifest.py` instead of writing
+  a bespoke script — it reads that project's real `tile_manifest.json` directly (the
+  exact handoff format the site-selection pipeline already produces, one real
+  dissolved GeoJSON tile per EMU/zone) and runs it through the same
+  `run_multi_tile_project` path:
+
+  ```bash
+  python run_project_from_manifest.py --manifest <path>/outputs/07_reference_handoff/tile_manifest.json
+  ```
+
+  Verified directly against all four real, current site-selection projects' manifests
+  before shipping — Tata Motors' 9 real zones, Soulforest's 7 real EMUs, and GV/Soova's
+  6 real EMUs each all load and dissolve correctly through this exact path. For Tata
+  Motors specifically, this means the pipeline genuinely runs once per real zone (9
+  independent runs), not once over the whole 126.66 ha campus — the project-level
+  report is built FROM those 9 real per-zone results via the same non-compensatory
+  aggregation described above, and the rendered report's "per-zone breakdown" section
+  shows all 9 real results explicitly, not just the aggregate on top of them.
+
+  `run_corbett_northshahdol.py` remains as the reference example for the OTHER real
+  case this same driver handles: a project with no site-selection pipeline involvement
+  at all (raw KML boundaries only) — build a manifest by hand in the same shape
+  (`corbett_sites/` for the pattern) and point either script at it.
 - **`corporate` / `solar` / `mining` / `materials`**: registered but **inactive by
   default** in the indicator contract (`contracts.py`) — a mitigation-hierarchy/no-net-loss
   framing is more appropriate than the conservation-oriented default indicator set, and
