@@ -1,0 +1,29 @@
+{
+  "project_name": "TataMotors_Pimpri_Aquatic",
+  "n_tiles": 6,
+  "tile_paths": [
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff_aquatic/tiles/TataMotors_Pimpri_Aquatic_Lake_Suman.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff_aquatic/tiles/TataMotors_Pimpri_Aquatic_Lake_Sharma.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff_aquatic/tiles/TataMotors_Pimpri_Aquatic_Pond_1.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff_aquatic/tiles/TataMotors_Pimpri_Aquatic_Pond_2.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff_aquatic/tiles/TataMotors_Pimpri_Aquatic_Pond_3.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff_aquatic/tiles/TataMotors_Pimpri_Aquatic_Pond_4.geojson"
+  ],
+  "tile_labels": [
+    "Lake_Suman",
+    "Lake_Sharma",
+    "Pond_1",
+    "Pond_2",
+    "Pond_3",
+    "Pond_4"
+  ],
+  "real_areas_ha": {
+    "Lake_Suman": 8.466,
+    "Lake_Sharma": 3.6081,
+    "Pond_1": 0.996,
+    "Pond_2": 0.7954,
+    "Pond_3": 0.8062,
+    "Pond_4": 0.2592
+  },
+  "note": "Real, individual water body polygons (Lake Suman, Lake Sharma, Ponds 1-4), extracted directly from the raw KML for a dedicated aquatic-module run -- these were never part of any terrestrial EMU tile (water was excluded, not assessed, during site selection). See extract_aquatic_tiles.py's module docstring for the real caveat about module-based indicator filtering."
+}

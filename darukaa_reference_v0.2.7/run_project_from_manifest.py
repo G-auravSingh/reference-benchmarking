@@ -120,20 +120,38 @@ def find_manifest_by_project_name(repo_root, project_name: str) -> Path:
     under ANY site-selection folder present, and requires exactly one
     real match — ambiguity (e.g. two different site-selection checkouts
     both containing the same project name) is a real problem to surface
-    and resolve explicitly, never silently guessed at."""
+    and resolve explicitly, never silently guessed at.
+
+    REAL FIX (found directly by testing this against a real second
+    manifest, not assumed to work): matching purely by path pattern
+    (projects/<name>/outputs/07_reference_handoff/...) silently misses
+    any manifest under a differently-named outputs folder — confirmed
+    directly against Tata Motors' own real aquatic-module manifest,
+    which deliberately lives under a SEPARATE
+    outputs/07_reference_handoff_aquatic/ (a different real project,
+    "TataMotors_Pimpri_Aquatic", extracted from the same site's raw
+    water body polygons — see extract_aquatic_tiles.py). Now matches on
+    each real manifest's own declared "project_name" field, which is the
+    actual authoritative identity, rather than inferring identity from a
+    path convention that doesn't hold for every real case."""
     repo_root = Path(repo_root)  # accepts a plain string too (e.g. from a
     # notebook's os.path.dirname(...)) — confirmed directly this call
     # pattern is real, not hypothetical, before making this defensive.
-    pattern = f"projects/{project_name}/outputs/07_reference_handoff/tile_manifest.json"
-    matches = [p for p in repo_root.rglob("tile_manifest.json")
-              if str(p.relative_to(repo_root)).replace("\\", "/").endswith(pattern)]
+    matches = []
+    for p in repo_root.rglob("tile_manifest.json"):
+        try:
+            with open(p) as f:
+                candidate = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue  # a malformed or unreadable file is not a real match, skip silently
+        if candidate.get("project_name") == project_name:
+            matches.append(p)
     if not matches:
         raise FileNotFoundError(
-            f"No tile_manifest.json found for project '{project_name}' anywhere under "
-            f"{repo_root}. Expected a real path ending in '{pattern}' — confirm the "
-            f"site-selection pipeline's real output for this project has been pushed "
-            f"to this repo, and that '{project_name}' matches its real project folder "
-            f"name exactly (case-sensitive)."
+            f"No tile_manifest.json with project_name '{project_name}' found anywhere "
+            f"under {repo_root}. Confirm the site-selection pipeline's real output for "
+            f"this project has been pushed to this repo, and that '{project_name}' "
+            f"matches the manifest's own \"project_name\" field exactly (case-sensitive)."
         )
     if len(matches) > 1:
         raise ValueError(
