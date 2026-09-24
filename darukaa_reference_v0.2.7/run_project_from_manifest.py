@@ -172,6 +172,10 @@ def main():
                        "no manual path/zip/upload needed when both pipelines share a repo")
     parser.add_argument("--output-dir", default=None, help="Output dir (default: ./outputs/<project_name>)")
     parser.add_argument("--config", default=str(Path(__file__).resolve().parent / "config.yaml"))
+    parser.add_argument("--realm", default=None, choices=["terrestrial", "aquatic", "mixed"],
+                       help="Overrides auto-detection (which only triggers on a project name "
+                       "containing 'aquatic'). 'terrestrial' excludes aquatic-module indicators, "
+                       "'aquatic' keeps only core+aquatic, 'mixed' keeps everything.")
     args = parser.parse_args()
 
     if args.project:
@@ -204,6 +208,23 @@ def main():
             "live Earth Engine data."
         )
 
+    # REAL FIX: config.realm drives the new module-based indicator filter
+    # in pipeline.py (Pipeline.run) — but config.yaml is shared across
+    # every project's run, and a user re-running this script for a
+    # different project would have no reason to remember to hand-edit
+    # realm between a terrestrial and an aquatic run. Manually forgetting
+    # that edit would silently filter OUT every real aquatic indicator
+    # from an aquatic run (realm='terrestrial' excludes module='aquatic'
+    # entirely) — a genuinely dangerous silent failure, not a loud one.
+    # Auto-detected here from the real, declared project_name instead, so
+    # this can't be gotten wrong by omission. An explicit --realm flag
+    # still wins if given, for the real edge case of a project name that
+    # doesn't happen to signal its own realm.
+    if args.realm:
+        config.realm = args.realm
+    elif "aquatic" in project_name.lower():
+        config.realm = "aquatic"
+        logger.info("Auto-detected realm='aquatic' from project name '%s'.", project_name)
     registry = create_default_registry()
 
     logger.info("Running %s — %d real zone(s)/tile(s): %s",

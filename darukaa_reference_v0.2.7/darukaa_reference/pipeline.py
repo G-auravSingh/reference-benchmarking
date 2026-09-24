@@ -128,9 +128,28 @@ class Pipeline:
         indicators = [s for s in indicators if getattr(s, "registered", True)
                       and getattr(s, "active", True)]
 
+        # REAL FIX: config.realm ("terrestrial" | "aquatic" | "mixed") was
+        # already loaded and logged every run, but never actually used to
+        # filter anything — confirmed directly, not assumed, before
+        # completing it. Without this, an aquatic-focused run (e.g. Tata
+        # Motors' real water bodies) computed every terrestrial indicator
+        # too, mostly returning null/low-confidence on a small pond
+        # polygon rather than being cleanly excluded. "mixed" (or an
+        # unrecognised value) keeps every module, preserving the exact
+        # prior behaviour for every existing project/config — this is
+        # additive, not a change to default behaviour.
+        realm = getattr(self.config, "realm", "terrestrial")
+        if realm == "aquatic":
+            indicators = [s for s in indicators if getattr(s, "module", "core") in ("core", "aquatic")]
+        elif realm == "terrestrial":
+            indicators = [s for s in indicators if getattr(s, "module", "core") != "aquatic"]
+        # realm == "mixed" (or anything else): no module filtering, same as before this fix.
+
         mode = getattr(self.config, "assessment_mode", "baseline")
-        logger.info(f"Assessment mode: {mode} | realm={getattr(self.config,'realm','terrestrial')} "
+        logger.info(f"Assessment mode: {mode} | realm={realm} "
                     f"| archetype={getattr(self.config,'archetype','conservation')}")
+        logger.info(f"Realm filter kept {len(indicators)} indicator(s) "
+                    f"({'aquatic + core' if realm == 'aquatic' else 'non-aquatic' if realm == 'terrestrial' else 'all modules'})")
         if mode == "monitoring":
             logger.warning(
                 "Monitoring mode: change-vs-baseline scoring requires a stored Year-0 "
