@@ -1,0 +1,243 @@
+{
+  "project_name": "FCF_GV",
+  "regime": "sequential_cluster",
+  "n_emus": 6,
+  "n_devices": 4,
+  "device_allocation": null,
+  "emu_week_assignment": null,
+  "project_duration_weeks": 5,
+  "achievable_cycles": 4,
+  "used_duration_extension": true,
+  "n_cycles_scheduled": 5,
+  "n_emus_covered": 6,
+  "uncovered_emu_ids": [],
+  "avg_travel_speed_kmh_assumed": 25.0,
+  "schedule": [
+    {
+      "cycle_number": 1,
+      "start_day_offset": 0,
+      "recording_end_day_offset": 7,
+      "emu_ids": [
+        "FCF_GV_EMU_Ganjam_1"
+      ],
+      "n_devices_used": 4,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_GV_EMU_Ganjam_1",
+          "n_devices": 4,
+          "positions": [
+            {
+              "name": "737335948",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "654106756",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "750043435",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "735356793",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 2,
+      "start_day_offset": 8,
+      "recording_end_day_offset": 15,
+      "emu_ids": [
+        "FCF_GV_EMU_Kandhmal_1",
+        "FCF_GV_EMU_Kandhmal_2"
+      ],
+      "n_devices_used": 4,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_GV_EMU_Kandhmal_1",
+          "n_devices": 2,
+          "positions": [
+            {
+              "name": "689493541",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "743695200",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        },
+        {
+          "emu_id": "FCF_GV_EMU_Kandhmal_2",
+          "n_devices": 2,
+          "positions": [
+            {
+              "name": "689494004",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "740331712",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 20.73,
+      "est_max_internal_travel_hours": 0.83
+    },
+    {
+      "cycle_number": 3,
+      "start_day_offset": 16,
+      "recording_end_day_offset": 23,
+      "emu_ids": [
+        "FCF_GV_EMU_Gajapati_1"
+      ],
+      "n_devices_used": 4,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_GV_EMU_Gajapati_1",
+          "n_devices": 4,
+          "positions": [
+            {
+              "name": "740213232",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "744653389",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "747830310",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "735536390",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 4,
+      "start_day_offset": 24,
+      "recording_end_day_offset": 31,
+      "emu_ids": [
+        "FCF_GV_EMU_Kalahandi_1"
+      ],
+      "n_devices_used": 4,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_GV_EMU_Kalahandi_1",
+          "n_devices": 4,
+          "positions": [
+            {
+              "name": "740568090",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "647529267",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "740752085",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "654499039",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 5,
+      "start_day_offset": 32,
+      "recording_end_day_offset": 39,
+      "emu_ids": [
+        "FCF_GV_EMU_Kalahandi_2"
+      ],
+      "n_devices_used": 4,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_GV_EMU_Kalahandi_2",
+          "n_devices": 4,
+          "positions": [
+            {
+              "name": "633034808",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "719776699",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "725591934",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "646077951",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    }
+  ],
+  "fixed_events": null,
+  "warnings": [
+    "5 panels needed; fits within 6 weeks (+1 week extension) but NOT the base 5 weeks. Using the extension \u2014 this is the last-resort case per policy (devices cannot be added), flagged explicitly rather than applied silently. Confirm before mobilising."
+  ]
+}

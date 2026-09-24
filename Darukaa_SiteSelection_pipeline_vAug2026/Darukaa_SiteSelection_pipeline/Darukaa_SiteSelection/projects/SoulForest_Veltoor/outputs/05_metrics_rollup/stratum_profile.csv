@@ -1,0 +1,8 @@
+EMU ID,N candidates,Ecological rationale,NDVI_raw,TreeCover_Pct,BuiltUp_Pct,Elev_m,ElevStd_m,TRI_m,Slope_deg,gHM,DistWater_m,LST_C,NightLights,NatCoverPct_2km,EdgeDensity_2km,NatCoverPct_500m,EdgeDensity_500m
+EMU_ANCHOR_Fruit_Forest,150,"Client-identified ecological feature, adopted directly as an EMU.",0.2909,27.1441,100.0,359.2306,1.8199,0.2001,0.0525,0.4149,607.8895,30.8969,1.5631,11.5906,1.2903,12.0763,2.6096
+EMU_ANCHOR_Wetland,28,"Client-identified ecological feature, adopted directly as an EMU.",0.2596,17.2606,0.0,354.9969,2.2797,0.2243,0.0525,0.3521,24.9901,29.7618,1.5631,10.6348,1.1964,27.1273,4.4113
+EMU_ANCHOR_Rock_Guild,3,"Client-identified ecological feature, adopted directly as an EMU.",0.2834,49.573,100.0,364.7897,1.3613,0.2224,0.0525,0.4149,1018.0177,30.8969,1.4964,12.2401,1.4409,4.7942,1.7264
+SEG02,154,"GEE SNIC segmentation-derived unit, 154 grid cells.",0.2681,15.9853,0.0,358.7669,2.4586,0.3354,0.0525,0.3967,1717.4932,30.1037,1.5431,11.4736,1.4015,0.0,0.0
+SEG01,256,"GEE SNIC segmentation-derived unit, 256 grid cells.",0.253,6.0421,0.0,358.7687,1.7785,0.2197,0.0525,0.3667,1322.1438,30.8969,1.5431,11.5369,1.3772,0.8196,0.6055
+SEG03,55,"GEE SNIC segmentation-derived unit, 55 grid cells.",0.3143,67.6523,0.0,354.9053,1.9453,0.2516,0.0525,0.3967,1293.9644,29.7618,1.5431,12.0473,1.383,2.3049,0.9878
+SEG04,30,"GEE SNIC segmentation-derived unit, 30 grid cells.",0.262,4.6362,0.0,352.3118,1.9417,0.2256,0.0525,0.4317,1297.0243,30.1037,1.5194,12.1721,1.407,2.8129,1.1374

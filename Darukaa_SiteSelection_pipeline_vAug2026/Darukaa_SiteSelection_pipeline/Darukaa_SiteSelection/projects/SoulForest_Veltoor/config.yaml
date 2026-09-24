@@ -1,0 +1,136 @@
+# SoulForest Veltoor — conservation/restoration, single contiguous polygon
+# with client-drawn internal areas (some ecological, some infrastructure).
+
+client_name: SoulForest
+project_name: SoulForest_Veltoor
+archetype: conservation
+realm: mixed   # terrestrial (AudioMoth, camera trap, soil) + aquatic (water eDNA/quality)
+
+# This KML has no attribute table at all — zone identity IS the placemark
+# name (Fruit Forest, Island, Wetland, Admin Area, Guest Area, Speciality
+# Zone). No crosswalk needed; classification runs entirely on placemark name.
+
+# Confirmed via direct inspection (all 7 placemarks are real Polygons, not
+# point labels): "Fruit Forest" (multi-year plantation arc) and "Wetland"
+# (receding-water feature) are genuine ecological features per Aura and are
+# treated as anchors/constraints on segmentation in 03, not just labels.
+# "Rock Guild" added (Aug 2026, client-reported): a small area the client
+# has directly identified as holding real biodiversity value, even though
+# it wouldn't necessarily stand out to spectral segmentation alone —
+# treated as an anchor for the same reason Fruit Forest/Wetland are: a
+# real, client-declared ecological unit takes priority over what SNIC
+# would produce on its own.
+ecological_anchor_placemark_names:
+  - Fruit Forest
+  - Wetland
+  - Rock Guild
+
+# Rock Guild is intentionally audiomoth-only, no camera trap (client-
+# reported: "just audiomoth and no camera trap") — see
+# camera_trap_excluded_emus below, matched against this anchor's real
+# resulting EMU_ID (EMU_ANCHOR_Rock_Guild).
+camera_trap_excluded_emus:
+  - EMU_ANCHOR_Rock_Guild
+
+# "Island" sits fully within Wetland's own boundary, not a separate real
+# exclusion or anchor — it's real estate WITHIN the Wetland anchor, not a
+# competing claim on the same land. Client-reported: one of Wetland's two
+# audiomoth positions should specifically fall on the island (more
+# accessible for the field team) — see position_pool_named_subarea_bias
+# below, which biases selection toward it without forcing an artificial
+# choice if the island's own real candidates don't support one.
+position_pool_named_subarea_bias:
+  EMU_ANCHOR_Wetland:
+    subarea_placemark_name: Island
+    min_positions_in_subarea: 1
+
+# ADDED (Aug 2026): client-provided updated KML marks 4 additional real
+# water features not in the original boundary set. Treated as HARD
+# exclusions, same mechanism as buildings/roads — a terrestrial candidate
+# point inside a pond is a real placement error, not a soft/provisional
+# case like Admin Area's mixed building+greenery. Named explicitly here
+# (project-specific), not added to the shared hard_exclusion_terms lexicon
+# in config_schema.py, since "pond"/"WB" as generic substrings could
+# false-positive on unrelated placemark names in other projects.
+exclusion_placemark_names:
+  - Pond 01
+  - Pond 02
+  - Artifical WB 01
+  - Artificial WB 02
+
+# These are the SAME four features, also declared as real water bodies for
+# the optional GEE aquatic covariate export (RiparianNaturalPct, water
+# permanence, etc. per waterbody) — see common/gee_export.py. Being listed
+# here does not change their terrestrial-exclusion status above; the two
+# lists serve different, independent purposes.
+water_feature_placemark_names:
+  - Pond 01
+  - Pond 02
+  - Artifical WB 01
+  - Artificial WB 02
+
+# "Island" deliberately NOT listed as hard/soft exclusion or forced anchor —
+# it matches neither the hard nor soft exclusion lexicon (no "building" /
+# "admin area" etc. substring), so it correctly falls through to a normal
+# candidate/stratification input. Whether it should also be an anchor is an
+# open question for 03 (see its README) rather than assumed here.
+
+# Guest Area / Admin Area / Speciality Zone (nursery) match soft_exclusion
+# defaults ("guest area", "admin area", "nursery", "speciality zone") via
+# the shared default lexicon — no override needed. They are NOT dropped at
+# this stage; they carry through as exclusion_status=provisional_pixel_review
+# for 02_covariates to resolve pixel-by-pixel (Admin Area's green sub-patch
+# problem — see architecture discussion, Aug 2026).
+
+# The overall site outline ("Soul Forest Veltoor - Site For Certification")
+# is expected to auto-detect as the AOI boundary (it should geometrically
+# contain the others). Forced here anyway for certainty rather than relying
+# solely on the heuristic, since this is a single, static site.
+aoi_boundary_placemark_names:
+  - Soul Forest Veltoor - Site For Certification
+
+n_devices: 7  # AudioMoths; camera traps/soil/eDNA handled by streams below, not device count
+project_duration_weeks: 4
+cycle_length_days: 7
+# CORRECTED (Aug 2026) — was 3, a stale override from before the shared
+# default fix (day 1 deploy, days 2-6 recording, day 7 retrieval, day 8
+# buffer, day 9 next deploy — 1 buffer day). This project's own config was
+# missed when FCF_Soova/FCF_GV were fixed earlier; caught by a real date
+# mismatch in the deployment schedule CSV (week 2 showed Sept 16 instead
+# of the expected Sept 13, a 10-day gap instead of 7).
+logistics_buffer_days: 1
+
+deployment_regime: sequential_cluster
+streams_active: [audiomoth, camera_trap, soil_sample, water_edna, soil_edna, water_quality]
+
+# REDESIGNED (Aug 2026, reported directly): "number of camera traps are 2,
+# and weeks are 4 so we can actually cover 8 points distributed properly" —
+# was a fixed 4-position rotating pool; now 8 distinct positions (2 devices
+# x 4 weeks), no repeats/wrapping within the project.
+camera_trap_pool_size: 8
+
+# One-time baseline sampling design (Aug 2026, reported directly: "we are
+# not going to cover all stratums in each week... dividing into stratums
+# is just our way of sampling") — NOT the same regime as Tata Motors'
+# continuous_multi_week. See config_schema.py's note for the full reasoning.
+sampling_design: stratified_single_pass
+
+# Real start date given directly (Aug 2026): "say it starts from 6th of
+# September". Used only by the schedule CSV/Excel export to turn day-
+# offsets into real calendar dates.
+project_start_date: "2026-09-09"
+
+# RESOLVED (Aug 2026, was previously flagged as an open decision): the
+# default small_tile_area_ha_floor (0.25 ha) was zeroing out 11 of 15
+# condition covariates for this project, because it's calibrated for real
+# irregular farm parcels, not this project's 25m x 25m (0.0625 ha)
+# tessellated grid cells. Lowered specifically for this project to just
+# under one cell's area, calibrated instead to "at least roughly one clean
+# Sentinel-2 10m pixel" rather than the general small-farm threshold — the
+# two floors were answering different questions and shouldn't have shared
+# one number by default.
+small_tile_area_ha_floor: 0.05
+
+# Display prefix for candidate/position names in client-facing outputs —
+# matches the Tata Motors convention ("PMP-T060") style.
+id_prefix: SFV-T

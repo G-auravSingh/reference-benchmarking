@@ -1,0 +1,3909 @@
+{
+  "project_name": "TataMotors_Pimpri",
+  "regime": "zone_scoped_continuous",
+  "n_emus": 9,
+  "n_devices": 10,
+  "device_allocation": null,
+  "emu_week_assignment": null,
+  "project_duration_weeks": 24,
+  "achievable_cycles": 24,
+  "used_duration_extension": false,
+  "n_cycles_scheduled": 24,
+  "n_emus_covered": 9,
+  "uncovered_emu_ids": [],
+  "avg_travel_speed_kmh_assumed": 25.0,
+  "schedule": [
+    {
+      "cycle_number": 1,
+      "start_day_offset": 0,
+      "recording_end_day_offset": 7,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0435",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0827",
+              "pool_rank": 10,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0612",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0256",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0580",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0053",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0373",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0669",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0435",
+          "emu_id": "EMU_Deccan_forest",
+          "zone": "Deccan forest",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 2,
+      "start_day_offset": 7,
+      "recording_end_day_offset": 14,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0956",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1209",
+              "pool_rank": 11,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T1126",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0264",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0683",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0033",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0159",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0568",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0612",
+          "emu_id": "EMU_Grass_land",
+          "zone": "Grass land",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 3,
+      "start_day_offset": 14,
+      "recording_end_day_offset": 21,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0963",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0553",
+              "pool_rank": 12,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0634",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0699",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0685",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0039",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0463",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0548",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0256",
+          "emu_id": "EMU_Narmada_valley",
+          "zone": "Narmada valley",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 4,
+      "start_day_offset": 21,
+      "recording_end_day_offset": 28,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T1168",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1026",
+              "pool_rank": 13,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0868",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0857",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0993",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0024",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0334",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0470",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0580",
+          "emu_id": "EMU_Savana_ecosystem",
+          "zone": "Savana ecosystem",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 5,
+      "start_day_offset": 28,
+      "recording_end_day_offset": 35,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0408",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1280",
+              "pool_rank": 14,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0612",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0324",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0511",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0011",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0097",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0469",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0838",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "zone": "Seasonal wetland-polygon",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 6,
+      "start_day_offset": 35,
+      "recording_end_day_offset": 42,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0171",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0696",
+              "pool_rank": 15,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T1126",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0393",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0735",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0103",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0629",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0421",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0053",
+          "emu_id": "EMU_Trail_plots",
+          "zone": "Trail plots",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 7,
+      "start_day_offset": 42,
+      "recording_end_day_offset": 49,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0714",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0987",
+              "pool_rank": 16,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0634",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0145",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0872",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0106",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0461",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0401",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0373",
+          "emu_id": "EMU_Water_margin",
+          "zone": "Water margin",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 8,
+      "start_day_offset": 49,
+      "recording_end_day_offset": 56,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0704",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1218",
+              "pool_rank": 17,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0868",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0561",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T1023",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0053",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0545",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0424",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0669",
+          "emu_id": "EMU_Wildlife",
+          "zone": "Wildlife",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 9,
+      "start_day_offset": 56,
+      "recording_end_day_offset": 63,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0435",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0827",
+              "pool_rank": 10,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0612",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0256",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0580",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0053",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0373",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0669",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0435",
+          "emu_id": "EMU_Deccan_forest",
+          "zone": "Deccan forest",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 10,
+      "start_day_offset": 63,
+      "recording_end_day_offset": 70,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0956",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1209",
+              "pool_rank": 11,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T1126",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0264",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0683",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0033",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0159",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0568",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0612",
+          "emu_id": "EMU_Grass_land",
+          "zone": "Grass land",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 11,
+      "start_day_offset": 70,
+      "recording_end_day_offset": 77,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0963",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0553",
+              "pool_rank": 12,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0634",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0699",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0685",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0039",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0463",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0548",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0256",
+          "emu_id": "EMU_Narmada_valley",
+          "zone": "Narmada valley",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 12,
+      "start_day_offset": 77,
+      "recording_end_day_offset": 84,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T1168",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1026",
+              "pool_rank": 13,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0868",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0857",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0993",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0024",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0334",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0470",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0580",
+          "emu_id": "EMU_Savana_ecosystem",
+          "zone": "Savana ecosystem",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 13,
+      "start_day_offset": 84,
+      "recording_end_day_offset": 91,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0408",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1280",
+              "pool_rank": 14,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0612",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0324",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0511",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0011",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0097",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0469",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0838",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "zone": "Seasonal wetland-polygon",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 14,
+      "start_day_offset": 91,
+      "recording_end_day_offset": 98,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0171",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0696",
+              "pool_rank": 15,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T1126",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0393",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0735",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0103",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0629",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0421",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0053",
+          "emu_id": "EMU_Trail_plots",
+          "zone": "Trail plots",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 15,
+      "start_day_offset": 98,
+      "recording_end_day_offset": 105,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0714",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0987",
+              "pool_rank": 16,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0634",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0145",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0872",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0106",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0461",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0401",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0373",
+          "emu_id": "EMU_Water_margin",
+          "zone": "Water margin",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 16,
+      "start_day_offset": 105,
+      "recording_end_day_offset": 112,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0704",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1218",
+              "pool_rank": 17,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0868",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0561",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T1023",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0053",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0545",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0424",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0669",
+          "emu_id": "EMU_Wildlife",
+          "zone": "Wildlife",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 17,
+      "start_day_offset": 112,
+      "recording_end_day_offset": 119,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0435",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0827",
+              "pool_rank": 10,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0612",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0256",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0580",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0053",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0373",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0669",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 1,
+          "zone_rotation_wrapped": false
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0435",
+          "emu_id": "EMU_Deccan_forest",
+          "zone": "Deccan forest",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 18,
+      "start_day_offset": 119,
+      "recording_end_day_offset": 126,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0956",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1209",
+              "pool_rank": 11,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T1126",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0264",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0683",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0033",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0159",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0568",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 2,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0612",
+          "emu_id": "EMU_Grass_land",
+          "zone": "Grass land",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 19,
+      "start_day_offset": 126,
+      "recording_end_day_offset": 133,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0963",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0553",
+              "pool_rank": 12,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0634",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0699",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0685",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0039",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0463",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0548",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 3,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0256",
+          "emu_id": "EMU_Narmada_valley",
+          "zone": "Narmada valley",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 20,
+      "start_day_offset": 133,
+      "recording_end_day_offset": 140,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T1168",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1026",
+              "pool_rank": 13,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0868",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0857",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0993",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0024",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0334",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0470",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 4,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0580",
+          "emu_id": "EMU_Savana_ecosystem",
+          "zone": "Savana ecosystem",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 21,
+      "start_day_offset": 140,
+      "recording_end_day_offset": 147,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0408",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1280",
+              "pool_rank": 14,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0612",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0324",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0511",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0011",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0097",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0469",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 5,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0838",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "zone": "Seasonal wetland-polygon",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 22,
+      "start_day_offset": 147,
+      "recording_end_day_offset": 154,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0171",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0696",
+              "pool_rank": 15,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T1126",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0393",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0735",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0103",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0629",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0421",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 6,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0053",
+          "emu_id": "EMU_Trail_plots",
+          "zone": "Trail plots",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 23,
+      "start_day_offset": 154,
+      "recording_end_day_offset": 161,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0714",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T0987",
+              "pool_rank": 16,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0634",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0145",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T0872",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0838",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0106",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0461",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0252",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0401",
+              "pool_rank": 7,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 7,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0373",
+          "emu_id": "EMU_Water_margin",
+          "zone": "Water margin",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 24,
+      "start_day_offset": 161,
+      "recording_end_day_offset": 168,
+      "emu_ids": [
+        "EMU_Deccan_forest",
+        "EMU_Grass_land",
+        "EMU_Narmada_valley",
+        "EMU_Savana_ecosystem",
+        "EMU_Seasonal_wetland_polygon",
+        "EMU_Trail_plots",
+        "EMU_Water_margin",
+        "EMU_Wetland_forest",
+        "EMU_Wildlife"
+      ],
+      "n_devices_used": 9,
+      "position_assignments": [
+        {
+          "zone": "Deccan forest",
+          "emu_id": "EMU_Deccan_forest",
+          "positions": [
+            {
+              "name": "PMP-T0704",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "PMP-T1218",
+              "pool_rank": 17,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Grass land",
+          "emu_id": "EMU_Grass_land",
+          "positions": [
+            {
+              "name": "PMP-T0868",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Narmada valley",
+          "emu_id": "EMU_Narmada_valley",
+          "positions": [
+            {
+              "name": "PMP-T0561",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Savana ecosystem",
+          "emu_id": "EMU_Savana_ecosystem",
+          "positions": [
+            {
+              "name": "PMP-T1023",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Seasonal wetland-polygon",
+          "emu_id": "EMU_Seasonal_wetland_polygon",
+          "positions": [
+            {
+              "name": "PMP-T0499",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Trail plots",
+          "emu_id": "EMU_Trail_plots",
+          "positions": [
+            {
+              "name": "PMP-T0053",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Water margin",
+          "emu_id": "EMU_Water_margin",
+          "positions": [
+            {
+              "name": "PMP-T0545",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wetland forest",
+          "emu_id": "EMU_Wetland_forest",
+          "positions": [
+            {
+              "name": "PMP-T0204",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": true
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        },
+        {
+          "zone": "Wildlife",
+          "emu_id": "EMU_Wildlife",
+          "positions": [
+            {
+              "name": "PMP-T0424",
+              "pool_rank": 8,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ],
+          "visit_number_this_season": 8,
+          "zone_rotation_wrapped": true
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "PMP-T0669",
+          "emu_id": "EMU_Wildlife",
+          "zone": "Wildlife",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    }
+  ],
+  "fixed_events": null,
+  "warnings": [
+    "Camera trap (1 device(s)) cannot visit every one of 9 real zones at least once per 8-week season \u2014 ['Wetland forest'] (smallest by real area) excluded from camera trap rotation for the whole programme, every season, by deliberate design. Audiomoth still covers it every week via its own permanently-assigned device; only camera trap coverage is affected."
+  ]
+}

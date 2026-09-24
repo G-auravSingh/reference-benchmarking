@@ -1,0 +1,94 @@
+{
+  "project_name": "SoulForest_Veltoor",
+  "feature_tier": "full_with_satellite_covariates",
+  "feature_cols_used": [
+    "NDVI_raw",
+    "TreeCover_Pct",
+    "BuiltUp_Pct",
+    "Elev_m",
+    "ElevStd_m",
+    "TRI_m",
+    "Slope_deg",
+    "gHM",
+    "DistWater_m",
+    "LST_C",
+    "NightLights",
+    "NatCoverPct_2km",
+    "EdgeDensity_2km",
+    "NatCoverPct_500m",
+    "EdgeDensity_500m"
+  ],
+  "critic_weights": {
+    "NDVI_raw": 0.0271,
+    "TreeCover_Pct": 0.0902,
+    "BuiltUp_Pct": 0.113,
+    "Elev_m": 0.0458,
+    "ElevStd_m": 0.0558,
+    "TRI_m": 0.0617,
+    "Slope_deg": 0.0,
+    "gHM": 0.0765,
+    "DistWater_m": 0.0668,
+    "LST_C": 0.1285,
+    "NightLights": 0.0573,
+    "NatCoverPct_2km": 0.0589,
+    "EdgeDensity_2km": 0.065,
+    "NatCoverPct_500m": 0.0763,
+    "EdgeDensity_500m": 0.0771
+  },
+  "achievable_cycles_used_as_pool_target": 7,
+  "n_emus": 7,
+  "emu_reports": {
+    "EMU_ANCHOR_Fruit_Forest": {
+      "n_candidates": 150,
+      "pool_size": 7,
+      "medoid_name": "SFV-T0577",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_ANCHOR_Wetland": {
+      "n_candidates": 28,
+      "pool_size": 3,
+      "medoid_name": "SFV-T0588",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_ANCHOR_Rock_Guild": {
+      "n_candidates": 3,
+      "pool_size": 1,
+      "medoid_name": "SFV-T0571",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "SEG02": {
+      "n_candidates": 154,
+      "pool_size": 7,
+      "medoid_name": "SFV-T0109",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "SEG01": {
+      "n_candidates": 256,
+      "pool_size": 7,
+      "medoid_name": "SFV-T0416",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "SEG03": {
+      "n_candidates": 55,
+      "pool_size": 5,
+      "medoid_name": "SFV-T0248",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "SEG04": {
+      "n_candidates": 30,
+      "pool_size": 2,
+      "medoid_name": "SFV-T0226",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    }
+  },
+  "warnings": [],
+  "camera_trap_pool_size": 8,
+  "camera_trap_n_devices": 2
+}

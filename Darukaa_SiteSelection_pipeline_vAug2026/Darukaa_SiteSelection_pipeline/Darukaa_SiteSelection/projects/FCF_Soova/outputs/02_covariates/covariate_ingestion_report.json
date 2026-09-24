@@ -1,0 +1,33 @@
+{
+  "status": "ok",
+  "project_name": "FCF_Soova",
+  "n_candidates": 50,
+  "n_matched": 50,
+  "n_unmatched": 0,
+  "unmatched_names": [],
+  "coverage_by_column": {
+    "NDVI_raw": 50,
+    "TreeCover_Pct": 50,
+    "Elev_m": 50,
+    "ElevStd_m": 50,
+    "TRI_m": 50,
+    "Slope_deg": 50,
+    "NatCoverPct_2km": 50,
+    "EdgeDensity_2km": 50,
+    "NatCoverPct_500m": 50,
+    "EdgeDensity_500m": 50,
+    "gHM": 50,
+    "DistWater_m": 50,
+    "LST_C": 50,
+    "NightLights": 50,
+    "BuiltUp_Pct": 50,
+    "JRC_Water": 0
+  },
+  "n_hard_filtered_builtup": 0,
+  "n_hard_filtered_water": 0,
+  "warnings": [
+    "JRC_Water: only 0.0% coverage across candidates",
+    "28 candidate(s) in this project had BuiltUp_Pct above the threshold but were kept anyway because their NDVI showed real vegetation \u2014 the land-cover classifier appears to be misclassifying part of this site as built-up (a known failure mode on managed/plantation landscapes: a young plantation's bare-soil-between-rows pattern showing BuiltUp_Pct near 100 with NDVI 0.24-0.35, physically inconsistent with a real built surface). Worth a visual/field check on this specific classifier behaviour."
+  ],
+  "n_builtup_override_by_ndvi": 28
+}

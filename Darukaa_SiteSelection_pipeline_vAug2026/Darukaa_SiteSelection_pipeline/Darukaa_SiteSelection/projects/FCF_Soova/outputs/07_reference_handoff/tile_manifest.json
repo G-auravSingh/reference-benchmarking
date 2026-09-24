@@ -1,0 +1,18 @@
+{
+  "project_name": "FCF_Soova",
+  "n_tiles": 5,
+  "tile_paths": [
+    "projects/FCF_Soova/outputs/07_reference_handoff/tiles/FCF_Soova_FCF_Soova_EMU_Mayurbhanj_1.geojson",
+    "projects/FCF_Soova/outputs/07_reference_handoff/tiles/FCF_Soova_FCF_Soova_EMU_Mayurbhanj_2.geojson",
+    "projects/FCF_Soova/outputs/07_reference_handoff/tiles/FCF_Soova_FCF_Soova_EMU_Mayurbhanj_3.geojson",
+    "projects/FCF_Soova/outputs/07_reference_handoff/tiles/FCF_Soova_FCF_Soova_EMU_Mayurbhanj_4.geojson",
+    "projects/FCF_Soova/outputs/07_reference_handoff/tiles/FCF_Soova_FCF_Soova_EMU_Mayurbhanj_5.geojson"
+  ],
+  "tile_labels": [
+    "FCF_Soova_EMU_Mayurbhanj_1",
+    "FCF_Soova_EMU_Mayurbhanj_2",
+    "FCF_Soova_EMU_Mayurbhanj_3",
+    "FCF_Soova_EMU_Mayurbhanj_4",
+    "FCF_Soova_EMU_Mayurbhanj_5"
+  ]
+}

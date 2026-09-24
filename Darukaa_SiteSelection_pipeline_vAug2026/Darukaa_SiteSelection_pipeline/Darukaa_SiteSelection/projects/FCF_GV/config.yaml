@@ -1,0 +1,78 @@
+# FCF GV — agroforestry, scattered across 4 districts (Ganjam, Gajapati,
+# Kandhmal, Kalahandi), 1,893 farm parcels, ~200km x 157km bounding box.
+
+client_name: FCF
+project_name: FCF_GV
+archetype: agroforestry
+realm: terrestrial
+
+# GV's KML uses standard KML ExtendedData/SchemaData, but with DIFFERENT
+# field names than Soova for the same underlying attributes — confirmed by
+# direct inspection: Farmer_s_n, District, Grampancha, Village, Year_of_pl,
+# Submission, area_ha. NOTE: there is no `block`/`Block_Name` field in this
+# KML at all (confirmed absent) — this was flagged in an earlier session as
+# a generalization gap (pipeline only looked for Block/Block_Name and
+# silently missed Grampancha/District); the crosswalk here is the actual
+# fix — admin_grampanchayat and admin_district are matched from their real
+# field names via the shared default crosswalk, no code change needed.
+attribute_crosswalk:
+  plantation_year: [Year_of_pl]
+
+# Only plantation_year is usable here — GV has no block-equivalent field at
+# all, so admin_block will show 0% coverage in the ingestion report (this is
+# expected and reported, not an error). Grampanchayat/district ARE present
+# via the default crosswalk and can still inform the geography-aware
+# clustering constraint in 03 (barrier/administrative discontinuity), even
+# though they're not used as stratification_attributes here.
+stratification_attributes:
+  - plantation_year
+
+n_devices: 4
+project_duration_weeks: 5
+project_start_date: "2026-10-19"  # tentative
+cycle_length_days: 7
+# CORRECTED (Aug 2026, exact schedule given directly): was 3, a stale
+# explicit override predating the fix to the shared default (day 1 deploy,
+# days 2-6 recording, day 7 retrieval, day 8 buffer, day 9 next deploy —
+# 1 buffer day, not 3). This project-level override was silently
+# shadowing the corrected default until caught by checking actual
+# scheduled cycle day-offsets against the stated schedule, not just
+# trusting the default change alone.
+logistics_buffer_days: 1
+
+deployment_regime: sequential_cluster
+streams_active: [audiomoth]
+
+# REAL DATA-QUALITY CORRECTIONS (Aug 2026, all independently verified via
+# k-nearest-neighbour geographic voting against every confidently-tagged
+# parcel in the client's own ground-truth CSV, not assumed from any
+# unverified source — see CHANGELOG for the full verification method and
+# results, including a client-reported batch of "28 mistagged parcels"
+# that was checked the same way and found NOT supported, so deliberately
+# NOT included here).
+district_corrections:
+  # 11 of 13 originally-unassigned parcels — 8/8 or 7/8 nearest-neighbour
+  # votes for Ganjam, all within ~1.5km.
+  "738255244": Ganjam
+  "740712347": Ganjam
+  "745978335": Ganjam
+  "746087164": Ganjam
+  "746096609": Ganjam
+  "746803713": Ganjam
+  "734754734": Ganjam
+  "735883701": Ganjam
+  "740783779": Ganjam
+  "741459677": Ganjam
+  "654106741": Ganjam
+  # The other 2 of 13 — each voted strongly for a DIFFERENT district.
+  "745842207": Gajapati   # 7/8 votes, all within 0.7km
+  "747559920": Kandhmal   # 6/8 votes, all within 0.23km
+  # 3 parcels tagged Kalahandi but with strong, unambiguous nearest-
+  # neighbour disagreement (a client-reported concern, independently
+  # re-verified — the report also named 2 more IDs as "should be Ganjam"
+  # that were checked and found to actually belong in Kandhmal instead,
+  # corrected accordingly below rather than as reported).
+  "654495171": Ganjam      # 8/8 votes, ~0.1-0.25km
+  "654106742": Ganjam      # 8/8 votes, ~0.17-0.31km
+  "719649031": Kandhmal    # 8/8 votes, ~0.03-0.12km (reported as "should be Ganjam" — verified incorrect, real vote is Kandhmal)
+  "739140541": Kandhmal    # 8/8 votes, ~1.24-2.16km (reported as "should be Ganjam" — verified incorrect, real vote is Kandhmal)

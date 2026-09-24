@@ -1,0 +1,22 @@
+{
+  "project_name": "SoulForest_Veltoor",
+  "n_tiles": 7,
+  "tile_paths": [
+    "projects/SoulForest_Veltoor/outputs/07_reference_handoff/tiles/SoulForest_Veltoor_EMU_ANCHOR_Fruit_Forest.geojson",
+    "projects/SoulForest_Veltoor/outputs/07_reference_handoff/tiles/SoulForest_Veltoor_EMU_ANCHOR_Rock_Guild.geojson",
+    "projects/SoulForest_Veltoor/outputs/07_reference_handoff/tiles/SoulForest_Veltoor_EMU_ANCHOR_Wetland.geojson",
+    "projects/SoulForest_Veltoor/outputs/07_reference_handoff/tiles/SoulForest_Veltoor_SEG01.geojson",
+    "projects/SoulForest_Veltoor/outputs/07_reference_handoff/tiles/SoulForest_Veltoor_SEG02.geojson",
+    "projects/SoulForest_Veltoor/outputs/07_reference_handoff/tiles/SoulForest_Veltoor_SEG03.geojson",
+    "projects/SoulForest_Veltoor/outputs/07_reference_handoff/tiles/SoulForest_Veltoor_SEG04.geojson"
+  ],
+  "tile_labels": [
+    "EMU_ANCHOR_Fruit_Forest",
+    "EMU_ANCHOR_Rock_Guild",
+    "EMU_ANCHOR_Wetland",
+    "SEG01",
+    "SEG02",
+    "SEG03",
+    "SEG04"
+  ]
+}

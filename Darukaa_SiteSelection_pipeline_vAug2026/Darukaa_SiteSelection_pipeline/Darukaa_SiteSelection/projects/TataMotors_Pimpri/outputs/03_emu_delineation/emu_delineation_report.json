@@ -1,0 +1,16 @@
+{
+  "n_emus": 9,
+  "n_anchor_emus": 0,
+  "n_segmentation_emus": 9,
+  "mmu_diagnostics": null,
+  "orphan_segments_merged_into_anchors": [],
+  "aoi_boundary_area_ha": 126.655,
+  "exclusion_area_ha": 46.339,
+  "covered_by_emus_ha": 67.34,
+  "residual_unclassified_ha": 12.976,
+  "warnings": [
+    "12.976 ha (10.2% of AOI) is not covered by any anchor, exclusion, or EMU \u2014 this is real leftover land, not dropped silently; needs either the candidate-grid fix above or manual review before reporting."
+  ],
+  "project_name": "TataMotors_Pimpri",
+  "method": "segmentation_reconciliation"
+}

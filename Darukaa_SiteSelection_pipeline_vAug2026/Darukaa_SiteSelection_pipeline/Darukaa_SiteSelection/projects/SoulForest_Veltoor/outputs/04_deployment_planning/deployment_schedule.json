@@ -1,0 +1,360 @@
+{
+  "project_name": "SoulForest_Veltoor",
+  "regime": "stratified_single_pass",
+  "n_emus": 7,
+  "n_devices": 7,
+  "device_allocation": {
+    "EMU_ANCHOR_Fruit_Forest": 7,
+    "EMU_ANCHOR_Wetland": 3,
+    "EMU_ANCHOR_Rock_Guild": 1,
+    "SEG02": 7,
+    "SEG01": 7,
+    "SEG03": 5,
+    "SEG04": 2
+  },
+  "emu_week_assignment": {
+    "1": [
+      "EMU_ANCHOR_Fruit_Forest",
+      "EMU_ANCHOR_Wetland"
+    ],
+    "2": [
+      "SEG02",
+      "SEG04"
+    ],
+    "3": [
+      "SEG01",
+      "EMU_ANCHOR_Rock_Guild"
+    ],
+    "4": [
+      "SEG03"
+    ]
+  },
+  "project_duration_weeks": 4,
+  "achievable_cycles": 4,
+  "used_duration_extension": false,
+  "n_cycles_scheduled": 4,
+  "n_emus_covered": 7,
+  "uncovered_emu_ids": [],
+  "avg_travel_speed_kmh_assumed": 25.0,
+  "schedule": [
+    {
+      "cycle_number": 1,
+      "start_day_offset": 0,
+      "recording_end_day_offset": 7,
+      "emu_ids": [
+        "EMU_ANCHOR_Fruit_Forest",
+        "EMU_ANCHOR_Wetland"
+      ],
+      "n_devices_used": 7,
+      "position_assignments": [
+        {
+          "emu_id": "EMU_ANCHOR_Fruit_Forest",
+          "n_devices": 5,
+          "positions": [
+            {
+              "name": "SFV-T0577",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0652",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0489",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0637",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0667",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        },
+        {
+          "emu_id": "EMU_ANCHOR_Wetland",
+          "n_devices": 2,
+          "positions": [
+            {
+              "name": "SFV-T0625",
+              "pool_rank": 1,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0549",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "SFV-T0461",
+          "emu_id": "EMU_ANCHOR_Fruit_Forest",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        },
+        {
+          "name": "SFV-T0550",
+          "emu_id": "EMU_ANCHOR_Wetland",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 2,
+      "start_day_offset": 7,
+      "recording_end_day_offset": 14,
+      "emu_ids": [
+        "SEG02",
+        "SEG04"
+      ],
+      "n_devices_used": 7,
+      "position_assignments": [
+        {
+          "emu_id": "SEG02",
+          "n_devices": 5,
+          "positions": [
+            {
+              "name": "SFV-T0109",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0042",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0138",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0274",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0047",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        },
+        {
+          "emu_id": "SEG04",
+          "n_devices": 2,
+          "positions": [
+            {
+              "name": "SFV-T0226",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0294",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "SFV-T0020",
+          "emu_id": "SEG02",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        },
+        {
+          "name": "SFV-T0195",
+          "emu_id": "SEG04",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 3,
+      "start_day_offset": 14,
+      "recording_end_day_offset": 21,
+      "emu_ids": [
+        "SEG01",
+        "EMU_ANCHOR_Rock_Guild"
+      ],
+      "n_devices_used": 7,
+      "position_assignments": [
+        {
+          "emu_id": "SEG01",
+          "n_devices": 6,
+          "positions": [
+            {
+              "name": "SFV-T0416",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0337",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0100",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0447",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0297",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0492",
+              "pool_rank": 6,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        },
+        {
+          "emu_id": "EMU_ANCHOR_Rock_Guild",
+          "n_devices": 1,
+          "positions": [
+            {
+              "name": "SFV-T0571",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "SFV-T0032",
+          "emu_id": "SEG01",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        },
+        {
+          "name": "SFV-T0422",
+          "emu_id": "SEG01",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 4,
+      "start_day_offset": 21,
+      "recording_end_day_offset": 28,
+      "emu_ids": [
+        "SEG03"
+      ],
+      "n_devices_used": 5,
+      "position_assignments": [
+        {
+          "emu_id": "SEG03",
+          "n_devices": 5,
+          "positions": [
+            {
+              "name": "SFV-T0248",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0353",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0345",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0221",
+              "pool_rank": 4,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "SFV-T0213",
+              "pool_rank": 5,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "camera_trap_positions": [
+        {
+          "name": "SFV-T0164",
+          "emu_id": "SEG03",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        },
+        {
+          "name": "SFV-T0282",
+          "emu_id": "SEG03",
+          "wrapped": false,
+          "shared_with_audiomoth": false
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    }
+  ],
+  "fixed_events": {
+    "streams": [
+      "soil_sample",
+      "water_edna",
+      "soil_edna",
+      "water_quality"
+    ],
+    "note": "These are one-time composite samples tied to fixed physical features (waterbodies, soil zones), not rotated across EMUs/cycles \u2014 out of scope for panel scheduling by design (see module docstring). Scheduled as a single event near the end of the project, around day 28, per the original project brief's timing (final 1-2 weeks)."
+  },
+  "warnings": []
+}

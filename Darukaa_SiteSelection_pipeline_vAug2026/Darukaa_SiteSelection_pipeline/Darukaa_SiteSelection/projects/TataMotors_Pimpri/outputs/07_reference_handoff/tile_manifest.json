@@ -1,0 +1,26 @@
+{
+  "project_name": "TataMotors_Pimpri",
+  "n_tiles": 9,
+  "tile_paths": [
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Deccan_forest.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Grass_land.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Narmada_valley.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Savana_ecosystem.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Seasonal_wetland_polygon.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Trail_plots.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Water_margin.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Wetland_forest.geojson",
+    "projects/TataMotors_Pimpri/outputs/07_reference_handoff/tiles/TataMotors_Pimpri_EMU_Wildlife.geojson"
+  ],
+  "tile_labels": [
+    "EMU_Deccan_forest",
+    "EMU_Grass_land",
+    "EMU_Narmada_valley",
+    "EMU_Savana_ecosystem",
+    "EMU_Seasonal_wetland_polygon",
+    "EMU_Trail_plots",
+    "EMU_Water_margin",
+    "EMU_Wetland_forest",
+    "EMU_Wildlife"
+  ]
+}

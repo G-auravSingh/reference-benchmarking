@@ -1,0 +1,182 @@
+{
+  "project_name": "FCF_Soova",
+  "regime": "sequential_cluster",
+  "n_emus": 5,
+  "n_devices": 4,
+  "device_allocation": null,
+  "emu_week_assignment": null,
+  "project_duration_weeks": 4,
+  "achievable_cycles": 3,
+  "used_duration_extension": true,
+  "n_cycles_scheduled": 4,
+  "n_emus_covered": 5,
+  "uncovered_emu_ids": [],
+  "avg_travel_speed_kmh_assumed": 25.0,
+  "schedule": [
+    {
+      "cycle_number": 1,
+      "start_day_offset": 0,
+      "recording_end_day_offset": 7,
+      "emu_ids": [
+        "FCF_Soova_EMU_Mayurbhanj_1",
+        "FCF_Soova_EMU_Mayurbhanj_3"
+      ],
+      "n_devices_used": 4,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_Soova_EMU_Mayurbhanj_1",
+          "n_devices": 2,
+          "positions": [
+            {
+              "name": "764979564",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "764838760",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        },
+        {
+          "emu_id": "FCF_Soova_EMU_Mayurbhanj_3",
+          "n_devices": 2,
+          "positions": [
+            {
+              "name": "764545514",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "764892265",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 14.83,
+      "est_max_internal_travel_hours": 0.59
+    },
+    {
+      "cycle_number": 2,
+      "start_day_offset": 8,
+      "recording_end_day_offset": 15,
+      "emu_ids": [
+        "FCF_Soova_EMU_Mayurbhanj_4"
+      ],
+      "n_devices_used": 3,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_Soova_EMU_Mayurbhanj_4",
+          "n_devices": 3,
+          "positions": [
+            {
+              "name": "763766541",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "763762371",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "763772880",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 3,
+      "start_day_offset": 16,
+      "recording_end_day_offset": 23,
+      "emu_ids": [
+        "FCF_Soova_EMU_Mayurbhanj_2"
+      ],
+      "n_devices_used": 3,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_Soova_EMU_Mayurbhanj_2",
+          "n_devices": 3,
+          "positions": [
+            {
+              "name": "765361417",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "765393619",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "765340778",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    },
+    {
+      "cycle_number": 4,
+      "start_day_offset": 24,
+      "recording_end_day_offset": 31,
+      "emu_ids": [
+        "FCF_Soova_EMU_Mayurbhanj_5"
+      ],
+      "n_devices_used": 3,
+      "position_assignments": [
+        {
+          "emu_id": "FCF_Soova_EMU_Mayurbhanj_5",
+          "n_devices": 3,
+          "positions": [
+            {
+              "name": "763148801",
+              "pool_rank": 1,
+              "is_medoid": true,
+              "wrapped": false
+            },
+            {
+              "name": "763492655",
+              "pool_rank": 2,
+              "is_medoid": false,
+              "wrapped": false
+            },
+            {
+              "name": "763493190",
+              "pool_rank": 3,
+              "is_medoid": false,
+              "wrapped": false
+            }
+          ]
+        }
+      ],
+      "est_max_internal_travel_km": 0.0,
+      "est_max_internal_travel_hours": 0.0
+    }
+  ],
+  "fixed_events": null,
+  "warnings": [
+    "4 panels needed; fits within 5 weeks (+1 week extension) but NOT the base 4 weeks. Using the extension \u2014 this is the last-resort case per policy (devices cannot be added), flagged explicitly rather than applied silently. Confirm before mobilising."
+  ]
+}

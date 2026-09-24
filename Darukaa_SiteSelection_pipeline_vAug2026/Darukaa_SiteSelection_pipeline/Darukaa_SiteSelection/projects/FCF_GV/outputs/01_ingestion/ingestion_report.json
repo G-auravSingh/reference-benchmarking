@@ -1,0 +1,71 @@
+{
+  "project_name": "FCF_GV",
+  "client_name": "FCF",
+  "archetype": "agroforestry",
+  "projected_crs": "EPSG:32645",
+  "kml_files": [
+    "Project_GV_Biodiversity.kml"
+  ],
+  "n_placemarks_total": 1893,
+  "n_geometry_repaired": 0,
+  "n_geometry_dropped_unusable": 0,
+  "n_exclusion_hard": 0,
+  "n_exclusion_soft": 0,
+  "n_ecological_anchor": 0,
+  "n_aoi_boundary": 0,
+  "n_candidates": 1893,
+  "attribute_coverage": {
+    "farmer_id": {
+      "n_found": 1884,
+      "n_candidates": 1893,
+      "pct": 99.5
+    },
+    "admin_state": {
+      "n_found": 0,
+      "n_candidates": 1893,
+      "pct": 0.0
+    },
+    "admin_district": {
+      "n_found": 1893,
+      "n_candidates": 1893,
+      "pct": 100.0
+    },
+    "admin_block": {
+      "n_found": 0,
+      "n_candidates": 1893,
+      "pct": 0.0
+    },
+    "admin_grampanchayat": {
+      "n_found": 1884,
+      "n_candidates": 1893,
+      "pct": 99.5
+    },
+    "admin_village": {
+      "n_found": 1884,
+      "n_candidates": 1893,
+      "pct": 99.5
+    },
+    "plantation_year": {
+      "n_found": 1853,
+      "n_candidates": 1893,
+      "pct": 97.9
+    },
+    "plantation_type": {
+      "n_found": 0,
+      "n_candidates": 1893,
+      "pct": 0.0
+    },
+    "parcel_block_id": {
+      "n_found": 0,
+      "n_candidates": 1893,
+      "pct": 0.0
+    },
+    "area_ha_reported": {
+      "n_found": 1893,
+      "n_candidates": 1893,
+      "pct": 100.0
+    }
+  },
+  "area_mismatches_gt_5pct": [],
+  "warnings": []
+}

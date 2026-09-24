@@ -1,0 +1,127 @@
+{
+  "status": "ok",
+  "preprocess": {
+    "boundary_area_ha": 126.655,
+    "exclusion_area_ha": 46.339,
+    "exclusion_layers": {
+      "_L_Water_Bodies": {
+        "n_features": 6,
+        "kind": "polygon",
+        "buffer_m": 0
+      },
+      "_L_Water_Island": {
+        "n_features": 2,
+        "kind": "polygon",
+        "buffer_m": 0
+      },
+      "_L_Infrastructure": {
+        "n_features": 44,
+        "kind": "line_buffered",
+        "buffer_m": 10.0
+      },
+      "_L_NIC _Building": {
+        "n_features": 263,
+        "kind": "line_buffered",
+        "buffer_m": 10.0
+      },
+      "_L_NIC_Landscape": {
+        "n_features": 666,
+        "kind": "line_buffered",
+        "buffer_m": 10.0
+      },
+      "_L_Path way": {
+        "n_features": 102,
+        "kind": "line_buffered",
+        "buffer_m": 5.0
+      },
+      "_L_Reed beds and check dam": {
+        "n_features": 45,
+        "kind": "line_buffered",
+        "buffer_m": 15.0
+      },
+      "_L_Veg_Seasonal wetland-line": {
+        "n_features": 1,
+        "kind": "line_buffered",
+        "buffer_m": 15.0
+      },
+      "_L_Water_Stream": {
+        "n_features": 10,
+        "kind": "line_buffered",
+        "buffer_m": 15.0
+      }
+    },
+    "usable_zone_area_ha": 94.396,
+    "usable_zone_area_ha_after_clipping": 76.235,
+    "usable_zones": {
+      "_L_Trail plots": {
+        "n_polygons": 28,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 2.52
+      },
+      "_L_Veg_Deccan forest": {
+        "n_polygons": 18,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 52.415
+      },
+      "_L_Veg_Eco region": {
+        "n_polygons": 3,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 1.574
+      },
+      "_L_Veg_Grass land": {
+        "n_polygons": 11,
+        "n_non_polygon_dropped": 1,
+        "area_ha": 4.343
+      },
+      "_L_Veg_Narmada valley": {
+        "n_polygons": 16,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 11.89
+      },
+      "_L_Veg_Savana ecosystem": {
+        "n_polygons": 10,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 3.535
+      },
+      "_L_Veg_Wildlife": {
+        "n_polygons": 3,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 4.595
+      },
+      "_L_Veg_Seasonal wetland-polygon": {
+        "n_polygons": 3,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 1.747
+      },
+      "_L_Veg_Water margion": {
+        "n_polygons": 16,
+        "n_non_polygon_dropped": 2,
+        "area_ha": 10.96
+      },
+      "_L_Veg_Wetland forest": {
+        "n_polygons": 1,
+        "n_non_polygon_dropped": 0,
+        "area_ha": 0.817
+      }
+    },
+    "unaccounted_area_ha": 4.081
+  },
+  "grid_generation": {
+    "status": "ok",
+    "n_cells": 1294,
+    "cell_size_m": 25,
+    "aoi_area_ha": 126.655,
+    "anchor_area_ha": 0.0,
+    "hard_exclusion_area_ha": 46.339,
+    "soft_exclusion_area_ha_included_in_matrix": 0.0,
+    "matrix_area_ha_to_tessellate": 80.316,
+    "grid_area_ha_covered": 72.672,
+    "coverage_of_matrix_pct": 90.5
+  },
+  "n_grid_cells": 1294,
+  "n_cells_unmatched_to_any_zone": 102,
+  "hard_exclusion_area_ha": 46.339,
+  "warnings": [
+    "102 of 1294 candidate cells did not fall within any real eco-zone polygon (likely the 4.08ha unaccounted-for gap area found during preprocessing) \u2014 these cells have eco_zone=None and will not be assigned to any EMU."
+  ]
+}

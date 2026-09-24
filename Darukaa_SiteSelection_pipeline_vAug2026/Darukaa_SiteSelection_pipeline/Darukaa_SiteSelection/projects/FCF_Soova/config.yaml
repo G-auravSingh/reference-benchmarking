@@ -1,0 +1,39 @@
+# FCF Soova — agroforestry, single district (Mayurbhanj, Odisha)
+# All parcels confirmed within one district from KML inspection — simplest
+# of the three real projects on file, used as the validation-run case.
+
+client_name: FCF
+project_name: FCF_Soova
+archetype: agroforestry
+realm: terrestrial
+
+# Soova's KML is the legacy Earth-Pro description-table format. Confirmed
+# fields: farmername, state, district, block, grampanchayat, village, _id,
+# latitude, longitude, area_ha, LP_id, Plantation_year, SHAPE_Length,
+# SHAPE_Area. Extends the default crosswalk only where field names are
+# genuinely project-specific (LP_id is already in the default list).
+attribute_crosswalk:
+  plantation_year: [Plantation_year]
+  admin_block: [block]
+
+# Per Aura (Aug 2026): plantation year and administrative block ARE present
+# here and should be used as stratification features where they carry real
+# ecological signal (planting year -> canopy/structural age; block ->
+# potential proxy for shared soil/management history within a village).
+# LP_id is NOT included here — its meaning (parcel/livelihood-plot ID vs. a
+# true plantation type/species-mix code) is unconfirmed; see 03's open
+# question rather than silently assuming it's a type code.
+stratification_attributes:
+  - plantation_year
+  - admin_block
+
+n_devices: 4
+project_duration_weeks: 4
+project_start_date: "2026-09-20"  # shifted from 2026-09-14 per Soova's request (Ganesh Puja / Biswakarma Puja + drone survey conflict)
+cycle_length_days: 7
+# CORRECTED (Aug 2026) — see FCF_GV/config.yaml for the full note; same
+# stale override, same fix.
+logistics_buffer_days: 1
+
+deployment_regime: sequential_cluster
+streams_active: [audiomoth]

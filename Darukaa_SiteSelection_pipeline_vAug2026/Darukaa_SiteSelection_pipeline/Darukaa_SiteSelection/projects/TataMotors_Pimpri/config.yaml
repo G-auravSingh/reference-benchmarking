@@ -1,0 +1,78 @@
+# Tata Motors Pimpri — conservation/restoration campus, rebuilt against the
+# client's own real, ground-truthed ecological zonation (Aug 2026 corrected
+# KML: Pune-Pimpri-eco_zones_1.kml), replacing the old v6.0 pipeline's
+# purely-algorithmic SEG01-SEG10 segments, which had zero relationship to
+# any real, named ecological concept (confirmed directly against v6.0's own
+# stratum_pools.geojson).
+
+client_name: TataMotors
+project_name: TataMotors_Pimpri
+archetype: conservation
+realm: mixed   # terrestrial (AudioMoth, camera trap) + aquatic (water eDNA/quality, one-time this season)
+
+# This project's AOI/exclusion/eco-zone inputs are NOT produced by the
+# normal kml_ingest.py placemark-classification flow — the source KML has
+# a genuinely different structure (20 real GDAL layers, several of them
+# LINE-traced exclusion features needing buffering, not simple named
+# polygons) that a dedicated preprocessor (preprocess_eco_zones.py) handles
+# instead. See that script's own docstring for the real reasoning.
+
+id_prefix: "PMP-T"
+n_devices: 10   # matches the real, existing 10-device AudioMoth fleet
+contiguous_grid_cell_size_m: 25
+
+# Confirmed real, established programme structure (from the earlier design
+# session that built the original device-rotation logic): 24-week total
+# programme across 3 seasons of 8 weeks each — monsoon (Aug-Oct), winter/
+# nesting (Dec-Jan), early summer (Mar-Apr). Kept here rather than
+# rediscovered, since it's already a real, agreed client commitment, not a
+# new assumption for this rebuild.
+project_duration_weeks: 24
+# Real, already-completed field history: Week 1 of Season 1 (13-27 Aug
+# 2026) was deployed under the old SEG-based plan before this redesign —
+# see historical/crosswalk_report.json. This schedule begins at Week 2
+# of Season 1, the first week the NEW zone-based design actually governs;
+# project_start_date is set so this pipeline's own "Week 1" output
+# (really Week 2 of the real programme) lands on the real restart date.
+project_start_date: "2026-09-12"
+season_length_weeks: 8   # rotation resets every 8 weeks (monsoon/winter/
+# summer) so the same position lands at the same relative week in every
+# season — required for valid season-to-season comparison at a fixed
+# point (confirmed directly: variation observed there must be
+# attributable to the season, not to a different physical spot).
+
+# The real, client-provided ecological zone (Deccan forest, Narmada valley,
+# Savanna ecosystem, Grassland, Trail plots, Wildlife, Wetland forest,
+# Water margin, Seasonal wetland, Eco region) acts as the EMU boundary
+# directly — see zone_is_emu below.
+hard_barrier_attribute: eco_zone
+
+# REAL REDESIGN (reported directly: SNIC-based sub-segmentation within a
+# zone was producing small, ecologically meaningless fragments — "small
+# small segments... won't make much sense ecologically"). Each real
+# client-given zone now becomes exactly ONE EMU directly — no further
+# spectral sub-clustering within it. A zone's real candidate tiles are
+# dissolved into one EMU regardless of geometric adjacency, exactly the
+# same way an agroforestry EMU already handles many scattered, physically
+# disconnected real parcels as one EMU with a real, spacing-verified
+# position pool spread across the whole extent.
+zone_is_emu: true
+
+# Client-reported and confirmed with real data before enabling: at the
+# standard 100m acoustic-detection-derived spacing, Wetland forest's real
+# capacity was 1-2 positions (forcing the same spot every week) and
+# Trail plots' was 6 — halving to 50m for EMUs this small raised them to
+# 3 and 10 respectively (checked directly, not assumed). Real trade-off
+# (some acoustic overlap risk) accepted only for genuinely small EMUs;
+# every EMU with real room for 3+ positions at 100m is unaffected.
+allow_small_emu_spacing_relaxation: true
+
+camera_trap_n_devices: 1   # matches the real, existing single camera trap
+
+streams_active: [audiomoth, camera_trap]
+# Water eDNA/quality, soil chemistry, hydromoth/hydrocam, and soil eDNA
+# are real, already-collected, one-time-per-season deployments this
+# cycle (13-27 Aug 2026) — not modelled by this pipeline's rotation logic
+# at all (see METHODOLOGY.md's note on 04_deployment_planning). They are
+# NOT included in streams_active here because nothing about them is being
+# re-planned; only audiomoth and camera trap rotate going forward.

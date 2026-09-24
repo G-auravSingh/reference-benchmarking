@@ -1,0 +1,35 @@
+{
+  "status": "ok",
+  "project_name": "SoulForest_Veltoor",
+  "n_candidates": 704,
+  "n_matched": 704,
+  "n_unmatched": 0,
+  "unmatched_names": [],
+  "coverage_by_column": {
+    "NDVI_raw": 704,
+    "TreeCover_Pct": 704,
+    "Elev_m": 704,
+    "ElevStd_m": 704,
+    "TRI_m": 704,
+    "Slope_deg": 704,
+    "NatCoverPct_2km": 704,
+    "EdgeDensity_2km": 704,
+    "NatCoverPct_500m": 704,
+    "EdgeDensity_500m": 704,
+    "gHM": 704,
+    "DistWater_m": 704,
+    "LST_C": 704,
+    "NightLights": 704,
+    "BuiltUp_Pct": 704,
+    "JRC_Water": 21,
+    "SEGMENT_ID": 540
+  },
+  "n_hard_filtered_builtup": 6,
+  "n_hard_filtered_water": 0,
+  "warnings": [
+    "JRC_Water: only 3.0% coverage across candidates",
+    "SEGMENT_ID: only 76.7% coverage across candidates",
+    "177 candidate(s) in this project had BuiltUp_Pct above the threshold but were kept anyway because their NDVI showed real vegetation \u2014 the land-cover classifier appears to be misclassifying part of this site as built-up (a known failure mode on managed/plantation landscapes: a young plantation's bare-soil-between-rows pattern showing BuiltUp_Pct near 100 with NDVI 0.24-0.35, physically inconsistent with a real built surface). Worth a visual/field check on this specific classifier behaviour."
+  ],
+  "n_builtup_override_by_ndvi": 177
+}

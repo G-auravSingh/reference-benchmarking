@@ -1,0 +1,87 @@
+{
+  "project_name": "FCF_GV",
+  "feature_tier": "full_with_satellite_covariates",
+  "feature_cols_used": [
+    "NDVI_raw",
+    "TreeCover_Pct",
+    "BuiltUp_Pct",
+    "Elev_m",
+    "ElevStd_m",
+    "TRI_m",
+    "Slope_deg",
+    "gHM",
+    "DistWater_m",
+    "LST_C",
+    "NightLights",
+    "NatCoverPct_2km",
+    "EdgeDensity_2km",
+    "NatCoverPct_500m",
+    "EdgeDensity_500m"
+  ],
+  "critic_weights": {
+    "NDVI_raw": 0.0467,
+    "TreeCover_Pct": 0.1179,
+    "BuiltUp_Pct": 0.0683,
+    "Elev_m": 0.0874,
+    "ElevStd_m": 0.0542,
+    "TRI_m": 0.0497,
+    "Slope_deg": 0.0651,
+    "gHM": 0.0538,
+    "DistWater_m": 0.1429,
+    "LST_C": 0.0678,
+    "NightLights": 0.0108,
+    "NatCoverPct_2km": 0.0552,
+    "EdgeDensity_2km": 0.0628,
+    "NatCoverPct_500m": 0.0643,
+    "EdgeDensity_500m": 0.0532
+  },
+  "achievable_cycles_used_as_pool_target": 4,
+  "n_emus": 6,
+  "emu_reports": {
+    "FCF_GV_EMU_Ganjam_1": {
+      "n_candidates": 643,
+      "pool_size": 4,
+      "medoid_name": "737335948",
+      "n_deployment_outliers_excluded": 60,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_GV_EMU_Kandhmal_2": {
+      "n_candidates": 148,
+      "pool_size": 4,
+      "medoid_name": "689494004",
+      "n_deployment_outliers_excluded": 33,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_GV_EMU_Kandhmal_1": {
+      "n_candidates": 267,
+      "pool_size": 4,
+      "medoid_name": "689493541",
+      "n_deployment_outliers_excluded": 39,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_GV_EMU_Gajapati_1": {
+      "n_candidates": 495,
+      "pool_size": 4,
+      "medoid_name": "740213232",
+      "n_deployment_outliers_excluded": 29,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_GV_EMU_Kalahandi_1": {
+      "n_candidates": 234,
+      "pool_size": 4,
+      "medoid_name": "740568090",
+      "n_deployment_outliers_excluded": 30,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_GV_EMU_Kalahandi_2": {
+      "n_candidates": 106,
+      "pool_size": 4,
+      "medoid_name": "633034808",
+      "n_deployment_outliers_excluded": 16,
+      "relaxed_spacing_used_m": null
+    }
+  },
+  "warnings": [
+    "207 candidate(s) across 6 EMU(s) are real members (kept for metrics) but excluded from device-position eligibility as spatial outliers \u2014 too far from the rest of their EMU for a field visit to be practical: {'FCF_GV_EMU_Ganjam_1': 60, 'FCF_GV_EMU_Kandhmal_2': 33, 'FCF_GV_EMU_Kandhmal_1': 39, 'FCF_GV_EMU_Gajapati_1': 29, 'FCF_GV_EMU_Kalahandi_1': 30, 'FCF_GV_EMU_Kalahandi_2': 16}. This is a deliberate design choice: a severe outlier doesn't need its own EMU, it just shouldn't be a device candidate."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "project_name": "FCF_GV",
+  "n_tiles": 6,
+  "tile_paths": [
+    "projects/FCF_GV/outputs/07_reference_handoff/tiles/FCF_GV_FCF_GV_EMU_Gajapati_1.geojson",
+    "projects/FCF_GV/outputs/07_reference_handoff/tiles/FCF_GV_FCF_GV_EMU_Ganjam_1.geojson",
+    "projects/FCF_GV/outputs/07_reference_handoff/tiles/FCF_GV_FCF_GV_EMU_Kalahandi_1.geojson",
+    "projects/FCF_GV/outputs/07_reference_handoff/tiles/FCF_GV_FCF_GV_EMU_Kalahandi_2.geojson",
+    "projects/FCF_GV/outputs/07_reference_handoff/tiles/FCF_GV_FCF_GV_EMU_Kandhmal_1.geojson",
+    "projects/FCF_GV/outputs/07_reference_handoff/tiles/FCF_GV_FCF_GV_EMU_Kandhmal_2.geojson"
+  ],
+  "tile_labels": [
+    "FCF_GV_EMU_Gajapati_1",
+    "FCF_GV_EMU_Ganjam_1",
+    "FCF_GV_EMU_Kalahandi_1",
+    "FCF_GV_EMU_Kalahandi_2",
+    "FCF_GV_EMU_Kandhmal_1",
+    "FCF_GV_EMU_Kandhmal_2"
+  ]
+}

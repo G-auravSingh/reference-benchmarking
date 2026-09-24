@@ -1,0 +1,33 @@
+{
+  "status": "ok",
+  "project_name": "TataMotors_Pimpri",
+  "n_candidates": 1294,
+  "n_matched": 1294,
+  "n_unmatched": 0,
+  "unmatched_names": [],
+  "coverage_by_column": {
+    "NDVI_raw": 1294,
+    "TreeCover_Pct": 1294,
+    "Elev_m": 1294,
+    "ElevStd_m": 1294,
+    "TRI_m": 1294,
+    "Slope_deg": 1294,
+    "NatCoverPct_2km": 1294,
+    "EdgeDensity_2km": 1294,
+    "NatCoverPct_500m": 1294,
+    "EdgeDensity_500m": 1294,
+    "gHM": 1275,
+    "DistWater_m": 1294,
+    "LST_C": 1294,
+    "NightLights": 1294,
+    "BuiltUp_Pct": 1294,
+    "JRC_Water": 35,
+    "SEGMENT_ID": 1294
+  },
+  "n_hard_filtered_builtup": 0,
+  "n_hard_filtered_water": 0,
+  "warnings": [
+    "gHM: only 98.5% coverage across candidates",
+    "JRC_Water: only 2.7% coverage across candidates"
+  ]
+}

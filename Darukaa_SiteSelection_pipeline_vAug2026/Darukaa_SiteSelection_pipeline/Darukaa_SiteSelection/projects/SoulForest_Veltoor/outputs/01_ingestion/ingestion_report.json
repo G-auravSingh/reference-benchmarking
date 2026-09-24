@@ -1,0 +1,83 @@
+{
+  "project_name": "SoulForest_Veltoor",
+  "client_name": "SoulForest",
+  "archetype": "conservation",
+  "projected_crs": "EPSG:32643",
+  "kml_files": [
+    "SoulForest_Veltoor.kml"
+  ],
+  "n_placemarks_total": 8,
+  "n_geometry_repaired": 0,
+  "n_geometry_dropped_unusable": 0,
+  "n_exclusion_hard": 0,
+  "n_exclusion_soft": 3,
+  "n_ecological_anchor": 3,
+  "n_aoi_boundary": 1,
+  "n_candidates": 1,
+  "attribute_coverage": {
+    "farmer_id": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "admin_state": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "admin_district": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "admin_block": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "admin_grampanchayat": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "admin_village": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "plantation_year": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "plantation_type": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "parcel_block_id": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    },
+    "area_ha_reported": {
+      "n_found": 0,
+      "n_candidates": 1,
+      "pct": 0.0
+    }
+  },
+  "area_mismatches_gt_5pct": [],
+  "warnings": [],
+  "candidate_grid": {
+    "status": "ok",
+    "n_cells": 704,
+    "cell_size_m": 25,
+    "aoi_area_ha": 44.285,
+    "anchor_area_ha": 11.363,
+    "hard_exclusion_area_ha": 0.0,
+    "soft_exclusion_area_ha_included_in_matrix": 3.573,
+    "matrix_area_ha_to_tessellate": 44.285,
+    "grid_area_ha_covered": 42.855,
+    "coverage_of_matrix_pct": 96.8
+  }
+}

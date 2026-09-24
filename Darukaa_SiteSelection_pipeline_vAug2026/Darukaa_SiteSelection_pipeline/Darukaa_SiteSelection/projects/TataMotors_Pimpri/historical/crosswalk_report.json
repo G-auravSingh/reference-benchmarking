@@ -1,0 +1,438 @@
+{
+  "streams": {
+    "audiomoths": [
+      {
+        "id": "PMP-T017",
+        "old_stratum": "SEG05",
+        "date": "2026-08-13",
+        "lat": 18.64551,
+        "lng": 73.814348,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Narmada valley",
+        "status": "real zone: Narmada valley"
+      },
+      {
+        "id": "PMP-T006",
+        "old_stratum": "SEG06",
+        "date": "2026-08-14",
+        "lat": 18.647063,
+        "lng": 73.812441,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Wildlife",
+        "status": "real zone: Wildlife"
+      },
+      {
+        "id": "PMP-T019",
+        "old_stratum": "SEG07",
+        "date": "2026-08-14",
+        "lat": 18.644694,
+        "lng": 73.809139,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Narmada valley",
+        "status": "real zone: Narmada valley"
+      },
+      {
+        "id": "PMP-T036",
+        "old_stratum": "SEG08",
+        "date": "2026-08-14",
+        "lat": 18.643159,
+        "lng": 73.813889,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Deccan forest",
+        "status": "real zone: Deccan forest"
+      },
+      {
+        "id": "PMP-T040",
+        "old_stratum": "SEG09",
+        "date": "2026-08-14",
+        "lat": 18.643183,
+        "lng": 73.817682,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Deccan forest",
+        "status": "real zone: Deccan forest"
+      },
+      {
+        "id": "PMP-T057",
+        "old_stratum": "SEG10",
+        "date": "2026-08-14",
+        "lat": 18.641606,
+        "lng": 73.815797,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "id": "PMP-T088",
+        "old_stratum": "SEG02",
+        "date": "2026-08-14",
+        "lat": 18.639249,
+        "lng": 73.814391,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Deccan forest",
+        "status": "real zone: Deccan forest"
+      },
+      {
+        "id": "PMP-T076",
+        "old_stratum": "SEG04",
+        "date": "2026-08-14",
+        "lat": 18.640017,
+        "lng": 73.812016,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "id": "PMP-T074",
+        "old_stratum": "SEG03",
+        "date": "2026-08-14",
+        "lat": 18.639993,
+        "lng": 73.808224,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": null,
+        "status": "inside boundary but unmatched to any usable zone (gap area)"
+      },
+      {
+        "id": "PMP-T105",
+        "old_stratum": "SEG01",
+        "date": "2026-08-14",
+        "lat": 18.638494,
+        "lng": 73.818662,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Deccan forest",
+        "status": "real zone: Deccan forest"
+      }
+    ],
+    "hydro": [
+      {
+        "name": "Hydromoth + Hydrocam",
+        "site": "Sumanth Sarovar",
+        "date": "2026-08-14",
+        "lat": 18.641669,
+        "lng": 73.810773,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "name": "Hydromoth (Acoustics)",
+        "site": "Sharma Lake",
+        "date": "2026-08-14",
+        "lat": 18.640426,
+        "lng": 73.809282,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      }
+    ],
+    "camera_trap": [
+      {
+        "name": "Camera Trap",
+        "plot": "Deccan Thorn FD 5 Buffer",
+        "date": "2026-08-14",
+        "lat": 18.641778,
+        "lng": 73.812833,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Savana ecosystem",
+        "status": "real zone: Savana ecosystem"
+      }
+    ],
+    "water_chem": [
+      {
+        "loc": "Sumanth Sarovar",
+        "lat": 18.641369,
+        "lng": 73.811241,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Water margin",
+        "status": "real zone: Water margin"
+      },
+      {
+        "loc": "Sharma Lake",
+        "lat": 18.640558,
+        "lng": 73.809243,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "loc": "Lake 3",
+        "lat": 18.6457,
+        "lng": 73.813113,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Water margin",
+        "status": "real zone: Water margin"
+      },
+      {
+        "loc": "Lake 2",
+        "lat": 18.646533,
+        "lng": 73.812758,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      }
+    ],
+    "soil_chem": [
+      {
+        "loc": "Intervention Zone: E1 Trial Plot",
+        "lat": 18.640444,
+        "lng": 73.807944,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": null,
+        "status": "inside boundary but unmatched to any usable zone (gap area)"
+      },
+      {
+        "loc": "Intervention Zone: Narmada Valley FN9",
+        "lat": 18.639667,
+        "lng": 73.807972,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "loc": "Intervention Zone: Narmada Valley FN7",
+        "lat": 18.641389,
+        "lng": 73.811694,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Water margin",
+        "status": "real zone: Water margin"
+      },
+      {
+        "loc": "Natural + Intervention Zone: Grassland 01",
+        "lat": 18.640361,
+        "lng": 73.813028,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Grass land",
+        "status": "real zone: Grass land"
+      },
+      {
+        "loc": "Natural Zone: Deccan Thorn FD 5",
+        "lat": 18.641694,
+        "lng": 73.812806,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Savana ecosystem",
+        "status": "real zone: Savana ecosystem"
+      }
+    ],
+    "water_edna": [
+      {
+        "lake": "Sumanth Sarovar",
+        "p": "P1",
+        "lat": 18.642222,
+        "lng": 73.812528,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Water margin",
+        "status": "real zone: Water margin"
+      },
+      {
+        "lake": "Sumanth Sarovar",
+        "p": "P2",
+        "lat": 18.641806,
+        "lng": 73.811917,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "lake": "Sumanth Sarovar",
+        "p": "P3",
+        "lat": 18.641611,
+        "lng": 73.811111,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "lake": "Sumanth Sarovar",
+        "p": "P4",
+        "lat": 18.642361,
+        "lng": 73.809556,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "lake": "Sharma Lake",
+        "p": "P1",
+        "lat": 18.640583,
+        "lng": 73.809306,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "lake": "Sharma Lake",
+        "p": "P2",
+        "lat": 18.640139,
+        "lng": 73.808944,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Water margin",
+        "status": "real zone: Water margin"
+      },
+      {
+        "lake": "Sharma Lake",
+        "p": "P3",
+        "lat": 18.639667,
+        "lng": 73.808472,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "lake": "Sharma Lake",
+        "p": "P4",
+        "lat": 18.638926,
+        "lng": 73.809054,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      }
+    ],
+    "soil_edna": [
+      {
+        "loc": "Sumanth Sarovar Buffer",
+        "p": "Pt 1",
+        "date": "2026-08-13",
+        "lat": 18.641403,
+        "lng": 73.811539,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Water margin",
+        "status": "real zone: Water margin"
+      },
+      {
+        "loc": "Sumanth Sarovar Buffer",
+        "p": "Pt 2",
+        "date": "2026-08-13",
+        "lat": 18.641424,
+        "lng": 73.812054,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "loc": "Sumanth Sarovar Buffer",
+        "p": "Pt 3",
+        "date": "2026-08-13",
+        "lat": 18.641408,
+        "lng": 73.812405,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": true,
+        "new_eco_zone": null,
+        "status": "inside exclusion zone (buildings/infrastructure/water buffer)"
+      },
+      {
+        "loc": "Sumanth Sarovar Buffer",
+        "p": "Pt 4",
+        "date": "2026-08-13",
+        "lat": 18.64106,
+        "lng": 73.811142,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Narmada valley",
+        "status": "real zone: Narmada valley"
+      },
+      {
+        "loc": "Sumanth Sarovar Buffer",
+        "p": "Pt 5",
+        "date": "2026-08-13",
+        "lat": 18.640723,
+        "lng": 73.808929,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Eco region",
+        "status": "real zone: Eco region"
+      },
+      {
+        "loc": "Grassland 02",
+        "p": "Pt 1",
+        "date": "2026-08-14",
+        "lat": 18.644267,
+        "lng": 73.816557,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Grass land",
+        "status": "real zone: Grass land"
+      },
+      {
+        "loc": "Grassland 02",
+        "p": "Pt 2",
+        "date": "2026-08-14",
+        "lat": 18.643771,
+        "lng": 73.816557,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Grass land",
+        "status": "real zone: Grass land"
+      },
+      {
+        "loc": "Grassland 02",
+        "p": "Pt 3",
+        "date": "2026-08-14",
+        "lat": 18.644213,
+        "lng": 73.816087,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Savana ecosystem",
+        "status": "real zone: Savana ecosystem"
+      },
+      {
+        "loc": "Grassland 02",
+        "p": "Pt 4",
+        "date": "2026-08-14",
+        "lat": 18.643958,
+        "lng": 73.816808,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Grass land",
+        "status": "real zone: Grass land"
+      },
+      {
+        "loc": "Grassland 02",
+        "p": "Pt 5",
+        "date": "2026-08-14",
+        "lat": 18.64407,
+        "lng": 73.816309,
+        "inside_corrected_boundary": true,
+        "inside_exclusion_mask": false,
+        "new_eco_zone": "Grass land",
+        "status": "real zone: Grass land"
+      }
+    ]
+  },
+  "summary": {
+    "n_total_positions": 40,
+    "n_outside_corrected_boundary": 0,
+    "n_inside_exclusion_mask": 15,
+    "n_inside_boundary_but_unmatched_zone": 2
+  }
+}

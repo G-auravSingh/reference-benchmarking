@@ -1,0 +1,14 @@
+Cycle/Week,Deployment date,Retrieval date,Stream,Device ID,EMU,Position,Latitude,Longitude,Pool wrapped this week
+1,2026-09-20 (Sun),2026-09-27 (Sun),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_1-01,FCF_Soova_EMU_Mayurbhanj_1,764979564,22.043252,86.55281,No
+1,2026-09-20 (Sun),2026-09-27 (Sun),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_1-02,FCF_Soova_EMU_Mayurbhanj_1,764838760,22.123986,86.508406,No
+1,2026-09-20 (Sun),2026-09-27 (Sun),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_3-01,FCF_Soova_EMU_Mayurbhanj_3,764545514,21.98171,86.623356,No
+1,2026-09-20 (Sun),2026-09-27 (Sun),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_3-02,FCF_Soova_EMU_Mayurbhanj_3,764892265,21.997009,86.595656,No
+2,2026-09-28 (Mon),2026-10-05 (Mon),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_4-01,FCF_Soova_EMU_Mayurbhanj_4,763766541,22.046466,86.782701,No
+2,2026-09-28 (Mon),2026-10-05 (Mon),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_4-02,FCF_Soova_EMU_Mayurbhanj_4,763762371,22.045299,86.785053,No
+2,2026-09-28 (Mon),2026-10-05 (Mon),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_4-03,FCF_Soova_EMU_Mayurbhanj_4,763772880,22.043838,86.784368,No
+3,2026-10-06 (Tue),2026-10-13 (Tue),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_2-01,FCF_Soova_EMU_Mayurbhanj_2,765361417,21.894896,86.627373,No
+3,2026-10-06 (Tue),2026-10-13 (Tue),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_2-02,FCF_Soova_EMU_Mayurbhanj_2,765393619,21.875584,86.640381,No
+3,2026-10-06 (Tue),2026-10-13 (Tue),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_2-03,FCF_Soova_EMU_Mayurbhanj_2,765340778,21.919999,86.625711,No
+4,2026-10-14 (Wed),2026-10-21 (Wed),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_5-01,FCF_Soova_EMU_Mayurbhanj_5,763148801,22.099358,86.725687,No
+4,2026-10-14 (Wed),2026-10-21 (Wed),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_5-02,FCF_Soova_EMU_Mayurbhanj_5,763492655,22.095934,86.723674,No
+4,2026-10-14 (Wed),2026-10-21 (Wed),audiomoth,AM-FCF_Soova_EMU_Mayurbhanj_5-03,FCF_Soova_EMU_Mayurbhanj_5,763493190,22.102993,86.725347,No

@@ -1,0 +1,80 @@
+{
+  "project_name": "FCF_Soova",
+  "feature_tier": "full_with_satellite_covariates",
+  "feature_cols_used": [
+    "NDVI_raw",
+    "TreeCover_Pct",
+    "BuiltUp_Pct",
+    "Elev_m",
+    "ElevStd_m",
+    "TRI_m",
+    "Slope_deg",
+    "gHM",
+    "DistWater_m",
+    "LST_C",
+    "NightLights",
+    "NatCoverPct_2km",
+    "EdgeDensity_2km",
+    "NatCoverPct_500m",
+    "EdgeDensity_500m"
+  ],
+  "critic_weights": {
+    "NDVI_raw": 0.0547,
+    "TreeCover_Pct": 0.0617,
+    "BuiltUp_Pct": 0.0985,
+    "Elev_m": 0.0604,
+    "ElevStd_m": 0.0544,
+    "TRI_m": 0.0579,
+    "Slope_deg": 0.1171,
+    "gHM": 0.0506,
+    "DistWater_m": 0.0552,
+    "LST_C": 0.0891,
+    "NightLights": 0.0681,
+    "NatCoverPct_2km": 0.0578,
+    "EdgeDensity_2km": 0.0481,
+    "NatCoverPct_500m": 0.0599,
+    "EdgeDensity_500m": 0.0666
+  },
+  "achievable_cycles_used_as_pool_target": 3,
+  "n_emus": 5,
+  "emu_reports": {
+    "FCF_Soova_EMU_Mayurbhanj_5": {
+      "n_candidates": 3,
+      "pool_size": 3,
+      "medoid_name": "763148801",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_Soova_EMU_Mayurbhanj_1": {
+      "n_candidates": 18,
+      "pool_size": 2,
+      "medoid_name": "764979564",
+      "n_deployment_outliers_excluded": 6,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_Soova_EMU_Mayurbhanj_2": {
+      "n_candidates": 14,
+      "pool_size": 3,
+      "medoid_name": "765361417",
+      "n_deployment_outliers_excluded": 5,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_Soova_EMU_Mayurbhanj_3": {
+      "n_candidates": 11,
+      "pool_size": 3,
+      "medoid_name": "764545514",
+      "n_deployment_outliers_excluded": 1,
+      "relaxed_spacing_used_m": null
+    },
+    "FCF_Soova_EMU_Mayurbhanj_4": {
+      "n_candidates": 4,
+      "pool_size": 3,
+      "medoid_name": "763766541",
+      "n_deployment_outliers_excluded": 1,
+      "relaxed_spacing_used_m": null
+    }
+  },
+  "warnings": [
+    "13 candidate(s) across 4 EMU(s) are real members (kept for metrics) but excluded from device-position eligibility \u2014 either as spatial outliers (too far from the rest of their EMU for a field visit to be practical) or via an explicit manual_deployment_exclude flag (e.g. a reported access constraint): {'FCF_Soova_EMU_Mayurbhanj_1': 6, 'FCF_Soova_EMU_Mayurbhanj_2': 5, 'FCF_Soova_EMU_Mayurbhanj_3': 1, 'FCF_Soova_EMU_Mayurbhanj_4': 1}. This is a deliberate design choice: neither case needs its own EMU, it just shouldn't be a device candidate."
+  ]
+}

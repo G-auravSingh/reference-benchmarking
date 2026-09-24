@@ -1,0 +1,12 @@
+{
+  "status": "ok",
+  "n_cells": 704,
+  "cell_size_m": 25,
+  "aoi_area_ha": 44.285,
+  "anchor_area_ha": 11.363,
+  "hard_exclusion_area_ha": 0.0,
+  "soft_exclusion_area_ha_included_in_matrix": 3.573,
+  "matrix_area_ha_to_tessellate": 44.285,
+  "grid_area_ha_covered": 42.855,
+  "coverage_of_matrix_pct": 96.8
+}

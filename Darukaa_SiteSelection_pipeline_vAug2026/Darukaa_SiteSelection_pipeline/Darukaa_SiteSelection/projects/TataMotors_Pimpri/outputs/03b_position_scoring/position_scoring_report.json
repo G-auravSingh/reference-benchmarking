@@ -1,0 +1,111 @@
+{
+  "project_name": "TataMotors_Pimpri",
+  "feature_tier": "full_with_satellite_covariates",
+  "feature_cols_used": [
+    "NDVI_raw",
+    "TreeCover_Pct",
+    "BuiltUp_Pct",
+    "Elev_m",
+    "ElevStd_m",
+    "TRI_m",
+    "Slope_deg",
+    "gHM",
+    "DistWater_m",
+    "LST_C",
+    "NightLights",
+    "NatCoverPct_2km",
+    "EdgeDensity_2km",
+    "NatCoverPct_500m",
+    "EdgeDensity_500m"
+  ],
+  "critic_weights": {
+    "NDVI_raw": 0.0631,
+    "TreeCover_Pct": 0.0736,
+    "BuiltUp_Pct": 0.0094,
+    "Elev_m": 0.0583,
+    "ElevStd_m": 0.0545,
+    "TRI_m": 0.053,
+    "Slope_deg": 0.0,
+    "gHM": 0.1029,
+    "DistWater_m": 0.0874,
+    "LST_C": 0.1098,
+    "NightLights": 0.0878,
+    "NatCoverPct_2km": 0.0853,
+    "EdgeDensity_2km": 0.0623,
+    "NatCoverPct_500m": 0.0746,
+    "EdgeDensity_500m": 0.0779
+  },
+  "achievable_cycles_used_as_pool_target": 21,
+  "n_emus": 9,
+  "emu_reports": {
+    "EMU_Deccan_forest": {
+      "n_candidates": 693,
+      "pool_size": 18,
+      "medoid_name": "PMP-T0435",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_Grass_land": {
+      "n_candidates": 48,
+      "pool_size": 4,
+      "medoid_name": "PMP-T0612",
+      "n_deployment_outliers_excluded": 1,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_Narmada_valley": {
+      "n_candidates": 165,
+      "pool_size": 9,
+      "medoid_name": "PMP-T0256",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_Savana_ecosystem": {
+      "n_candidates": 33,
+      "pool_size": 8,
+      "medoid_name": "PMP-T0580",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_Seasonal_wetland_polygon": {
+      "n_candidates": 13,
+      "pool_size": 2,
+      "medoid_name": "PMP-T0838",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_Trail_plots": {
+      "n_candidates": 33,
+      "pool_size": 7,
+      "medoid_name": "PMP-T0053",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": 66.42441103205844
+    },
+    "EMU_Water_margin": {
+      "n_candidates": 134,
+      "pool_size": 13,
+      "medoid_name": "PMP-T0373",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": null
+    },
+    "EMU_Wetland_forest": {
+      "n_candidates": 8,
+      "pool_size": 2,
+      "medoid_name": "PMP-T0252",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": 50.0
+    },
+    "EMU_Wildlife": {
+      "n_candidates": 65,
+      "pool_size": 13,
+      "medoid_name": "PMP-T0669",
+      "n_deployment_outliers_excluded": 0,
+      "relaxed_spacing_used_m": 50.0
+    }
+  },
+  "warnings": [
+    "1 candidate(s) across 1 EMU(s) are real members (kept for metrics) but excluded from device-position eligibility as spatial outliers \u2014 too far from the rest of their EMU for a field visit to be practical: {'EMU_Grass_land': 1}. This is a deliberate design choice: a severe outlier doesn't need its own EMU, it just shouldn't be a device candidate.",
+    "3 EMU(s) had real capacity below what a full season's rotation needs at the standard 100m spacing floor (fewer real positions than season_length_weeks, meaning some positions would repeat within a single season) \u2014 relaxed for these EMUs specifically: {'EMU_Trail_plots': 66.42441103205844, 'EMU_Wetland_forest': 50.0, 'EMU_Wildlife': 50.0}. Real trade-off (some acoustic overlap risk between devices) accepted in exchange for genuine spatial/temporal variety instead of an unnecessarily repeated spot. Not applied to any other EMU in this project."
+  ],
+  "camera_trap_pool_size": 4,
+  "camera_trap_n_devices": 1
+}

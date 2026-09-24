@@ -1,0 +1,610 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+<Document>
+	<name>SoulForest_Veltoor.kml</name>
+	<Schema name="__managed_schema" id="__managed_schema">
+		<SimpleField type="string" name="COL5E559549797DFBD0">
+			<displayName>Layer</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E55954979CDF907">
+			<displayName>SubClasses</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E55954979FB6160">
+			<displayName>EntityHandle</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E559549799EF59D">
+			<displayName>felt-color</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497980A1F6">
+			<displayName>felt-id</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E55954979DCF18C">
+			<displayName>felt-locked</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497A306FBD">
+			<displayName>felt-ordering</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497AD1C22A">
+			<displayName>felt-showArea</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497AA36614">
+			<displayName>felt-text</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497A13CE29">
+			<displayName>felt-type</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497AAB7F8C">
+			<displayName>Text</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497A187224">
+			<displayName>ExtendedEntity</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497A42516F">
+			<displayName>Linetype</displayName>
+		</SimpleField>
+		<SimpleField type="string" name="COL5E5595497AE52FAA">
+			<displayName>gx_media_links</displayName>
+		</SimpleField>
+	</Schema>
+	<StyleMap id="__managed_style_043773B0044177E5F9B4">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_043773B0044177E5F9B4_normal</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_043773B0044177E5F9B4_highlight</styleUrl>
+		</Pair>
+	</StyleMap>
+	<gx:CascadingStyle kml:id="__managed_style_043773B0044177E5F9B4_highlight">
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ff2dc0fb</color>
+				<width>4</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>40ffffff</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_043773B0044177E5F9B4_normal">
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ff2dc0fb</color>
+				<width>2.66667</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>40ffffff</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="__managed_style_0B73C74CA64177E5F9B6">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_0B73C74CA64177E5F9B6_normal</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_0B73C74CA64177E5F9B6_highlight</styleUrl>
+		</Pair>
+	</StyleMap>
+	<gx:CascadingStyle kml:id="__managed_style_0B73C74CA64177E5F9B6_highlight">
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ffb0279c</color>
+				<width>2.883</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>00b0279c</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_0B73C74CA64177E5F9B6_normal">
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ffb0279c</color>
+				<width>1.922</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>00b0279c</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="__managed_style_168470F02A4177E5F9B4">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_168470F02A4177E5F9B4_normal</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_168470F02A4177E5F9B4_highlight</styleUrl>
+		</Pair>
+	</StyleMap>
+	<gx:CascadingStyle kml:id="__managed_style_168470F02A4177E5F9B4_highlight">
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ffab4939</color>
+				<width>3.701</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>94ab4939</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_168470F02A4177E5F9B4_normal">
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ffab4939</color>
+				<width>2.46733</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>94ab4939</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="__managed_style_168525512A4177E5F9B6">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_168525512A4177E5F9B6_normal</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_168525512A4177E5F9B6_highlight</styleUrl>
+		</Pair>
+	</StyleMap>
+	<gx:CascadingStyle kml:id="__managed_style_168525512A4177E5F9B6_highlight">
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ffd18802</color>
+				<width>4.701</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>1cd18802</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_168525512A4177E5F9B6_normal">
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ffd18802</color>
+				<width>3.134</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>1cd18802</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="__managed_style_299BD30DC94177E5F9B8">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_299BD30DC94177E5F9B8_normal</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_299BD30DC94177E5F9B8_highlight</styleUrl>
+		</Pair>
+	</StyleMap>
+	<gx:CascadingStyle kml:id="__managed_style_299BD30DC94177E5F9B8_highlight">
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ff25a8f9</color>
+				<width>2.883</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>0025a8f9</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_299BD30DC94177E5F9B8_normal">
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ff25a8f9</color>
+				<width>1.922</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>0025a8f9</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="__managed_style_471F7386F54177E5F9B8">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_471F7386F54177E5F9B8_normal</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_471F7386F54177E5F9B8_highlight</styleUrl>
+		</Pair>
+	</StyleMap>
+	<gx:CascadingStyle kml:id="__managed_style_471F7386F54177E5F9B8_highlight">
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ff42b37c</color>
+				<width>3.082</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>0042b37c</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_471F7386F54177E5F9B8_normal">
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LineStyle>
+				<color>ff42b37c</color>
+				<width>2.05467</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>0042b37c</color>
+			</PolyStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="m_ylw-pushpin">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#s_ylw-pushpin</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#s_ylw-pushpin_hl</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="poly-E65100-2201-0-nodesc">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#poly-E65100-2201-0-nodesc-normal</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#poly-E65100-2201-0-nodesc-highlight</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Style id="poly-E65100-2201-0-nodesc-highlight">
+		<BalloonStyle>
+			<text><![CDATA[<h3>$[name]</h3>]]></text>
+		</BalloonStyle>
+		<LineStyle>
+			<color>ff0051e6</color>
+			<width>3.3015</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>000051e6</color>
+		</PolyStyle>
+	</Style>
+	<Style id="poly-E65100-2201-0-nodesc-normal">
+		<BalloonStyle>
+			<text><![CDATA[<h3>$[name]</h3>]]></text>
+		</BalloonStyle>
+		<LineStyle>
+			<color>ff0051e6</color>
+			<width>2.201</width>
+		</LineStyle>
+		<PolyStyle>
+			<color>000051e6</color>
+		</PolyStyle>
+	</Style>
+	<Style id="s_ylw-pushpin">
+		<IconStyle>
+			<scale>1.1</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Style id="s_ylw-pushpin_hl">
+		<IconStyle>
+			<scale>1.3</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+		<PolyStyle>
+			<fill>0</fill>
+		</PolyStyle>
+	</Style>
+	<Folder id="5E55954422000001">
+		<name>SoulForest_Veltoor</name>
+		<open>1</open>
+		<styleUrl>#__managed_style_043773B0044177E5F9B4</styleUrl>
+		<Placemark>
+			<name>Soul Forest Veltoor - Site For Certification</name>
+			<styleUrl>#poly-E65100-2201-0-nodesc</styleUrl>
+			<gx:balloonVisibility>1</gx:balloonVisibility>
+			<Polygon>
+				<outerBoundaryIs>
+					<LinearRing>
+						<tessellate>1</tessellate>
+						<coordinates>
+							77.9504536,16.4585914,0 77.95129249999999,16.4583874,0 77.95122979999999,16.4553014,0 77.9542678,16.4552277,0 77.9542321,16.4564317,0 77.9542412,16.456476,0 77.9546876,16.4564225,0 77.9548819,16.4563845,0 77.9553628,16.4563642,0 77.9557003,16.4563374,0 77.9559769,16.4563382,0 77.9572345,16.4564259,0 77.957233,16.4563048,0 77.9572409,16.4562185,0 77.9572814,16.4561765,0 77.9576259,16.4559905,0 77.9576883,16.4559653,0 77.9578279,16.4559596,0 77.9578684,16.4560155,0 77.9579627,16.4560092,0 77.95811759999999,16.4559621,0 77.95821050000001,16.4559434,0 77.95828590000001,16.4558942,0 77.9583248,16.4558894,0 77.9583583,16.455864,0 77.9584174,16.4558481,0 77.9585798,16.455863,0 77.95884479999999,16.4558292,0 77.9592731,16.4557652,0 77.95984799999999,16.4557113,0 77.9600016,16.455687,0 77.96004379999999,16.4556944,0 77.9600141,16.4566593,0 77.9600085,16.4576242,0 77.959976,16.457938,0 77.959788,16.4584707,0 77.95965099999999,16.458957,0 77.95950620000001,16.4591716,0 77.9593369,16.4599736,0 77.9593369,16.4600116,0 77.9586042,16.4601312,0 77.9578822,16.4602816,0 77.95765849999999,16.4596398,0 77.9574569,16.4591016,0 77.9573956,16.4589327,0 77.957341,16.4588308,0 77.9569633,16.4590422,0 77.9565802,16.45926,0 77.956344,16.4591227,0 77.95622729999999,16.4589392,0 77.9561685,16.4587232,0 77.9562093,16.4585747,0 77.95607800000001,16.4583287,0 77.955778,16.4583137,0 77.9554394,16.4584258,0 77.9552594,16.4584973,0 77.95515450000001,16.4585996,0 77.954854,16.4586877,0 77.9546888,16.4588519,0 77.9544915,16.4589543,0 77.9545212,16.4590741,0 77.95456849999999,16.4592383,0 77.9545315,16.4593573,0 77.95450200000001,16.4593727,0 77.9542165,16.4596303,0 77.9541028,16.4603213,0 77.95401149999999,16.4604903,0 77.9539415,16.4605753,0 77.95446889999999,16.4610449,0 77.9544705,16.4611286,0 77.95448349999999,16.4613622,0 77.9545045,16.4616164,0 77.95436549999999,16.4616938,0 77.9541565,16.4617356,0 77.9538005,16.4618936,0 77.9537699,16.4619086,0 77.95373789999999,16.4619566,0 77.95387270000001,16.4623383,0 77.9540142,16.4627162,0 77.95410990000001,16.4633826,0 77.9536559,16.4634612,0 77.9535369,16.4635126,0 77.9535149,16.4632456,0 77.9534929,16.4629706,0 77.95338289999999,16.4624776,0 77.9534922,16.4622146,0 77.9533102,16.4621476,0 77.9531003,16.4621506,0 77.9529418,16.4617671,0 77.9528395,16.4614557,0 77.9527118,16.4610761,0 77.9524794,16.4606039,0 77.9523978,16.4604929,0 77.9516953,16.4606175,0 77.9515239,16.4606726,0 77.9512508,16.4607029,0 77.95126809999999,16.4602083,0 77.95093300000001,16.4600684,0 77.9508901,16.4600066,0 77.9504536,16.4585914,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<Placemark id="5E55954422000005">
+			<name>Fruit Forest</name>
+			<description><![CDATA[<br><br>Layer: <br>SubClasses: <br>EntityHandle: <br>felt-color: <br>felt-id: <br>felt-locked: <br>felt-ordering: <br>felt-showArea: <br>felt-text: <br>felt-type: <br>Text: <br>ExtendedEntity: <br>Linetype:]]></description>
+			<styleUrl>#__managed_style_471F7386F54177E5F9B8</styleUrl>
+			<ExtendedData>
+				<SchemaData schemaUrl="#__managed_schema">
+					<SimpleData name="COL5E559549797DFBD0"></SimpleData>
+					<SimpleData name="COL5E55954979CDF907"></SimpleData>
+					<SimpleData name="COL5E55954979FB6160"></SimpleData>
+					<SimpleData name="COL5E559549799EF59D"></SimpleData>
+					<SimpleData name="COL5E5595497980A1F6"></SimpleData>
+					<SimpleData name="COL5E55954979DCF18C"></SimpleData>
+					<SimpleData name="COL5E5595497A306FBD"></SimpleData>
+					<SimpleData name="COL5E5595497AD1C22A"></SimpleData>
+					<SimpleData name="COL5E5595497AA36614"></SimpleData>
+					<SimpleData name="COL5E5595497A13CE29"></SimpleData>
+					<SimpleData name="COL5E5595497AAB7F8C"></SimpleData>
+					<SimpleData name="COL5E5595497A187224"></SimpleData>
+					<SimpleData name="COL5E5595497A42516F"></SimpleData>
+				</SchemaData>
+			</ExtendedData>
+			<Polygon>
+				<outerBoundaryIs>
+					<LinearRing>
+						<coordinates>
+							77.9573096,16.4566562,0 77.957354,16.456623,0 77.9573963,16.4566694,0 77.95747609999999,16.456725,0 77.9575813,16.456778,0 77.957633,16.456807,0 77.95773440000001,16.4568454,0 77.957854,16.45686,0 77.9579493,16.4568791,0 77.9580995,16.456881,0 77.9581719,16.4568742,0 77.958247,16.4568584,0 77.958427,16.456795,0 77.95854249999999,16.4567396,0 77.958716,16.456626,0 77.9588071,16.4564926,0 77.958878,16.456357,0 77.95892600000001,16.4562404,0 77.958961,16.4560925,0 77.9589503,16.455942,0 77.9600087,16.4558154,0 77.96000309999999,16.456273,0 77.95999759999999,16.4567306,0 77.95996770000001,16.4576484,0 77.9599465,16.4579228,0 77.95981930000001,16.4583077,0 77.9596749,16.458765,0 77.959309,16.4589198,0 77.95909210000001,16.4589886,0 77.9588926,16.4590459,0 77.95873330000001,16.4590812,0 77.95856860000001,16.4591025,0 77.9583708,16.4591097,0 77.9581677,16.4591182,0 77.95782029999999,16.4591275,0 77.9576512,16.4591254,0 77.95762449999999,16.4590286,0 77.9577019,16.4589486,0 77.9577714,16.4588492,0 77.9578083,16.4586737,0 77.9577938,16.4586001,0 77.9576252,16.4584529,0 77.9574636,16.4583952,0 77.9573551,16.4583954,0 77.9572465,16.4584136,0 77.9570456,16.4584503,0 77.9570039,16.4584505,0 77.95692819999999,16.458434,0 77.95685899999999,16.458407,0 77.95675610000001,16.4583611,0 77.9565994,16.4582703,0 77.9564695,16.4582115,0 77.95633429999999,16.4581347,0 77.9562607,16.4580874,0 77.95622059999999,16.4580259,0 77.95620529999999,16.4579979,0 77.9562007,16.4579621,0 77.95626129999999,16.4578508,0 77.9563165,16.4577343,0 77.9564541,16.457456,0 77.9566329,16.4572494,0 77.9569954,16.456837,0 77.9571766,16.4567595,0 77.9573096,16.4566562,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<Placemark id="5E55954422000006">
+			<name>Island</name>
+			<description><![CDATA[<br><br>Layer: <br>SubClasses: <br>EntityHandle: <br>felt-color: <br>felt-id: <br>felt-locked: <br>felt-ordering: <br>felt-showArea: <br>felt-text: <br>felt-type: <br>Text: <br>ExtendedEntity: <br>Linetype:]]></description>
+			<styleUrl>#__managed_style_168470F02A4177E5F9B4</styleUrl>
+			<ExtendedData>
+				<SchemaData schemaUrl="#__managed_schema">
+					<SimpleData name="COL5E559549797DFBD0"></SimpleData>
+					<SimpleData name="COL5E55954979CDF907"></SimpleData>
+					<SimpleData name="COL5E55954979FB6160"></SimpleData>
+					<SimpleData name="COL5E559549799EF59D"></SimpleData>
+					<SimpleData name="COL5E5595497980A1F6"></SimpleData>
+					<SimpleData name="COL5E55954979DCF18C"></SimpleData>
+					<SimpleData name="COL5E5595497A306FBD"></SimpleData>
+					<SimpleData name="COL5E5595497AD1C22A"></SimpleData>
+					<SimpleData name="COL5E5595497AA36614"></SimpleData>
+					<SimpleData name="COL5E5595497A13CE29"></SimpleData>
+					<SimpleData name="COL5E5595497AAB7F8C"></SimpleData>
+					<SimpleData name="COL5E5595497A187224"></SimpleData>
+					<SimpleData name="COL5E5595497A42516F"></SimpleData>
+				</SchemaData>
+			</ExtendedData>
+			<Polygon>
+				<outerBoundaryIs>
+					<LinearRing>
+						<coordinates>
+							77.95854490000001,16.4597361,0 77.958541,16.459714,0 77.958545,16.45969,0 77.958562,16.459669,0 77.9585723,16.4596597,0 77.958575,16.459645,0 77.958602,16.459633,0 77.958614,16.459621,0 77.95863,16.459615,0 77.95862099999999,16.459606,0 77.958652,16.4596,0 77.958664,16.459588,0 77.958685,16.459584,0 77.958715,16.459584,0 77.95872799999999,16.459585,0 77.958744,16.459585,0 77.95875700000001,16.459585,0 77.95879100000001,16.459593,0 77.958803,16.459606,0 77.9588171,16.4596191,0 77.9588279,16.4596281,0 77.9588346,16.4596384,0 77.95884529999999,16.4596551,0 77.95885199999999,16.4596718,0 77.958856,16.4596847,0 77.95886,16.4597027,0 77.9588614,16.4597143,0 77.9588641,16.4597297,0 77.9588641,16.4597451,0 77.9588641,16.4597606,0 77.95886,16.4597773,0 77.958856,16.4597914,0 77.9588493,16.4598069,0 77.9588399,16.4598172,0 77.9588305,16.4598326,0 77.95882109999999,16.4598442,0 77.95880510000001,16.4598545,0 77.958793,16.4598635,0 77.9587769,16.4598763,0 77.95876079999999,16.4598815,0 77.9587487,16.4598815,0 77.95873,16.4598802,0 77.9587125,16.4598789,0 77.9586991,16.4598776,0 77.9586857,16.459875,0 77.95866959999999,16.4598712,0 77.9586508,16.4598635,0 77.9586307,16.4598545,0 77.9586146,16.4598455,0 77.9586012,16.4598313,0 77.9585865,16.4598185,0 77.9585797,16.4598056,0 77.958569,16.4597914,0 77.9585596,16.4597773,0 77.9585529,16.459758,0 77.95854490000001,16.4597361,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<Placemark id="5E55954422000007">
+			<name>Wetland</name>
+			<description><![CDATA[<br><br>Layer: <br>SubClasses: <br>EntityHandle: <br>felt-color: <br>felt-id: <br>felt-locked: <br>felt-ordering: <br>felt-showArea: <br>felt-text: <br>felt-type: <br>Text: <br>ExtendedEntity: <br>Linetype:]]></description>
+			<styleUrl>#__managed_style_168525512A4177E5F9B6</styleUrl>
+			<ExtendedData>
+				<SchemaData schemaUrl="#__managed_schema">
+					<SimpleData name="COL5E559549797DFBD0"></SimpleData>
+					<SimpleData name="COL5E55954979CDF907"></SimpleData>
+					<SimpleData name="COL5E55954979FB6160"></SimpleData>
+					<SimpleData name="COL5E559549799EF59D"></SimpleData>
+					<SimpleData name="COL5E5595497980A1F6"></SimpleData>
+					<SimpleData name="COL5E55954979DCF18C"></SimpleData>
+					<SimpleData name="COL5E5595497A306FBD"></SimpleData>
+					<SimpleData name="COL5E5595497AD1C22A"></SimpleData>
+					<SimpleData name="COL5E5595497AA36614"></SimpleData>
+					<SimpleData name="COL5E5595497A13CE29"></SimpleData>
+					<SimpleData name="COL5E5595497AAB7F8C"></SimpleData>
+					<SimpleData name="COL5E5595497A187224"></SimpleData>
+					<SimpleData name="COL5E5595497A42516F"></SimpleData>
+				</SchemaData>
+			</ExtendedData>
+			<Polygon>
+				<outerBoundaryIs>
+					<LinearRing>
+						<coordinates>
+							77.9575976,16.4594881,0 77.9578284,16.4595058,0 77.9580806,16.4594824,0 77.95863869999999,16.4593121,0 77.9596691,16.4589407,0 77.95954740000001,16.4594064,0 77.9594671,16.459748,0 77.95939129999999,16.4600859,0 77.9579313,16.4603504,0 77.9575976,16.4594881,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<Placemark id="5E55954422000008">
+			<name>Admin Area</name>
+			<description><![CDATA[<img src="https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy1JE4FOcUch5ZXFlPZyWg7JFkXkQr6V_sEtXvMX-PVJe9srC0CIzJs6nQPfKq_FvysZm8Hru781LzAwNFztm8447JO0OvBiDJk4K_nX5mVsO30eht_2fzWCVZ9t9LYz4hB076W9loxqeolR42ivhawBVkGGyrGXdQBYSVStvSeWUpd-S0OiYs_ubL1eOJHWITbpX7ax309rxiHaNF7aSwAq8Mc7ja6jpxg7PhrBf1HHacAiMdPuD7vTnw?authuser=0&fife=s16383" height="200" width="auto" /><br><br>2.77acre<br><br>Layer: <br>SubClasses: <br>EntityHandle: <br>felt-color: <br>felt-id: <br>felt-locked: <br>felt-ordering: <br>felt-showArea: <br>felt-text: <br>felt-type: <br>Text: <br>ExtendedEntity: <br>Linetype: <br><br><img src="https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzcx9JvIVjsey3nr2Zyr9T_4P_mSI8jjlp_OJNvJ-BngRHhMPbjNx7Xcw-39-qv0ewnsSHa-WSrygZyP91mML3NCG5cDWDbFjugK__yzXnIDirkSpihT1jU-mwvy16j_L_ElFU2mOF1C1wcA3_8_2r2_2pyo6jaXnq8bslwBIfUjOVw3RgU00g1R45i0UyJDotNtp5n-ZNuNZNTVgVShQOsUTu8UaOalxe29P1JA8E3QlQIsSLq-_7pTKM?authuser=0&fife=s16383" height="200" width="auto" />]]></description>
+			<styleUrl>#__managed_style_0B73C74CA64177E5F9B6</styleUrl>
+			<ExtendedData>
+				<SchemaData schemaUrl="#__managed_schema">
+					<SimpleData name="COL5E559549797DFBD0"></SimpleData>
+					<SimpleData name="COL5E55954979CDF907"></SimpleData>
+					<SimpleData name="COL5E55954979FB6160"></SimpleData>
+					<SimpleData name="COL5E559549799EF59D"></SimpleData>
+					<SimpleData name="COL5E5595497980A1F6"></SimpleData>
+					<SimpleData name="COL5E55954979DCF18C"></SimpleData>
+					<SimpleData name="COL5E5595497A306FBD"></SimpleData>
+					<SimpleData name="COL5E5595497AD1C22A"></SimpleData>
+					<SimpleData name="COL5E5595497AA36614"></SimpleData>
+					<SimpleData name="COL5E5595497A13CE29"></SimpleData>
+					<SimpleData name="COL5E5595497AAB7F8C"></SimpleData>
+					<SimpleData name="COL5E5595497A187224"></SimpleData>
+					<SimpleData name="COL5E5595497A42516F"></SimpleData>
+					<SimpleData name="COL5E5595497AE52FAA">https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gy1JE4FOcUch5ZXFlPZyWg7JFkXkQr6V_sEtXvMX-PVJe9srC0CIzJs6nQPfKq_FvysZm8Hru781LzAwNFztm8447JO0OvBiDJk4K_nX5mVsO30eht_2fzWCVZ9t9LYz4hB076W9loxqeolR42ivhawBVkGGyrGXdQBYSVStvSeWUpd-S0OiYs_ubL1eOJHWITbpX7ax309rxiHaNF7aSwAq8Mc7ja6jpxg7PhrBf1HHacAiMdPuD7vTnw?authuser=0&amp;fife=s16383 https://mymaps.usercontent.google.com/hostedimage/m/*/3AE5a_Gzcx9JvIVjsey3nr2Zyr9T_4P_mSI8jjlp_OJNvJ-BngRHhMPbjNx7Xcw-39-qv0ewnsSHa-WSrygZyP91mML3NCG5cDWDbFjugK__yzXnIDirkSpihT1jU-mwvy16j_L_ElFU2mOF1C1wcA3_8_2r2_2pyo6jaXnq8bslwBIfUjOVw3RgU00g1R45i0UyJDotNtp5n-ZNuNZNTVgVShQOsUTu8UaOalxe29P1JA8E3QlQIsSLq-_7pTKM?authuser=0&amp;fife=s16383</SimpleData>
+				</SchemaData>
+			</ExtendedData>
+			<Polygon>
+				<outerBoundaryIs>
+					<LinearRing>
+						<coordinates>
+							77.9572537,16.4564204,0 77.95724869999999,16.4563313,0 77.95724679999999,16.4562782,0 77.957245,16.4562101,0 77.9576677,16.455997,0 77.9576979,16.4559829,0 77.95776360000001,16.4559847,0 77.957795,16.45605,0 77.9578128,16.4561047,0 77.9578269,16.4561369,0 77.957857,16.456225,0 77.95792299999999,16.45637,0 77.957973,16.456403,0 77.958063,16.45642,0 77.958195,16.456356,0 77.958265,16.456269,0 77.958296,16.456154,0 77.95829310000001,16.4560577,0 77.9582853,16.4560262,0 77.9582868,16.4559973,0 77.958287,16.455977,0 77.95829070000001,16.4559193,0 77.9583507,16.4559104,0 77.9583921,16.455906,0 77.958432,16.455902,0 77.9584981,16.4559039,0 77.95854009999999,16.4558981,0 77.95872009999999,16.4558667,0 77.95893599999999,16.455833,0 77.958956,16.45597,0 77.958945,16.456127,0 77.958905,16.456279,0 77.958838,16.456442,0 77.9587039,16.4566196,0 77.95862049999999,16.4566821,0 77.9585318,16.4567344,0 77.958485,16.4567613,0 77.958371,16.456821,0 77.95823900000001,16.4568494,0 77.958113,16.4568707,0 77.957948,16.4568663,0 77.9578363,16.456853,0 77.9577613,16.4568399,0 77.957705,16.4568217,0 77.957564,16.456758,0 77.957509,16.456728,0 77.957354,16.456623,0 77.9572537,16.4564204,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<Placemark id="5E55954422000009">
+			<name>Guest Area</name>
+			<description><![CDATA[<br><br>Layer: <br>SubClasses: <br>EntityHandle: <br>felt-color: <br>felt-id: <br>felt-locked: <br>felt-ordering: <br>felt-showArea: <br>felt-text: <br>felt-type: <br>Text: <br>ExtendedEntity: <br>Linetype:]]></description>
+			<styleUrl>#__managed_style_0B73C74CA64177E5F9B6</styleUrl>
+			<ExtendedData>
+				<SchemaData schemaUrl="#__managed_schema">
+					<SimpleData name="COL5E559549797DFBD0"></SimpleData>
+					<SimpleData name="COL5E55954979CDF907"></SimpleData>
+					<SimpleData name="COL5E55954979FB6160"></SimpleData>
+					<SimpleData name="COL5E559549799EF59D"></SimpleData>
+					<SimpleData name="COL5E5595497980A1F6"></SimpleData>
+					<SimpleData name="COL5E55954979DCF18C"></SimpleData>
+					<SimpleData name="COL5E5595497A306FBD"></SimpleData>
+					<SimpleData name="COL5E5595497AD1C22A"></SimpleData>
+					<SimpleData name="COL5E5595497AA36614"></SimpleData>
+					<SimpleData name="COL5E5595497A13CE29"></SimpleData>
+					<SimpleData name="COL5E5595497AAB7F8C"></SimpleData>
+					<SimpleData name="COL5E5595497A187224"></SimpleData>
+					<SimpleData name="COL5E5595497A42516F"></SimpleData>
+				</SchemaData>
+			</ExtendedData>
+			<Polygon>
+				<outerBoundaryIs>
+					<LinearRing>
+						<coordinates>
+							77.95341070000001,16.4561192,0 77.95415730000001,16.4562073,0 77.9541574,16.4564427,0 77.9534031,16.4565195,0 77.9526424,16.4566376,0 77.9520105,16.4567429,0 77.95201609999999,16.4560623,0 77.95341070000001,16.4561192,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<Placemark id="5E5595442200000A">
+			<name>Speciality Zone - Nursery, NV, OV, FP</name>
+			<description><![CDATA[<br><br>Layer: <br>SubClasses: <br>EntityHandle: <br>felt-color: <br>felt-id: <br>felt-locked: <br>felt-ordering: <br>felt-showArea: <br>felt-text: <br>felt-type: <br>Text: <br>ExtendedEntity: <br>Linetype:]]></description>
+			<styleUrl>#__managed_style_299BD30DC94177E5F9B8</styleUrl>
+			<ExtendedData>
+				<SchemaData schemaUrl="#__managed_schema">
+					<SimpleData name="COL5E559549797DFBD0"></SimpleData>
+					<SimpleData name="COL5E55954979CDF907"></SimpleData>
+					<SimpleData name="COL5E55954979FB6160"></SimpleData>
+					<SimpleData name="COL5E559549799EF59D"></SimpleData>
+					<SimpleData name="COL5E5595497980A1F6"></SimpleData>
+					<SimpleData name="COL5E55954979DCF18C"></SimpleData>
+					<SimpleData name="COL5E5595497A306FBD"></SimpleData>
+					<SimpleData name="COL5E5595497AD1C22A"></SimpleData>
+					<SimpleData name="COL5E5595497AA36614"></SimpleData>
+					<SimpleData name="COL5E5595497A13CE29"></SimpleData>
+					<SimpleData name="COL5E5595497AAB7F8C"></SimpleData>
+					<SimpleData name="COL5E5595497A187224"></SimpleData>
+					<SimpleData name="COL5E5595497A42516F"></SimpleData>
+				</SchemaData>
+			</ExtendedData>
+			<Polygon>
+				<outerBoundaryIs>
+					<LinearRing>
+						<coordinates>
+							77.9540181,16.4580172,0 77.95403159999999,16.4580258,0 77.9540409,16.4580339,0 77.95405580000001,16.4580578,0 77.9540729,16.4580764,0 77.9540926,16.4580877,0 77.9541141,16.4581018,0 77.95416090000001,16.4581121,0 77.9542117,16.4581134,0 77.9542833,16.4581166,0 77.95437769999999,16.4581469,0 77.954438,16.458162,0 77.9544693,16.458154,0 77.9545354,16.4581278,0 77.9545901,16.458124,0 77.9547105,16.4580752,0 77.95481719999999,16.4580701,0 77.9548939,16.4580896,0 77.9549518,16.458122,0 77.95500319999999,16.4581662,0 77.95503050000001,16.4582207,0 77.9550461,16.4582525,0 77.9550644,16.4582894,0 77.9550732,16.4583601,0 77.955066,16.4584243,0 77.9550507,16.4584667,0 77.955005,16.458527,0 77.95492489999999,16.4585827,0 77.95481719999999,16.4586113,0 77.9547014,16.4585885,0 77.9545557,16.4585196,0 77.954292,16.458522,0 77.9538962,16.4585126,0 77.9536782,16.4584953,0 77.9536057,16.4582778,0 77.95359089999999,16.4582351,0 77.9535753,16.4581873,0 77.953596,16.4581524,0 77.9535824,16.4581089,0 77.9535527,16.4580706,0 77.9535025,16.4581056,0 77.953397,16.458192,0 77.953402,16.458217,0 77.95329839999999,16.4582547,0 77.95318709999999,16.4582444,0 77.9531602,16.4582187,0 77.953065,16.4582213,0 77.95298990000001,16.4581994,0 77.9528518,16.4581171,0 77.95273640000001,16.4580001,0 77.9526479,16.4579088,0 77.9526845,16.4578747,0 77.9528766,16.4578407,0 77.9532952,16.4578141,0 77.95333460000001,16.4578933,0 77.95332670000001,16.4579255,0 77.95326900000001,16.4579744,0 77.9532019,16.4579769,0 77.9531724,16.4580181,0 77.9531738,16.4580425,0 77.95316579999999,16.4580747,0 77.9531295,16.4580889,0 77.9531242,16.4581081,0 77.9531322,16.4581519,0 77.95317780000001,16.4581441,0 77.9531966,16.4581287,0 77.9532221,16.4581493,0 77.9532435,16.458157,0 77.9532751,16.4581428,0 77.95329719999999,16.4581249,0 77.9533366,16.4580993,0 77.9533642,16.4580772,0 77.9533978,16.4580618,0 77.9534238,16.4580409,0 77.9534608,16.458013,0 77.95350310000001,16.4579899,0 77.95353919999999,16.4579657,0 77.9535956,16.4579461,0 77.95364859999999,16.4579038,0 77.95365,16.4578845,0 77.9536701,16.4578614,0 77.9536956,16.4578523,0 77.953722,16.457868,0 77.9537425,16.4578858,0 77.95377070000001,16.4578781,0 77.95379079999999,16.4578884,0 77.9538438,16.4578714,0 77.9539055,16.4578817,0 77.95394039999999,16.4578714,0 77.95393230000001,16.4578148,0 77.9539564,16.4577634,0 77.9539618,16.4577042,0 77.9539967,16.4576862,0 77.9540181,16.4577145,0 77.95403690000001,16.4577582,0 77.9540262,16.4578045,0 77.9540101,16.457856,0 77.95401099999999,16.457912,0 77.9539994,16.4579666,0 77.9540181,16.4580172,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<Placemark>
+			<name>Rock Guild</name>
+			<styleUrl>#m_ylw-pushpin</styleUrl>
+			<Polygon>
+				<tessellate>1</tessellate>
+				<outerBoundaryIs>
+					<LinearRing>
+						<coordinates>
+							77.95786599929552,16.45602333179944,0 77.95789873138989,16.45602149082766,0 77.9579468771787,16.45601700173884,0 77.95797643136696,16.45601260287564,0 77.95802027352448,16.45600195697926,0 77.95806874312598,16.4559855137174,0 77.95810313831373,16.45597427606973,0 77.95815056581142,16.45596651949812,0 77.95819402424866,16.4559580505576,0 77.95822705160217,16.45594696795175,0 77.95827755437612,16.45592076988857,0 77.95827791980356,16.45594859422276,0 77.9582738816668,16.45597263817486,0 77.95827640311818,16.4560094821108,0 77.9582824795508,16.45603623425639,0 77.95828700945262,16.45606612354404,0 77.95828914801058,16.45609549373892,0 77.95828816338744,16.45612504008002,0 77.95827704519758,16.45616384081884,0 77.95827346974693,16.45620015978081,0 77.95826910864731,16.45623426982923,0 77.95825161780247,16.45626560834604,0 77.95822856201214,16.45629080754311,0 77.9581949313845,16.45632308542637,0 77.95815541460222,16.45635922594003,0 77.95809363549917,16.45639661031811,0 77.95806669202517,16.45639740620614,0 77.95803707276556,16.4563982813769,0 77.95800472160116,16.45639809841171,0 77.95797307457794,16.45638995853836,0 77.95795207902832,16.45638045722527,0 77.95793561188692,16.45636760664648,0 77.95792371612929,16.45634829233977,0 77.95790709281073,16.45632316161348,0 77.95789288166755,16.45628743711406,0 77.95787473186778,16.45624251566164,0 77.95785534907627,16.45620991685364,0 77.95785067761237,16.45617907770919,0 77.95783716570929,16.45614604831936,0 77.95782284575287,16.45610997104043,0 77.95781106080236,16.45607840688917,0 77.9577983756883,16.45604648324511,0 77.95778985472481,16.45601423286445,0 77.95783606451315,16.45598184186435,0 77.95786599929552,16.45602333179944,0 
+						</coordinates>
+					</LinearRing>
+				</outerBoundaryIs>
+			</Polygon>
+		</Placemark>
+		<atom:link rel="app" href="https://www.google.com/earth/about/versions/#earth-pro" title="Google Earth Pro 7.3.7.1155"></atom:link>
+	</Folder>
+</Document>
+</kml>

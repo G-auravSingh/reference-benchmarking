@@ -1,0 +1,1745 @@
+{
+  "project_name": "TataMotors_Pimpri",
+  "n_emus": 9,
+  "emu_results": {
+    "EMU_Deccan_forest": {
+      "n_tiles": 693,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 0.4424,
+            "p25": 0.3578,
+            "p75": 0.5926,
+            "min": 0.1662,
+            "max": 0.7702,
+            "area_weighted_mean": 0.4646
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 100.0,
+            "p25": 95.4321,
+            "p75": 100.0,
+            "min": 0.0,
+            "max": 100.0,
+            "area_weighted_mean": 87.2245
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 11.0982,
+            "area_weighted_mean": 0.0232
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 600.064,
+            "p25": 595.5378,
+            "p75": 603.4885,
+            "min": 582.185,
+            "max": 609.4769,
+            "area_weighted_mean": 598.735
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 3.1021,
+            "p25": 2.5699,
+            "p75": 3.7259,
+            "min": 1.7152,
+            "max": 6.432,
+            "area_weighted_mean": 3.2323
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 0.5652,
+            "p25": 0.522,
+            "p75": 0.6169,
+            "min": 0.3854,
+            "max": 0.8578,
+            "area_weighted_mean": 0.5713
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 0.5543,
+            "p25": 0.4033,
+            "p75": 0.7165,
+            "min": 0.3995,
+            "max": 0.9032,
+            "area_weighted_mean": 0.5781
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 1099.6389,
+            "p25": 733.4501,
+            "p75": 1658.0462,
+            "min": 9.0325,
+            "max": 2637.1552,
+            "area_weighted_mean": 1209.6054
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 30.1776,
+            "p25": 29.9567,
+            "p75": 30.3833,
+            "min": 29.9567,
+            "max": 30.5996,
+            "area_weighted_mean": 30.1946
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 693,
+          "low_confidence_stats": {
+            "n_valid": 693,
+            "median": 22.045,
+            "p25": 18.7031,
+            "p75": 26.2369,
+            "min": 18.175,
+            "max": 41.7519,
+            "area_weighted_mean": 22.7051
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 693,
+          "median": 3.6323,
+          "p25": 3.3133,
+          "p75": 4.2851,
+          "min": 2.5209,
+          "max": 5.2028,
+          "area_weighted_mean": 3.7761,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 693,
+          "median": 2.3911,
+          "p25": 2.2685,
+          "p75": 2.6312,
+          "min": 2.1107,
+          "max": 3.3188,
+          "area_weighted_mean": 2.5033,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 693,
+          "median": 23.8233,
+          "p25": 16.5326,
+          "p75": 28.7073,
+          "min": 2.463,
+          "max": 40.9817,
+          "area_weighted_mean": 22.4964,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 693,
+          "median": 11.7115,
+          "p25": 9.0093,
+          "p75": 13.985,
+          "min": 4.2645,
+          "max": 17.9406,
+          "area_weighted_mean": 11.2862,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Grass_land": {
+      "n_tiles": 48,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 0.4637,
+            "p25": 0.3601,
+            "p75": 0.5858,
+            "min": 0.2232,
+            "max": 0.7019,
+            "area_weighted_mean": 0.4674
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 100.0,
+            "p25": 92.1994,
+            "p75": 100.0,
+            "min": 0.0,
+            "max": 100.0,
+            "area_weighted_mean": 84.4883
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 600.7448,
+            "p25": 596.6243,
+            "p75": 603.2697,
+            "min": 591.8776,
+            "max": 606.0616,
+            "area_weighted_mean": 600.2884
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 2.9334,
+            "p25": 2.7026,
+            "p75": 3.5958,
+            "min": 2.0023,
+            "max": 4.7696,
+            "area_weighted_mean": 3.1687
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 0.5486,
+            "p25": 0.4609,
+            "p75": 0.6002,
+            "min": 0.3882,
+            "max": 0.9409,
+            "area_weighted_mean": 0.5614
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 0.4011,
+            "p25": 0.3995,
+            "p75": 0.63,
+            "min": 0.3995,
+            "max": 0.7328,
+            "area_weighted_mean": 0.4884
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 1293.5992,
+            "p25": 589.8057,
+            "p75": 1521.3209,
+            "min": 71.362,
+            "max": 1769.2638,
+            "area_weighted_mean": 1074.4067
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 30.3833,
+            "p25": 30.1776,
+            "p75": 30.5996,
+            "min": 29.9567,
+            "max": 30.5996,
+            "area_weighted_mean": 30.3501
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 48,
+          "low_confidence_stats": {
+            "n_valid": 48,
+            "median": 18.4391,
+            "p25": 18.175,
+            "p75": 21.3731,
+            "min": 18.175,
+            "max": 27.8538,
+            "area_weighted_mean": 20.584
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 48,
+          "median": 3.46,
+          "p25": 3.3236,
+          "p75": 3.6457,
+          "min": 3.2224,
+          "max": 4.8856,
+          "area_weighted_mean": 3.5201,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 48,
+          "median": 2.2918,
+          "p25": 2.2281,
+          "p75": 2.3581,
+          "min": 2.0768,
+          "max": 2.8785,
+          "area_weighted_mean": 2.3009,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 48,
+          "median": 26.9145,
+          "p25": 24.2712,
+          "p75": 28.4181,
+          "min": 3.4066,
+          "max": 36.3632,
+          "area_weighted_mean": 26.3887,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 48,
+          "median": 13.4752,
+          "p25": 11.9109,
+          "p75": 14.2249,
+          "min": 5.6443,
+          "max": 18.5717,
+          "area_weighted_mean": 13.4265,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Narmada_valley": {
+      "n_tiles": 165,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 0.4211,
+            "p25": 0.3555,
+            "p75": 0.5163,
+            "min": 0.2244,
+            "max": 0.7127,
+            "area_weighted_mean": 0.4367
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 100.0,
+            "p25": 97.5059,
+            "p75": 100.0,
+            "min": 0.0,
+            "max": 100.0,
+            "area_weighted_mean": 88.395
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 598.0102,
+            "p25": 595.0203,
+            "p75": 602.637,
+            "min": 587.0445,
+            "max": 610.6564,
+            "area_weighted_mean": 598.7759
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 3.8045,
+            "p25": 3.166,
+            "p75": 4.2155,
+            "min": 2.675,
+            "max": 5.6417,
+            "area_weighted_mean": 3.7921
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 0.6487,
+            "p25": 0.5937,
+            "p75": 0.7099,
+            "min": 0.4511,
+            "max": 0.8581,
+            "area_weighted_mean": 0.6533
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 162,
+          "low_confidence_stats": {
+            "n_valid": 162,
+            "median": 0.5067,
+            "p25": 0.4007,
+            "p75": 0.6098,
+            "min": 0.4004,
+            "max": 0.852,
+            "area_weighted_mean": 0.5355
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 286.7388,
+            "p25": 163.8703,
+            "p75": 431.2486,
+            "min": 3.1206,
+            "max": 861.2278,
+            "area_weighted_mean": 324.8551
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 30.3833,
+            "p25": 30.3833,
+            "p75": 30.3833,
+            "min": 30.1776,
+            "max": 30.5371,
+            "area_weighted_mean": 30.3394
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 165,
+          "low_confidence_stats": {
+            "n_valid": 165,
+            "median": 27.8538,
+            "p25": 22.045,
+            "p75": 40.885,
+            "min": 18.175,
+            "max": 40.885,
+            "area_weighted_mean": 30.9632
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 165,
+          "median": 3.7662,
+          "p25": 3.2999,
+          "p75": 3.9137,
+          "min": 2.674,
+          "max": 4.5263,
+          "area_weighted_mean": 3.6581,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 165,
+          "median": 2.3942,
+          "p25": 2.2852,
+          "p75": 2.5325,
+          "min": 2.0909,
+          "max": 2.7171,
+          "area_weighted_mean": 2.4135,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 165,
+          "median": 30.0453,
+          "p25": 24.5083,
+          "p75": 33.7671,
+          "min": 11.8363,
+          "max": 40.999,
+          "area_weighted_mean": 29.2305,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 165,
+          "median": 13.5036,
+          "p25": 12.0826,
+          "p75": 14.8965,
+          "min": 8.3057,
+          "max": 18.755,
+          "area_weighted_mean": 13.6179,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Savana_ecosystem": {
+      "n_tiles": 33,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.4681,
+            "p25": 0.3452,
+            "p75": 0.5439,
+            "min": 0.2041,
+            "max": 0.6647,
+            "area_weighted_mean": 0.4471
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 100.0,
+            "p25": 95.0858,
+            "p75": 100.0,
+            "min": 0.0,
+            "max": 100.0,
+            "area_weighted_mean": 83.5601
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 599.5254,
+            "p25": 598.7723,
+            "p75": 600.1797,
+            "min": 594.1755,
+            "max": 601.2654,
+            "area_weighted_mean": 599.1956
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 2.6869,
+            "p25": 2.246,
+            "p75": 2.9506,
+            "min": 2.0365,
+            "max": 3.6595,
+            "area_weighted_mean": 2.6486
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.5704,
+            "p25": 0.5385,
+            "p75": 0.5951,
+            "min": 0.5047,
+            "max": 0.6894,
+            "area_weighted_mean": 0.5723
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.3995,
+            "p25": 0.3995,
+            "p75": 0.4011,
+            "min": 0.3995,
+            "max": 0.5429,
+            "area_weighted_mean": 0.4104
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 991.1466,
+            "p25": 683.2869,
+            "p75": 1150.4672,
+            "min": 107.9859,
+            "max": 1372.5211,
+            "area_weighted_mean": 889.235
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 30.1776,
+            "p25": 29.9567,
+            "p75": 30.1776,
+            "min": 29.9567,
+            "max": 30.5996,
+            "area_weighted_mean": 30.179
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 18.7031,
+            "p25": 18.175,
+            "p75": 21.3731,
+            "min": 18.175,
+            "max": 22.8275,
+            "area_weighted_mean": 19.7714
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 33,
+          "median": 3.4314,
+          "p25": 3.0522,
+          "p75": 3.9124,
+          "min": 2.8355,
+          "max": 4.4378,
+          "area_weighted_mean": 3.4772,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 33,
+          "median": 2.2932,
+          "p25": 2.2585,
+          "p75": 2.5337,
+          "min": 2.1827,
+          "max": 2.6502,
+          "area_weighted_mean": 2.3908,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 33,
+          "median": 27.6926,
+          "p25": 20.7101,
+          "p75": 32.1132,
+          "min": 13.0649,
+          "max": 36.6051,
+          "area_weighted_mean": 26.668,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 33,
+          "median": 13.421,
+          "p25": 11.2738,
+          "p75": 13.9124,
+          "min": 9.6741,
+          "max": 14.9625,
+          "area_weighted_mean": 12.6273,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Seasonal_wetland_polygon": {
+      "n_tiles": 13,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 0.4772,
+            "p25": 0.4411,
+            "p75": 0.5228,
+            "min": 0.2664,
+            "max": 0.5645,
+            "area_weighted_mean": 0.4542
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 100.0,
+            "p25": 77.5953,
+            "p75": 100.0,
+            "min": 10.5137,
+            "max": 100.0,
+            "area_weighted_mean": 84.4477
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 599.5217,
+            "p25": 598.2953,
+            "p75": 603.4411,
+            "min": 596.361,
+            "max": 604.2656,
+            "area_weighted_mean": 600.8183
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 2.7635,
+            "p25": 2.4059,
+            "p75": 3.3409,
+            "min": 2.2002,
+            "max": 3.5208,
+            "area_weighted_mean": 2.8931
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 0.5811,
+            "p25": 0.5679,
+            "p75": 0.6199,
+            "min": 0.5547,
+            "max": 0.6426,
+            "area_weighted_mean": 0.5956
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 0.4273,
+            "p25": 0.3995,
+            "p75": 0.7758,
+            "min": 0.3995,
+            "max": 0.7758,
+            "area_weighted_mean": 0.5652
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 1054.7212,
+            "p25": 288.4399,
+            "p75": 1203.276,
+            "min": 207.0468,
+            "max": 1242.0863,
+            "area_weighted_mean": 769.4081
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 29.9567,
+            "p25": 29.9567,
+            "p75": 30.3833,
+            "min": 29.9567,
+            "max": 30.3833,
+            "area_weighted_mean": 30.1403
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 13,
+          "low_confidence_stats": {
+            "n_valid": 13,
+            "median": 22.8275,
+            "p25": 21.3731,
+            "p75": 27.8538,
+            "min": 21.3731,
+            "max": 32.7725,
+            "area_weighted_mean": 25.2763
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 13,
+          "median": 3.8095,
+          "p25": 3.6748,
+          "p75": 4.2346,
+          "min": 3.5135,
+          "max": 4.3887,
+          "area_weighted_mean": 3.9449,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 13,
+          "median": 2.5285,
+          "p25": 2.5182,
+          "p75": 2.5582,
+          "min": 2.4497,
+          "max": 2.6174,
+          "area_weighted_mean": 2.5337,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 13,
+          "median": 22.5393,
+          "p25": 22.2535,
+          "p75": 24.0455,
+          "min": 20.199,
+          "max": 26.3413,
+          "area_weighted_mean": 22.98,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 13,
+          "median": 11.2481,
+          "p25": 10.8954,
+          "p75": 11.6445,
+          "min": 10.0073,
+          "max": 11.7984,
+          "area_weighted_mean": 11.2175,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Trail_plots": {
+      "n_tiles": 33,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.5063,
+            "p25": 0.4638,
+            "p75": 0.5486,
+            "min": 0.4,
+            "max": 0.6225,
+            "area_weighted_mean": 0.5031
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 100.0,
+            "p25": 100.0,
+            "p75": 100.0,
+            "min": 99.6099,
+            "max": 100.0,
+            "area_weighted_mean": 99.9892
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 589.7467,
+            "p25": 587.403,
+            "p75": 594.6189,
+            "min": 584.5774,
+            "max": 598.5233,
+            "area_weighted_mean": 590.8617
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 3.1494,
+            "p25": 2.9207,
+            "p75": 3.5289,
+            "min": 2.3562,
+            "max": 4.2841,
+            "area_weighted_mean": 3.2199
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.5325,
+            "p25": 0.4718,
+            "p75": 0.6032,
+            "min": 0.4258,
+            "max": 0.6503,
+            "area_weighted_mean": 0.5346
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 0.5815,
+            "p25": 0.5815,
+            "p75": 0.6333,
+            "min": 0.5815,
+            "max": 0.852,
+            "area_weighted_mean": 0.6144
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 558.5775,
+            "p25": 450.0538,
+            "p75": 624.0925,
+            "min": 321.0753,
+            "max": 766.1358,
+            "area_weighted_mean": 547.4745
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 30.1776,
+            "p25": 30.1776,
+            "p75": 30.3833,
+            "min": 30.1776,
+            "max": 30.3833,
+            "area_weighted_mean": 30.2338
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 33,
+          "low_confidence_stats": {
+            "n_valid": 33,
+            "median": 29.1462,
+            "p25": 26.2369,
+            "p75": 29.1462,
+            "min": 26.2369,
+            "max": 40.885,
+            "area_weighted_mean": 29.0041
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 33,
+          "median": 4.6607,
+          "p25": 4.4183,
+          "p75": 4.7643,
+          "min": 4.0212,
+          "max": 4.9482,
+          "area_weighted_mean": 4.5679,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 33,
+          "median": 2.7261,
+          "p25": 2.698,
+          "p75": 2.7667,
+          "min": 2.6295,
+          "max": 2.929,
+          "area_weighted_mean": 2.7329,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 33,
+          "median": 14.214,
+          "p25": 11.4601,
+          "p75": 22.579,
+          "min": 8.3094,
+          "max": 26.9907,
+          "area_weighted_mean": 16.0697,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 33,
+          "median": 9.9769,
+          "p25": 9.5391,
+          "p75": 10.4239,
+          "min": 8.7978,
+          "max": 11.8354,
+          "area_weighted_mean": 9.9653,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Water_margin": {
+      "n_tiles": 134,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 0.5321,
+            "p25": 0.4605,
+            "p75": 0.6492,
+            "min": 0.2368,
+            "max": 0.7363,
+            "area_weighted_mean": 0.5378
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 100.0,
+            "p25": 100.0,
+            "p75": 100.0,
+            "min": 12.7079,
+            "max": 100.0,
+            "area_weighted_mean": 96.5868
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 597.5891,
+            "p25": 594.8763,
+            "p75": 600.2283,
+            "min": 586.2245,
+            "max": 606.696,
+            "area_weighted_mean": 597.0736
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 4.3444,
+            "p25": 3.7217,
+            "p75": 4.9098,
+            "min": 2.9418,
+            "max": 6.5187,
+            "area_weighted_mean": 4.3092
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 0.7046,
+            "p25": 0.6553,
+            "p75": 0.8161,
+            "min": 0.4461,
+            "max": 0.9571,
+            "area_weighted_mean": 0.7262
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 125,
+          "low_confidence_stats": {
+            "n_valid": 125,
+            "median": 0.5067,
+            "p25": 0.4007,
+            "p75": 0.6333,
+            "min": 0.3995,
+            "max": 0.7758,
+            "area_weighted_mean": 0.5285
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 135.3432,
+            "p25": 67.2475,
+            "p75": 213.4999,
+            "min": 0.0,
+            "max": 625.1878,
+            "area_weighted_mean": 148.9431
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 30.3833,
+            "p25": 30.1776,
+            "p75": 30.3833,
+            "min": 30.1776,
+            "max": 30.3833,
+            "area_weighted_mean": 30.3256
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 134,
+          "low_confidence_stats": {
+            "n_valid": 134,
+            "median": 27.8538,
+            "p25": 26.2369,
+            "p75": 29.1462,
+            "min": 18.7031,
+            "max": 41.7519,
+            "area_weighted_mean": 28.2626
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 134,
+          "median": 3.727,
+          "p25": 3.3995,
+          "p75": 4.0883,
+          "min": 3.0019,
+          "max": 4.9214,
+          "area_weighted_mean": 3.7605,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 134,
+          "median": 2.3966,
+          "p25": 2.2368,
+          "p75": 2.53,
+          "min": 2.0742,
+          "max": 3.0101,
+          "area_weighted_mean": 2.4051,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 134,
+          "median": 27.9541,
+          "p25": 24.1511,
+          "p75": 34.7139,
+          "min": 8.1732,
+          "max": 39.1813,
+          "area_weighted_mean": 28.289,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 134,
+          "median": 14.1483,
+          "p25": 11.7269,
+          "p75": 16.3132,
+          "min": 8.7435,
+          "max": 18.8692,
+          "area_weighted_mean": 14.0286,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Wetland_forest": {
+      "n_tiles": 8,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 0.7113,
+            "p25": 0.6492,
+            "p75": 0.7222,
+            "min": 0.5976,
+            "max": 0.7548,
+            "area_weighted_mean": 0.6895
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 100.0,
+            "p25": 100.0,
+            "p75": 100.0,
+            "min": 100.0,
+            "max": 100.0,
+            "area_weighted_mean": 100.0
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 596.216,
+            "p25": 594.8121,
+            "p75": 597.0767,
+            "min": 593.8859,
+            "max": 597.9008,
+            "area_weighted_mean": 596.0702
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 5.3552,
+            "p25": 5.2635,
+            "p75": 5.4282,
+            "min": 5.215,
+            "max": 5.6786,
+            "area_weighted_mean": 5.3797
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 0.8508,
+            "p25": 0.846,
+            "p75": 0.8818,
+            "min": 0.8264,
+            "max": 0.8991,
+            "area_weighted_mean": 0.8622
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 2,
+          "low_confidence_stats": {
+            "n_valid": 2,
+            "median": 0.4004,
+            "p25": 0.4004,
+            "p75": 0.4004,
+            "min": 0.4004,
+            "max": 0.4004,
+            "area_weighted_mean": 0.4004
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 93.2103,
+            "p25": 36.2996,
+            "p75": 113.6812,
+            "min": 8.2346,
+            "max": 131.9646,
+            "area_weighted_mean": 79.8652
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 30.1776,
+            "p25": 30.1776,
+            "p75": 30.1776,
+            "min": 30.1776,
+            "max": 30.1776,
+            "area_weighted_mean": 30.1776
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 8,
+          "low_confidence_stats": {
+            "n_valid": 8,
+            "median": 29.1462,
+            "p25": 29.1462,
+            "p75": 29.1462,
+            "min": 23.6283,
+            "max": 29.1462,
+            "area_weighted_mean": 28.5888
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 8,
+          "median": 3.9747,
+          "p25": 3.9365,
+          "p75": 4.0001,
+          "min": 3.8523,
+          "max": 4.0666,
+          "area_weighted_mean": 3.9662,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 8,
+          "median": 2.4314,
+          "p25": 2.4155,
+          "p75": 2.4393,
+          "min": 2.3931,
+          "max": 2.462,
+          "area_weighted_mean": 2.4288,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 8,
+          "median": 25.3545,
+          "p25": 24.6025,
+          "p75": 25.8338,
+          "min": 22.7089,
+          "max": 25.9993,
+          "area_weighted_mean": 24.9958,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 8,
+          "median": 14.2909,
+          "p25": 14.0535,
+          "p75": 14.4066,
+          "min": 13.5623,
+          "max": 14.6098,
+          "area_weighted_mean": 14.2262,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    },
+    "EMU_Wildlife": {
+      "n_tiles": 65,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 0.4955,
+            "p25": 0.391,
+            "p75": 0.5462,
+            "min": 0.2027,
+            "max": 0.6817,
+            "area_weighted_mean": 0.4715
+          }
+        },
+        "TreeCover_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 100.0,
+            "p25": 93.4053,
+            "p75": 100.0,
+            "min": 1.052,
+            "max": 100.0,
+            "area_weighted_mean": 89.6607
+          }
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 0.0,
+            "p25": 0.0,
+            "p75": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "area_weighted_mean": 0.0
+          }
+        },
+        "Elev_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 603.6928,
+            "p25": 602.0581,
+            "p75": 604.3529,
+            "min": 594.8552,
+            "max": 605.5601,
+            "area_weighted_mean": 602.9451
+          }
+        },
+        "ElevStd_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 3.662,
+            "p25": 3.4947,
+            "p75": 3.8842,
+            "min": 2.7549,
+            "max": 5.0015,
+            "area_weighted_mean": 3.6852
+          }
+        },
+        "TRI_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 0.6925,
+            "p25": 0.6388,
+            "p75": 0.7834,
+            "min": 0.5602,
+            "max": 0.9135,
+            "area_weighted_mean": 0.7109
+          }
+        },
+        "Slope_deg": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 0.1462,
+            "p25": 0.1462,
+            "p75": 0.1462,
+            "min": 0.1462,
+            "max": 0.1462,
+            "area_weighted_mean": 0.1462
+          }
+        },
+        "gHM": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 0.6557,
+            "p25": 0.6557,
+            "p75": 0.7758,
+            "min": 0.4007,
+            "max": 0.7758,
+            "area_weighted_mean": 0.6868
+          }
+        },
+        "DistWater_m": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 308.9447,
+            "p25": 208.8403,
+            "p75": 380.7417,
+            "min": 76.0432,
+            "max": 507.1258,
+            "area_weighted_mean": 294.8606
+          }
+        },
+        "LST_C": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 30.3833,
+            "p25": 30.3833,
+            "p75": 30.3833,
+            "min": 30.3833,
+            "max": 30.3833,
+            "area_weighted_mean": 30.3833
+          }
+        },
+        "NightLights": {
+          "n_valid": 0,
+          "n_low_confidence_excluded": 65,
+          "low_confidence_stats": {
+            "n_valid": 65,
+            "median": 27.8538,
+            "p25": 27.8538,
+            "p75": 27.8538,
+            "min": 27.8538,
+            "max": 32.7725,
+            "area_weighted_mean": 29.0084
+          }
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 65,
+          "median": 4.0213,
+          "p25": 3.7352,
+          "p75": 4.2701,
+          "min": 3.2333,
+          "max": 4.548,
+          "area_weighted_mean": 4.0004,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 65,
+          "median": 2.4158,
+          "p25": 2.3506,
+          "p75": 2.5431,
+          "min": 2.1057,
+          "max": 2.6556,
+          "area_weighted_mean": 2.4318,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 65,
+          "median": 25.7383,
+          "p25": 22.0068,
+          "p75": 30.0303,
+          "min": 17.0019,
+          "max": 36.433,
+          "area_weighted_mean": 25.9635,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 65,
+          "median": 13.3338,
+          "p25": 11.4239,
+          "p75": 14.3136,
+          "min": 9.3915,
+          "max": 17.93,
+          "area_weighted_mean": 13.0594,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Unclassified."
+    }
+  },
+  "project_covariates": {
+    "NatCoverPct_2km": {
+      "n_emus_with_data": 9,
+      "median_of_emu_medians": 3.7662,
+      "min_emu_median": 3.4314,
+      "max_emu_median": 4.6607,
+      "worst_emu_id": "EMU_Savana_ecosystem",
+      "worst_emu_median": 3.4314
+    },
+    "EdgeDensity_2km": {
+      "n_emus_with_data": 9,
+      "median_of_emu_medians": 2.3966,
+      "min_emu_median": 2.2918,
+      "max_emu_median": 2.7261,
+      "worst_emu_id": "EMU_Trail_plots",
+      "worst_emu_median": 2.7261
+    },
+    "NatCoverPct_500m": {
+      "n_emus_with_data": 9,
+      "median_of_emu_medians": 25.7383,
+      "min_emu_median": 14.214,
+      "max_emu_median": 30.0453,
+      "worst_emu_id": "EMU_Trail_plots",
+      "worst_emu_median": 14.214
+    },
+    "EdgeDensity_500m": {
+      "n_emus_with_data": 9,
+      "median_of_emu_medians": 13.421,
+      "min_emu_median": 9.9769,
+      "max_emu_median": 14.2909,
+      "worst_emu_id": "EMU_Wetland_forest",
+      "worst_emu_median": 14.2909
+    }
+  },
+  "warnings": [
+    "['NDVI_raw', 'TreeCover_Pct', 'BuiltUp_Pct', 'Elev_m', 'ElevStd_m', 'TRI_m', 'Slope_deg', 'gHM', 'DistWater_m', 'LST_C', 'NightLights'] have ZERO project-level coverage despite other covariates having real data \u2014 found while validating against Soulforest's real GEE output: this project's grid cell size (25m, 0.0625 ha) sits BELOW small_tile_area_ha_floor (0.25 ha), so every single cell is excluded from these parcel-intrinsic metrics as low-confidence \u2014 not a bug, the floor is doing exactly what it's configured to do, but it silently zeroes out this whole indicator family for any contiguous-archetype project at this resolution. Needs a decision: raise the grid cell size, lower the floor for contiguous archetypes specifically, or accept these indicators being unavailable at this resolution.",
+    "SCIENTIFIC DEFENSIBILITY: 1 EMU pair(s) show near-identical covariate profiles (normalized distance < 0.08): [('EMU_Grass_land', 'EMU_Savana_ecosystem', 0.028)]. Image segmentation found a real spectral discontinuity between them, but their aggregate covariate values barely differ \u2014 plausibly SNIC oversegmentation rather than a genuine ecological distinction. Field reconnaissance should confirm or correct this before treating them as separately meaningful strata in any client-facing ecological interpretation."
+  ]
+}

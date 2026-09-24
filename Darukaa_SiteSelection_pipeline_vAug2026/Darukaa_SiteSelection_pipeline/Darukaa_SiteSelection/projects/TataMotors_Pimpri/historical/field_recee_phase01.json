@@ -1,0 +1,270 @@
+{
+  "audiomoths": [
+    {
+      "id": "PMP-T017",
+      "old_stratum": "SEG05",
+      "date": "2026-08-13",
+      "lat": 18.64551,
+      "lng": 73.814348
+    },
+    {
+      "id": "PMP-T006",
+      "old_stratum": "SEG06",
+      "date": "2026-08-14",
+      "lat": 18.647063,
+      "lng": 73.812441
+    },
+    {
+      "id": "PMP-T019",
+      "old_stratum": "SEG07",
+      "date": "2026-08-14",
+      "lat": 18.644694,
+      "lng": 73.809139
+    },
+    {
+      "id": "PMP-T036",
+      "old_stratum": "SEG08",
+      "date": "2026-08-14",
+      "lat": 18.643159,
+      "lng": 73.813889
+    },
+    {
+      "id": "PMP-T040",
+      "old_stratum": "SEG09",
+      "date": "2026-08-14",
+      "lat": 18.643183,
+      "lng": 73.817682
+    },
+    {
+      "id": "PMP-T057",
+      "old_stratum": "SEG10",
+      "date": "2026-08-14",
+      "lat": 18.641606,
+      "lng": 73.815797
+    },
+    {
+      "id": "PMP-T088",
+      "old_stratum": "SEG02",
+      "date": "2026-08-14",
+      "lat": 18.639249,
+      "lng": 73.814391
+    },
+    {
+      "id": "PMP-T076",
+      "old_stratum": "SEG04",
+      "date": "2026-08-14",
+      "lat": 18.640017,
+      "lng": 73.812016
+    },
+    {
+      "id": "PMP-T074",
+      "old_stratum": "SEG03",
+      "date": "2026-08-14",
+      "lat": 18.639993,
+      "lng": 73.808224
+    },
+    {
+      "id": "PMP-T105",
+      "old_stratum": "SEG01",
+      "date": "2026-08-14",
+      "lat": 18.638494,
+      "lng": 73.818662
+    }
+  ],
+  "hydro": [
+    {
+      "name": "Hydromoth + Hydrocam",
+      "site": "Sumanth Sarovar",
+      "date": "2026-08-14",
+      "lat": 18.641669,
+      "lng": 73.810773
+    },
+    {
+      "name": "Hydromoth (Acoustics)",
+      "site": "Sharma Lake",
+      "date": "2026-08-14",
+      "lat": 18.640426,
+      "lng": 73.809282
+    }
+  ],
+  "camera_trap": [
+    {
+      "name": "Camera Trap",
+      "plot": "Deccan Thorn FD 5 Buffer",
+      "date": "2026-08-14",
+      "lat": 18.641778,
+      "lng": 73.812833
+    }
+  ],
+  "water_chem": [
+    {
+      "loc": "Sumanth Sarovar",
+      "lat": 18.641369,
+      "lng": 73.811241
+    },
+    {
+      "loc": "Sharma Lake",
+      "lat": 18.640558,
+      "lng": 73.809243
+    },
+    {
+      "loc": "Lake 3",
+      "lat": 18.6457,
+      "lng": 73.813113
+    },
+    {
+      "loc": "Lake 2",
+      "lat": 18.646533,
+      "lng": 73.812758
+    }
+  ],
+  "soil_chem": [
+    {
+      "loc": "Intervention Zone: E1 Trial Plot",
+      "lat": 18.640444,
+      "lng": 73.807944
+    },
+    {
+      "loc": "Intervention Zone: Narmada Valley FN9",
+      "lat": 18.639667,
+      "lng": 73.807972
+    },
+    {
+      "loc": "Intervention Zone: Narmada Valley FN7",
+      "lat": 18.641389,
+      "lng": 73.811694
+    },
+    {
+      "loc": "Natural + Intervention Zone: Grassland 01",
+      "lat": 18.640361,
+      "lng": 73.813028
+    },
+    {
+      "loc": "Natural Zone: Deccan Thorn FD 5",
+      "lat": 18.641694,
+      "lng": 73.812806
+    }
+  ],
+  "water_edna": [
+    {
+      "lake": "Sumanth Sarovar",
+      "p": "P1",
+      "lat": 18.642222,
+      "lng": 73.812528
+    },
+    {
+      "lake": "Sumanth Sarovar",
+      "p": "P2",
+      "lat": 18.641806,
+      "lng": 73.811917
+    },
+    {
+      "lake": "Sumanth Sarovar",
+      "p": "P3",
+      "lat": 18.641611,
+      "lng": 73.811111
+    },
+    {
+      "lake": "Sumanth Sarovar",
+      "p": "P4",
+      "lat": 18.642361,
+      "lng": 73.809556
+    },
+    {
+      "lake": "Sharma Lake",
+      "p": "P1",
+      "lat": 18.640583,
+      "lng": 73.809306
+    },
+    {
+      "lake": "Sharma Lake",
+      "p": "P2",
+      "lat": 18.640139,
+      "lng": 73.808944
+    },
+    {
+      "lake": "Sharma Lake",
+      "p": "P3",
+      "lat": 18.639667,
+      "lng": 73.808472
+    },
+    {
+      "lake": "Sharma Lake",
+      "p": "P4",
+      "lat": 18.638926,
+      "lng": 73.809054
+    }
+  ],
+  "soil_edna": [
+    {
+      "loc": "Sumanth Sarovar Buffer",
+      "p": "Pt 1",
+      "date": "2026-08-13",
+      "lat": 18.641403,
+      "lng": 73.811539
+    },
+    {
+      "loc": "Sumanth Sarovar Buffer",
+      "p": "Pt 2",
+      "date": "2026-08-13",
+      "lat": 18.641424,
+      "lng": 73.812054
+    },
+    {
+      "loc": "Sumanth Sarovar Buffer",
+      "p": "Pt 3",
+      "date": "2026-08-13",
+      "lat": 18.641408,
+      "lng": 73.812405
+    },
+    {
+      "loc": "Sumanth Sarovar Buffer",
+      "p": "Pt 4",
+      "date": "2026-08-13",
+      "lat": 18.64106,
+      "lng": 73.811142
+    },
+    {
+      "loc": "Sumanth Sarovar Buffer",
+      "p": "Pt 5",
+      "date": "2026-08-13",
+      "lat": 18.640723,
+      "lng": 73.808929
+    },
+    {
+      "loc": "Grassland 02",
+      "p": "Pt 1",
+      "date": "2026-08-14",
+      "lat": 18.644267,
+      "lng": 73.816557
+    },
+    {
+      "loc": "Grassland 02",
+      "p": "Pt 2",
+      "date": "2026-08-14",
+      "lat": 18.643771,
+      "lng": 73.816557
+    },
+    {
+      "loc": "Grassland 02",
+      "p": "Pt 3",
+      "date": "2026-08-14",
+      "lat": 18.644213,
+      "lng": 73.816087
+    },
+    {
+      "loc": "Grassland 02",
+      "p": "Pt 4",
+      "date": "2026-08-14",
+      "lat": 18.643958,
+      "lng": 73.816808
+    },
+    {
+      "loc": "Grassland 02",
+      "p": "Pt 5",
+      "date": "2026-08-14",
+      "lat": 18.64407,
+      "lng": 73.816309
+    }
+  ]
+}

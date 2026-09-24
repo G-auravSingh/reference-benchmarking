@@ -1,0 +1,149 @@
+{
+  "project_name": "FCF_Soova",
+  "method": "ecological_clustering",
+  "feature_tier": "full_with_satellite_covariates",
+  "active_numeric_features": [
+    "NDVI_raw",
+    "TreeCover_Pct",
+    "Elev_m",
+    "TRI_m",
+    "NatCoverPct_2km",
+    "EdgeDensity_2km",
+    "gHM",
+    "DistWater_m",
+    "attr_area_ha_computed",
+    "attr_plantation_year_numeric",
+    "attr_x_m",
+    "attr_y_m"
+  ],
+  "active_categorical_features": [
+    "attr_admin_block"
+  ],
+  "barrier_attribute_used": "attr_admin_district",
+  "k_bounds": {
+    "k_min": 2,
+    "k_max": 12,
+    "achievable_cycles": 3,
+    "k_max_logistics": 12,
+    "k_max_replication": 16
+  },
+  "n_partitions": 1,
+  "n_emus_total": 6,
+  "partition_reports": {
+    "Mayurbhanj": {
+      "n_candidates": 50,
+      "k_max_allocated": 12,
+      "k_selected": 7,
+      "n_emus_after_compactness_split": 6,
+      "silhouette_by_k": {
+        "2": 0.0347,
+        "3": 0.0411,
+        "4": 0.0217,
+        "5": 0.0304,
+        "6": 0.1442,
+        "7": 0.2138,
+        "8": 0.2207,
+        "9": 0.2164,
+        "10": 0.2119,
+        "11": 0.2315,
+        "12": 0.2483
+      },
+      "spatial_spread_warning": null
+    }
+  },
+  "emu_summary": [
+    {
+      "emu_id": "FCF_Soova_EMU_Mayurbhanj_6",
+      "n_tiles": 3,
+      "total_area_ha": 55.196,
+      "member_candidate_names": [
+        "763148801",
+        "763493190",
+        "763492655"
+      ]
+    },
+    {
+      "emu_id": "FCF_Soova_EMU_Mayurbhanj_1",
+      "n_tiles": 18,
+      "total_area_ha": 106.818,
+      "member_candidate_names": [
+        "763615432",
+        "763614779",
+        "764979543",
+        "765373790",
+        "763614742",
+        "764799794",
+        "764799811",
+        "764799819",
+        "764835382",
+        "764838760",
+        "764839738",
+        "764860707",
+        "764979556",
+        "764979564",
+        "764984257",
+        "764996797",
+        "765373814",
+        "765594906"
+      ]
+    },
+    {
+      "emu_id": "FCF_Soova_EMU_Mayurbhanj_2",
+      "n_tiles": 11,
+      "total_area_ha": 118.429,
+      "member_candidate_names": [
+        "764487247",
+        "764485701",
+        "764508068",
+        "764881330 [1:Polygon]",
+        "765340778",
+        "765351846",
+        "765361417",
+        "765393619",
+        "765413177",
+        "765458688",
+        "765655312"
+      ]
+    },
+    {
+      "emu_id": "FCF_Soova_EMU_Mayurbhanj_3",
+      "n_tiles": 11,
+      "total_area_ha": 57.668,
+      "member_candidate_names": [
+        "764543994",
+        "764536192",
+        "764545514",
+        "764549198",
+        "764551107",
+        "764547080",
+        "764888768",
+        "764893745",
+        "764892265",
+        "764892777",
+        "765383435"
+      ]
+    },
+    {
+      "emu_id": "FCF_Soova_EMU_Mayurbhanj_5",
+      "n_tiles": 3,
+      "total_area_ha": 64.13,
+      "member_candidate_names": [
+        "764487572",
+        "765457520",
+        "765457919"
+      ]
+    },
+    {
+      "emu_id": "FCF_Soova_EMU_Mayurbhanj_4",
+      "n_tiles": 4,
+      "total_area_ha": 18.362,
+      "member_candidate_names": [
+        "763762371",
+        "763766541",
+        "763772880",
+        "764434279"
+      ]
+    }
+  ],
+  "warnings": []
+}

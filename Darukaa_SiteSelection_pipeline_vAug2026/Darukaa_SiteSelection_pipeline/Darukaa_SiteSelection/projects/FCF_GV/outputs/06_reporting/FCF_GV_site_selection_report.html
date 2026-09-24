@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8"/>
+<title>FCF_GV — Site Selection Report</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0 32px 48px; color: #1f2937; max-width: 980px; }
+  h1 { font-size: 22px; border-bottom: 2px solid #15803d; padding-bottom: 8px; }
+  h2 { font-size: 17px; margin-top: 32px; color: #14532d; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 13px; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f0fdf4; }
+  .note { color: #6b7280; font-size: 12px; font-style: italic; }
+  ul { font-size: 13px; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>FCF_GV — Site Selection Report</h1>
+  <p><strong>Client:</strong> FCF</p>
+
+  <h2>1. Purpose and scope</h2>
+  
+    <p>This document states what will be measured, where, when, how often,
+    and with what pipeline settings for <b>FCF_GV</b>
+    (FCF) — and what this design can and cannot support as
+    a conclusion. It is paired with <code>field_map.html</code>, the
+    interactive map: this document explains and constrains what the
+    pipeline is allowed to do; the map is the fastest way to see what it
+    actually did.</p>
+    <p><b>Archetype:</b> agroforestry (scattered multi-parcel site, EMUs delineated by ecological clustering).</p>
+    
+
+  <h2>Overview</h2>
+  <table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody><tr><td>Project</td><td>FCF</td></tr><tr><td>Archetype</td><td>agroforestry</td></tr><tr><td>EMUs delineated</td><td>6</td></tr><tr><td>Terrestrial Acoustic Devices</td><td>4</td></tr><tr><td>Deployment Cycles</td><td>5 Weeks</td></tr><tr><td>Deployment regime</td><td>sequential_cluster</td></tr></tbody></table>
+
+  <h2>2. The site, as measured</h2>
+  <table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody><tr><td>Total candidates ingested</td><td>1893</td></tr><tr><td>Ecological anchors</td><td>0</td></tr><tr><td>Exclusion zones (hard + soft)</td><td>0</td></tr><tr><td>Candidates matched to real GEE covariates</td><td>1893/1893</td></tr><tr><td>Filtered — built-up</td><td>0</td></tr><tr><td>Filtered — permanent water</td><td>0</td></tr></tbody></table>
+
+  <h2>3. Design principles</h2>
+  
+    <ul>
+      <li><b>Segment/cluster before logistics.</b> The ecological unit (EMU) is decided on ecological grounds first, then fitted to devices, days, and access.</li>
+      <li><b>EMU membership stays real and complete, even when scattered.</b> A farm parcel that's geographically far from most of its EMU is never split into a separate unit just for tidiness &mdash; it keeps contributing to that EMU's ecological metrics. It's simply excluded from device-position eligibility if it's too isolated for a field visit to be practical (see &sect;6).</li>
+      <li><b>Device coverage is a hard guarantee.</b> An EMU this pipeline delineates and cannot cover with available devices is treated as an internal error to fix, never a client-facing "uncovered EMU" finding.</li>
+      <li><b>Distribution shown alongside the worst-case flag, never the flag alone</b> &mdash; a single declining tile inside an otherwise-healthy EMU should never read as "no improvement happening" project-wide.</li>
+    </ul>
+    
+    
+
+  <h2>4. Site selection methodology &mdash; this run</h2>
+  <p><b>Method:</b> Gower-distance ecological clustering with a spatial k-nearest-neighbour connectivity constraint, so ecologically-similar candidates can only group together if they're geographically reachable through a chain of nearby candidates.</p><p><b>K bounds this run:</b> k_min=2, k_max=16 (logistics ceiling 16, replication ceiling 631, achievable cycles 4).</p><table><thead><tr><th>Partition (barrier group)</th><th>N candidates</th><th>K selected</th><th>Final EMU count</th></tr></thead><tbody><tr><td>Ganjam</td><td>643</td><td>2</td><td>1</td></tr><tr><td>Kandhmal</td><td>415</td><td>2</td><td>2</td></tr><tr><td>Gajapati</td><td>495</td><td>2</td><td>1</td></tr><tr><td>Kalahandi</td><td>340</td><td>2</td><td>2</td></tr></tbody></table><p><b>Within-EMU position ranking:</b> CRITIC-weighted typicality (feature tier: full_with_satellite_covariates). Top-weighted covariates this run: DistWater_m (0.143), TreeCover_Pct (0.118), Elev_m (0.087), BuiltUp_Pct (0.068), LST_C (0.068), Slope_deg (0.065), NatCoverPct_500m (0.064), EdgeDensity_2km (0.063).</p>
+
+  <h2>5. Ecological stratification &mdash; current result</h2>
+  <table><thead><tr><th>EMU ID</th><th>Area (ha)</th><th>Number of farm parcels</th></tr></thead><tbody><tr><td>FCF_GV_EMU_Ganjam_1</td><td>335.038</td><td>643</td></tr><tr><td>FCF_GV_EMU_Kandhmal_2</td><td>78.587</td><td>148</td></tr><tr><td>FCF_GV_EMU_Kandhmal_1</td><td>111.849</td><td>267</td></tr><tr><td>FCF_GV_EMU_Gajapati_1</td><td>211.329</td><td>495</td></tr><tr><td>FCF_GV_EMU_Kalahandi_1</td><td>134.103</td><td>234</td></tr><tr><td>FCF_GV_EMU_Kalahandi_2</td><td>53.428</td><td>106</td></tr></tbody></table>
+
+  <h2>6. Position pool status per EMU</h2>
+  <table><thead><tr><th>EMU ID</th><th>N candidates</th><th>Position pool size</th><th>Medoid</th><th>Spatial outliers excluded from device eligibility</th></tr></thead><tbody><tr><td>FCF_GV_EMU_Ganjam_1</td><td>643</td><td>4</td><td>737335948</td><td>60</td></tr><tr><td>FCF_GV_EMU_Kandhmal_2</td><td>148</td><td>4</td><td>689494004</td><td>33</td></tr><tr><td>FCF_GV_EMU_Kandhmal_1</td><td>267</td><td>4</td><td>689493541</td><td>39</td></tr><tr><td>FCF_GV_EMU_Gajapati_1</td><td>495</td><td>4</td><td>740213232</td><td>29</td></tr><tr><td>FCF_GV_EMU_Kalahandi_1</td><td>234</td><td>4</td><td>740568090</td><td>30</td></tr><tr><td>FCF_GV_EMU_Kalahandi_2</td><td>106</td><td>4</td><td>633034808</td><td>16</td></tr></tbody></table><p class="note">207 candidate(s) are kept as real EMU members (they still count toward that EMU's ex-situ metrics) but are too geographically isolated from the rest of their EMU to be a practical device position &mdash; see Declared Caveats.</p>
+
+  <h2>7. Deployment regime and schedule</h2>
+  <p>EMUs are grouped into geographic panels; each panel is visited in a different cycle, capped at what the project timeline can achieve.</p>
+  
+  <table><thead><tr><th>Cycle</th><th>Days</th><th>EMUs / positions visited</th></tr></thead><tbody><tr><td>1</td><td>day 0–7</td><td>FCF_GV_EMU_Ganjam_1: 737335948, 654106756, 750043435, 735356793</td></tr><tr><td>2</td><td>day 8–15</td><td>FCF_GV_EMU_Kandhmal_1: 689493541, 743695200; FCF_GV_EMU_Kandhmal_2: 689494004, 740331712</td></tr><tr><td>3</td><td>day 16–23</td><td>FCF_GV_EMU_Gajapati_1: 740213232, 744653389, 747830310, 735536390</td></tr><tr><td>4</td><td>day 24–31</td><td>FCF_GV_EMU_Kalahandi_1: 740568090, 647529267, 740752085, 654499039</td></tr><tr><td>5</td><td>day 32–39</td><td>FCF_GV_EMU_Kalahandi_2: 633034808, 719776699, 725591934, 646077951</td></tr></tbody></table>
+  
+
+  <h2>8. Covariate profile (project level)</h2>
+  <table><thead><tr><th>Covariate</th><th>Median of EMU medians</th><th>Range across EMUs</th><th>Worst EMU (flag)</th></tr></thead><tbody><tr><td>NDVI_raw</td><td>0.4669</td><td>0.4018–0.5834</td><td>FCF_GV_EMU_Kandhmal_2</td></tr><tr><td>TreeCover_Pct</td><td>7.433</td><td>0.0–34.3143</td><td>FCF_GV_EMU_Kandhmal_1</td></tr><tr><td>BuiltUp_Pct</td><td>0.0</td><td>0.0–0.0</td><td>FCF_GV_EMU_Ganjam_1</td></tr><tr><td>Elev_m</td><td>702.3685</td><td>186.0515–785.9983</td><td>—</td></tr><tr><td>ElevStd_m</td><td>12.0187</td><td>4.8254–16.4228</td><td>—</td></tr><tr><td>TRI_m</td><td>1.2889</td><td>0.6765–1.6813</td><td>—</td></tr><tr><td>Slope_deg</td><td>0.1101</td><td>0.0595–0.1547</td><td>—</td></tr><tr><td>gHM</td><td>0.1094</td><td>0.0854–0.1583</td><td>FCF_GV_EMU_Ganjam_1</td></tr><tr><td>DistWater_m</td><td>697748.9427</td><td>4252.8703–1390228.5</td><td>—</td></tr><tr><td>LST_C</td><td>25.2552</td><td>24.8718–26.3326</td><td>—</td></tr><tr><td>NightLights</td><td>0.3808</td><td>0.3653–0.4222</td><td>—</td></tr><tr><td>NatCoverPct_2km</td><td>63.5222</td><td>41.5859–78.1972</td><td>FCF_GV_EMU_Kalahandi_1</td></tr><tr><td>EdgeDensity_2km</td><td>7.8682</td><td>5.2771–8.9901</td><td>FCF_GV_EMU_Kalahandi_1</td></tr><tr><td>NatCoverPct_500m</td><td>49.8778</td><td>32.0244–66.8235</td><td>FCF_GV_EMU_Kalahandi_1</td></tr><tr><td>EdgeDensity_500m</td><td>8.9992</td><td>7.793–10.1303</td><td>FCF_GV_EMU_Kalahandi_2</td></tr></tbody></table><p class="note">Distribution shown alongside the worst-EMU flag by design &mdash; never the flag alone. ⚠️ = see Declared Caveats below for a known data-quality issue affecting this covariate.</p>
+
+  <h2>9. Output files &mdash; what to open and when</h2>
+  
+    <table><thead><tr><th>File</th><th>What it is</th></tr></thead><tbody>
+    <tr><td><code>field_map.html</code></td><td>The one file to open first &mdash; interactive map with EMUs, position pools, and deployment cycles. Works offline once downloaded. Open with Chrome browser for the best experience.</td></tr>
+    <tr><td>This report</td><td>The site selection design and its scientific basis.</td></tr>
+    <tr><td><code>deployment_schedule.csv</code> / <code>.xlsx</code></td><td>The field-ready schedule &mdash; real calendar dates, which position each device visits each cycle.</td></tr>
+    <tr><td><code>stratum_profile.csv</code></td><td>What each EMU is, in covariate terms &mdash; the source data behind the stratification table above, at full resolution.</td></tr>
+    </tbody></table>
+    
+
+  <h2>10. Declared caveats</h2>
+  <ul><li>Slope_deg: only 82.8% coverage across candidates</li><li>JRC_Water: only 0.1% coverage across candidates</li><li>127 candidate(s) in this project had BuiltUp_Pct above the threshold but were kept anyway because their NDVI showed real vegetation — the land-cover classifier appears to be misclassifying part of this site as built-up (a known failure mode on managed/plantation landscapes: a young plantation's bare-soil-between-rows pattern showing BuiltUp_Pct near 100 with NDVI 0.24-0.35, physically inconsistent with a real built surface). Worth a visual/field check on this specific classifier behaviour.</li><li>207 candidate(s) across 6 EMU(s) are real members (kept for metrics) but excluded from device-position eligibility as spatial outliers — too far from the rest of their EMU for a field visit to be practical: {'FCF_GV_EMU_Ganjam_1': 60, 'FCF_GV_EMU_Kandhmal_2': 33, 'FCF_GV_EMU_Kandhmal_1': 39, 'FCF_GV_EMU_Gajapati_1': 29, 'FCF_GV_EMU_Kalahandi_1': 30, 'FCF_GV_EMU_Kalahandi_2': 16}. This is a deliberate design choice: a severe outlier doesn't need its own EMU, it just shouldn't be a device candidate.</li><li>5 panels needed; fits within 6 weeks (+1 week extension) but NOT the base 5 weeks. Using the extension — this is the last-resort case per policy (devices cannot be added), flagged explicitly rather than applied silently. Confirm before mobilising.</li><li>BuiltUp_Pct: identical value (0.0) across every EMU — zero variance across a whole site is almost always a computation defect, not real ecological uniformity. Treat this covariate as unreliable until investigated at the GEE script level.</li></ul>
+
+  <h2>11. References</h2>
+  
+    <ul>
+      <li>Diakoulaki, D., Mavrotas, G., &amp; Papayannakis, L. (1995). Determining objective weights in multiple criteria problems: The CRITIC method. <i>Computers &amp; Operations Research</i>, 22(7), 763&ndash;770. &mdash; the objective, data-driven covariate weighting method used to rank candidate positions within each EMU.</li>
+      <li>Karra, K., Kontgis, C., et al. (2021). Global land use/land cover with Sentinel-2 and deep learning. <i>IGARSS 2021</i>. &mdash; the current, annually-updated land-cover classification used for landscape-context covariates.</li>
+      <li>Achanta, R., &amp; S&uuml;sstrunk, S. (2017). Superpixels and polygons using simple non-iterative clustering (SNIC). <i>CVPR 2017</i>. &mdash; the image segmentation method used to delineate ecological monitoring units for contiguous sites.</li>
+      <li>Hansen, M. C., et al. (2013, with ongoing annual updates). High-resolution global maps of 21st-century forest cover change. <i>Science</i>, 342(6160), 850&ndash;853. &mdash; global forest-loss reference dataset.</li>
+    </ul>
+    
+</body></html>

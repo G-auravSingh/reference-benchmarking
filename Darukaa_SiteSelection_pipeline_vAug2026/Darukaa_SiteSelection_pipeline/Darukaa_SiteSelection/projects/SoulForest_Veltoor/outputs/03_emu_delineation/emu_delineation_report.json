@@ -1,0 +1,109 @@
+{
+  "n_emus": 7,
+  "n_anchor_emus": 3,
+  "n_segmentation_emus": 4,
+  "mmu_diagnostics": {
+    "n_raw_segments": 44,
+    "n_contiguous_pieces_after_split": 70,
+    "min_mapping_unit_used": 22,
+    "converged": true,
+    "search_trace": [
+      {
+        "min_mapping_unit": 1,
+        "n_segments": 70
+      },
+      {
+        "min_mapping_unit": 2,
+        "n_segments": 50
+      },
+      {
+        "min_mapping_unit": 3,
+        "n_segments": 40
+      },
+      {
+        "min_mapping_unit": 4,
+        "n_segments": 37
+      },
+      {
+        "min_mapping_unit": 5,
+        "n_segments": 33
+      },
+      {
+        "min_mapping_unit": 6,
+        "n_segments": 29
+      },
+      {
+        "min_mapping_unit": 7,
+        "n_segments": 27
+      },
+      {
+        "min_mapping_unit": 8,
+        "n_segments": 23
+      },
+      {
+        "min_mapping_unit": 9,
+        "n_segments": 21
+      },
+      {
+        "min_mapping_unit": 10,
+        "n_segments": 19
+      },
+      {
+        "min_mapping_unit": 11,
+        "n_segments": 19
+      },
+      {
+        "min_mapping_unit": 12,
+        "n_segments": 16
+      },
+      {
+        "min_mapping_unit": 13,
+        "n_segments": 14
+      },
+      {
+        "min_mapping_unit": 14,
+        "n_segments": 12
+      },
+      {
+        "min_mapping_unit": 15,
+        "n_segments": 12
+      },
+      {
+        "min_mapping_unit": 16,
+        "n_segments": 11
+      },
+      {
+        "min_mapping_unit": 17,
+        "n_segments": 11
+      },
+      {
+        "min_mapping_unit": 18,
+        "n_segments": 10
+      },
+      {
+        "min_mapping_unit": 19,
+        "n_segments": 9
+      },
+      {
+        "min_mapping_unit": 20,
+        "n_segments": 7
+      },
+      {
+        "min_mapping_unit": 21,
+        "n_segments": 7
+      },
+      {
+        "min_mapping_unit": 22,
+        "n_segments": 4
+      }
+    ]
+  },
+  "orphan_segments_merged_into_anchors": [],
+  "aoi_boundary_area_ha": 44.285,
+  "exclusion_area_ha": 0,
+  "covered_by_emus_ha": 41.467,
+  "residual_unclassified_ha": 2.818,
+  "project_name": "SoulForest_Veltoor",
+  "method": "segmentation_reconciliation",
+  "warnings": []
+}

@@ -1,0 +1,34 @@
+{
+  "status": "ok",
+  "project_name": "FCF_GV",
+  "n_candidates": 1893,
+  "n_matched": 1893,
+  "n_unmatched": 0,
+  "unmatched_names": [],
+  "coverage_by_column": {
+    "NDVI_raw": 1893,
+    "TreeCover_Pct": 1893,
+    "Elev_m": 1893,
+    "ElevStd_m": 1893,
+    "TRI_m": 1893,
+    "Slope_deg": 1568,
+    "NatCoverPct_2km": 1893,
+    "EdgeDensity_2km": 1893,
+    "NatCoverPct_500m": 1893,
+    "EdgeDensity_500m": 1893,
+    "gHM": 1893,
+    "DistWater_m": 1893,
+    "LST_C": 1893,
+    "NightLights": 1893,
+    "BuiltUp_Pct": 1893,
+    "JRC_Water": 1
+  },
+  "n_hard_filtered_builtup": 0,
+  "n_hard_filtered_water": 0,
+  "warnings": [
+    "Slope_deg: only 82.8% coverage across candidates",
+    "JRC_Water: only 0.1% coverage across candidates",
+    "127 candidate(s) in this project had BuiltUp_Pct above the threshold but were kept anyway because their NDVI showed real vegetation \u2014 the land-cover classifier appears to be misclassifying part of this site as built-up (a known failure mode on managed/plantation landscapes: a young plantation's bare-soil-between-rows pattern showing BuiltUp_Pct near 100 with NDVI 0.24-0.35, physically inconsistent with a real built surface). Worth a visual/field check on this specific classifier behaviour."
+  ],
+  "n_builtup_override_by_ndvi": 127
+}

@@ -1,0 +1,912 @@
+{
+  "project_name": "FCF_Soova",
+  "n_emus": 5,
+  "emu_results": {
+    "FCF_Soova_EMU_Mayurbhanj_5": {
+      "n_tiles": 3,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 3,
+          "median": 0.48,
+          "p25": 0.4313,
+          "p75": 0.4822,
+          "min": 0.3826,
+          "max": 0.4843,
+          "area_weighted_mean": 0.4568,
+          "n_low_confidence_excluded": 0
+        },
+        "TreeCover_Pct": {
+          "n_valid": 3,
+          "median": 98.3311,
+          "p25": 86.5673,
+          "p75": 99.1323,
+          "min": 74.8034,
+          "max": 99.9335,
+          "area_weighted_mean": 92.4643,
+          "n_low_confidence_excluded": 0
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 3,
+          "median": 0.0,
+          "p25": 0.0,
+          "p75": 0.0862,
+          "min": 0.0,
+          "max": 0.1724,
+          "area_weighted_mean": 0.0452,
+          "n_low_confidence_excluded": 0
+        },
+        "Elev_m": {
+          "n_valid": 3,
+          "median": 104.2954,
+          "p25": 103.3303,
+          "p75": 105.05,
+          "min": 102.3652,
+          "max": 105.8046,
+          "area_weighted_mean": 104.6138,
+          "n_low_confidence_excluded": 0
+        },
+        "ElevStd_m": {
+          "n_valid": 3,
+          "median": 1.876,
+          "p25": 1.8283,
+          "p75": 2.1233,
+          "min": 1.7807,
+          "max": 2.3707,
+          "area_weighted_mean": 1.9184,
+          "n_low_confidence_excluded": 0
+        },
+        "TRI_m": {
+          "n_valid": 3,
+          "median": 0.3425,
+          "p25": 0.3348,
+          "p75": 0.384,
+          "min": 0.3272,
+          "max": 0.4255,
+          "area_weighted_mean": 0.3543,
+          "n_low_confidence_excluded": 0
+        },
+        "Slope_deg": {
+          "n_valid": 3,
+          "median": 0.1361,
+          "p25": 0.1361,
+          "p75": 0.1361,
+          "min": 0.1361,
+          "max": 0.1361,
+          "area_weighted_mean": 0.1361,
+          "n_low_confidence_excluded": 0
+        },
+        "gHM": {
+          "n_valid": 3,
+          "median": 0.1799,
+          "p25": 0.1748,
+          "p75": 0.1865,
+          "min": 0.1698,
+          "max": 0.1931,
+          "area_weighted_mean": 0.1814,
+          "n_low_confidence_excluded": 0
+        },
+        "DistWater_m": {
+          "n_valid": 3,
+          "median": 4953.2695,
+          "p25": 4349.6379,
+          "p75": 5405.2672,
+          "min": 3746.0063,
+          "max": 5857.2649,
+          "area_weighted_mean": 4959.7263,
+          "n_low_confidence_excluded": 0
+        },
+        "LST_C": {
+          "n_valid": 3,
+          "median": 26.1421,
+          "p25": 26.0927,
+          "p75": 26.1916,
+          "min": 26.0433,
+          "max": 26.2411,
+          "area_weighted_mean": 26.1351,
+          "n_low_confidence_excluded": 0
+        },
+        "NightLights": {
+          "n_valid": 3,
+          "median": 0.5319,
+          "p25": 0.5165,
+          "p75": 0.5392,
+          "min": 0.5012,
+          "max": 0.5465,
+          "area_weighted_mean": 0.5298,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 3,
+          "median": 69.3701,
+          "p25": 65.099,
+          "p75": 70.5959,
+          "min": 60.8279,
+          "max": 71.8217,
+          "area_weighted_mean": 68.3808,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 3,
+          "median": 6.0047,
+          "p25": 5.806,
+          "p75": 6.4125,
+          "min": 5.6073,
+          "max": 6.8203,
+          "area_weighted_mean": 6.0563,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 3,
+          "median": 51.966,
+          "p25": 49.3885,
+          "p75": 55.5162,
+          "min": 46.8111,
+          "max": 59.0663,
+          "area_weighted_mean": 50.5058,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 3,
+          "median": 10.0957,
+          "p25": 9.4166,
+          "p75": 10.4053,
+          "min": 8.7376,
+          "max": 10.715,
+          "area_weighted_mean": 9.8577,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Ecological clustering over 3 tiles (see emu_delineation_report.json for active features and silhouette diagnostics)."
+    },
+    "FCF_Soova_EMU_Mayurbhanj_1": {
+      "n_tiles": 18,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 18,
+          "median": 0.421,
+          "p25": 0.3966,
+          "p75": 0.4716,
+          "min": 0.3363,
+          "max": 0.5622,
+          "area_weighted_mean": 0.4244,
+          "n_low_confidence_excluded": 0
+        },
+        "TreeCover_Pct": {
+          "n_valid": 18,
+          "median": 97.5425,
+          "p25": 95.1208,
+          "p75": 99.8562,
+          "min": 78.5598,
+          "max": 100.0,
+          "area_weighted_mean": 95.7549,
+          "n_low_confidence_excluded": 0
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 18,
+          "median": 97.2757,
+          "p25": 49.4497,
+          "p75": 99.8797,
+          "min": 0.0308,
+          "max": 100.0,
+          "area_weighted_mean": 87.4176,
+          "n_low_confidence_excluded": 0
+        },
+        "Elev_m": {
+          "n_valid": 18,
+          "median": 110.3983,
+          "p25": 107.264,
+          "p75": 131.5776,
+          "min": 72.3656,
+          "max": 158.2007,
+          "area_weighted_mean": 112.7442,
+          "n_low_confidence_excluded": 0
+        },
+        "ElevStd_m": {
+          "n_valid": 18,
+          "median": 2.0647,
+          "p25": 1.7207,
+          "p75": 2.3967,
+          "min": 0.7838,
+          "max": 4.1297,
+          "area_weighted_mean": 1.662,
+          "n_low_confidence_excluded": 0
+        },
+        "TRI_m": {
+          "n_valid": 18,
+          "median": 0.3207,
+          "p25": 0.2214,
+          "p75": 0.4288,
+          "min": 0.1192,
+          "max": 0.5408,
+          "area_weighted_mean": 0.2588,
+          "n_low_confidence_excluded": 0
+        },
+        "Slope_deg": {
+          "n_valid": 18,
+          "median": 0.1361,
+          "p25": 0.1361,
+          "p75": 0.1361,
+          "min": 0.1361,
+          "max": 0.1361,
+          "area_weighted_mean": 0.1361,
+          "n_low_confidence_excluded": 0
+        },
+        "gHM": {
+          "n_valid": 18,
+          "median": 0.3317,
+          "p25": 0.3051,
+          "p75": 0.3666,
+          "min": 0.238,
+          "max": 0.4833,
+          "area_weighted_mean": 0.3414,
+          "n_low_confidence_excluded": 0
+        },
+        "DistWater_m": {
+          "n_valid": 18,
+          "median": 1019.5451,
+          "p25": 876.0223,
+          "p75": 1944.717,
+          "min": 169.0056,
+          "max": 8705.7787,
+          "area_weighted_mean": 1763.4937,
+          "n_low_confidence_excluded": 0
+        },
+        "LST_C": {
+          "n_valid": 18,
+          "median": 27.0294,
+          "p25": 26.7142,
+          "p75": 27.1776,
+          "min": 25.999,
+          "max": 27.5106,
+          "area_weighted_mean": 27.0028,
+          "n_low_confidence_excluded": 0
+        },
+        "NightLights": {
+          "n_valid": 18,
+          "median": 0.5126,
+          "p25": 0.4892,
+          "p75": 0.5803,
+          "min": 0.4498,
+          "max": 0.7965,
+          "area_weighted_mean": 0.5556,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 18,
+          "median": 22.6076,
+          "p25": 19.6712,
+          "p75": 36.0929,
+          "min": 9.2494,
+          "max": 59.513,
+          "area_weighted_mean": 26.1798,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 18,
+          "median": 6.4868,
+          "p25": 5.413,
+          "p75": 7.4955,
+          "min": 3.6736,
+          "max": 8.83,
+          "area_weighted_mean": 6.4029,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 18,
+          "median": 17.9988,
+          "p25": 5.3174,
+          "p75": 28.1813,
+          "min": 0.8668,
+          "max": 56.1906,
+          "area_weighted_mean": 18.8382,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 18,
+          "median": 6.1594,
+          "p25": 4.9422,
+          "p75": 9.2617,
+          "min": 0.826,
+          "max": 13.9427,
+          "area_weighted_mean": 7.034,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Ecological clustering over 18 tiles (see emu_delineation_report.json for active features and silhouette diagnostics)."
+    },
+    "FCF_Soova_EMU_Mayurbhanj_2": {
+      "n_tiles": 14,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 14,
+          "median": 0.4622,
+          "p25": 0.3994,
+          "p75": 0.4872,
+          "min": 0.3315,
+          "max": 0.5279,
+          "area_weighted_mean": 0.4301,
+          "n_low_confidence_excluded": 0
+        },
+        "TreeCover_Pct": {
+          "n_valid": 14,
+          "median": 99.0837,
+          "p25": 93.3671,
+          "p75": 99.8491,
+          "min": 71.7185,
+          "max": 100.0,
+          "area_weighted_mean": 92.4218,
+          "n_low_confidence_excluded": 0
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 14,
+          "median": 11.1454,
+          "p25": 0.0,
+          "p75": 85.2287,
+          "min": 0.0,
+          "max": 100.0,
+          "area_weighted_mean": 26.4607,
+          "n_low_confidence_excluded": 0
+        },
+        "Elev_m": {
+          "n_valid": 14,
+          "median": 89.2796,
+          "p25": 73.207,
+          "p75": 115.263,
+          "min": 49.577,
+          "max": 149.1164,
+          "area_weighted_mean": 97.9616,
+          "n_low_confidence_excluded": 0
+        },
+        "ElevStd_m": {
+          "n_valid": 14,
+          "median": 2.0031,
+          "p25": 1.4982,
+          "p75": 3.6875,
+          "min": 1.1328,
+          "max": 4.727,
+          "area_weighted_mean": 2.3997,
+          "n_low_confidence_excluded": 0
+        },
+        "TRI_m": {
+          "n_valid": 14,
+          "median": 0.3428,
+          "p25": 0.2241,
+          "p75": 0.4452,
+          "min": 0.1846,
+          "max": 0.5465,
+          "area_weighted_mean": 0.3215,
+          "n_low_confidence_excluded": 0
+        },
+        "Slope_deg": {
+          "n_valid": 14,
+          "median": 0.1668,
+          "p25": 0.1668,
+          "p75": 0.1668,
+          "min": 0.1668,
+          "max": 0.1668,
+          "area_weighted_mean": 0.1668,
+          "n_low_confidence_excluded": 0
+        },
+        "gHM": {
+          "n_valid": 14,
+          "median": 0.2244,
+          "p25": 0.1696,
+          "p75": 0.2687,
+          "min": 0.1206,
+          "max": 0.3839,
+          "area_weighted_mean": 0.2206,
+          "n_low_confidence_excluded": 0
+        },
+        "DistWater_m": {
+          "n_valid": 14,
+          "median": 3235.0293,
+          "p25": 2618.7406,
+          "p75": 3928.112,
+          "min": 1457.0343,
+          "max": 7864.6479,
+          "area_weighted_mean": 3736.8266,
+          "n_low_confidence_excluded": 0
+        },
+        "LST_C": {
+          "n_valid": 14,
+          "median": 26.9987,
+          "p25": 26.3656,
+          "p75": 27.3575,
+          "min": 25.6917,
+          "max": 27.4445,
+          "area_weighted_mean": 26.89,
+          "n_low_confidence_excluded": 0
+        },
+        "NightLights": {
+          "n_valid": 14,
+          "median": 0.4691,
+          "p25": 0.4244,
+          "p75": 0.5293,
+          "min": 0.3613,
+          "max": 0.6731,
+          "area_weighted_mean": 0.4753,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 14,
+          "median": 48.3357,
+          "p25": 24.6826,
+          "p75": 60.0828,
+          "min": 7.7191,
+          "max": 89.3072,
+          "area_weighted_mean": 47.1631,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 14,
+          "median": 6.7206,
+          "p25": 5.3573,
+          "p75": 7.4621,
+          "min": 3.7834,
+          "max": 8.1582,
+          "area_weighted_mean": 6.481,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 14,
+          "median": 42.1534,
+          "p25": 20.3772,
+          "p75": 77.1281,
+          "min": 3.833,
+          "max": 85.9564,
+          "area_weighted_mean": 43.384,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 14,
+          "median": 8.9156,
+          "p25": 6.6302,
+          "p75": 10.6364,
+          "min": 3.3945,
+          "max": 13.6988,
+          "area_weighted_mean": 8.201,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Ecological clustering over 14 tiles (see emu_delineation_report.json for active features and silhouette diagnostics)."
+    },
+    "FCF_Soova_EMU_Mayurbhanj_3": {
+      "n_tiles": 11,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 11,
+          "median": 0.4339,
+          "p25": 0.4003,
+          "p75": 0.4491,
+          "min": 0.3746,
+          "max": 0.4774,
+          "area_weighted_mean": 0.4282,
+          "n_low_confidence_excluded": 0
+        },
+        "TreeCover_Pct": {
+          "n_valid": 11,
+          "median": 98.9443,
+          "p25": 95.9744,
+          "p75": 99.8196,
+          "min": 85.6644,
+          "max": 100.0,
+          "area_weighted_mean": 97.4372,
+          "n_low_confidence_excluded": 0
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 11,
+          "median": 85.6034,
+          "p25": 79.8674,
+          "p75": 97.5282,
+          "min": 8.4068,
+          "max": 100.0,
+          "area_weighted_mean": 66.8023,
+          "n_low_confidence_excluded": 0
+        },
+        "Elev_m": {
+          "n_valid": 11,
+          "median": 88.7032,
+          "p25": 73.1521,
+          "p75": 96.4073,
+          "min": 64.5376,
+          "max": 99.271,
+          "area_weighted_mean": 85.7979,
+          "n_low_confidence_excluded": 0
+        },
+        "ElevStd_m": {
+          "n_valid": 11,
+          "median": 3.0013,
+          "p25": 2.329,
+          "p75": 3.6912,
+          "min": 1.7214,
+          "max": 4.6555,
+          "area_weighted_mean": 3.3369,
+          "n_low_confidence_excluded": 0
+        },
+        "TRI_m": {
+          "n_valid": 11,
+          "median": 0.4181,
+          "p25": 0.378,
+          "p75": 0.5051,
+          "min": 0.2406,
+          "max": 0.5516,
+          "area_weighted_mean": 0.4479,
+          "n_low_confidence_excluded": 0
+        },
+        "Slope_deg": {
+          "n_valid": 11,
+          "median": 0.1668,
+          "p25": 0.1361,
+          "p75": 0.1668,
+          "min": 0.1361,
+          "max": 0.1668,
+          "area_weighted_mean": 0.1537,
+          "n_low_confidence_excluded": 0
+        },
+        "gHM": {
+          "n_valid": 11,
+          "median": 0.3122,
+          "p25": 0.2598,
+          "p75": 0.3534,
+          "min": 0.2126,
+          "max": 0.542,
+          "area_weighted_mean": 0.3208,
+          "n_low_confidence_excluded": 0
+        },
+        "DistWater_m": {
+          "n_valid": 11,
+          "median": 2231.232,
+          "p25": 1928.0589,
+          "p75": 2692.8618,
+          "min": 491.6637,
+          "max": 4259.676,
+          "area_weighted_mean": 2389.9831,
+          "n_low_confidence_excluded": 0
+        },
+        "LST_C": {
+          "n_valid": 11,
+          "median": 27.2242,
+          "p25": 26.8492,
+          "p75": 27.5058,
+          "min": 26.6707,
+          "max": 27.6651,
+          "area_weighted_mean": 27.217,
+          "n_low_confidence_excluded": 0
+        },
+        "NightLights": {
+          "n_valid": 11,
+          "median": 0.4912,
+          "p25": 0.4632,
+          "p75": 0.5337,
+          "min": 0.4209,
+          "max": 0.6583,
+          "area_weighted_mean": 0.5032,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 11,
+          "median": 30.7893,
+          "p25": 26.7094,
+          "p75": 52.9868,
+          "min": 24.4029,
+          "max": 58.1789,
+          "area_weighted_mean": 38.3785,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 11,
+          "median": 6.5909,
+          "p25": 5.918,
+          "p75": 7.9696,
+          "min": 4.4419,
+          "max": 9.5214,
+          "area_weighted_mean": 6.727,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 11,
+          "median": 36.4386,
+          "p25": 14.9116,
+          "p75": 51.4204,
+          "min": 8.4825,
+          "max": 67.9841,
+          "area_weighted_mean": 36.8052,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 11,
+          "median": 8.9947,
+          "p25": 7.7834,
+          "p75": 12.5833,
+          "min": 4.5329,
+          "max": 18.7094,
+          "area_weighted_mean": 10.6123,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Ecological clustering over 11 tiles (see emu_delineation_report.json for active features and silhouette diagnostics)."
+    },
+    "FCF_Soova_EMU_Mayurbhanj_4": {
+      "n_tiles": 4,
+      "covariates": {
+        "NDVI_raw": {
+          "n_valid": 4,
+          "median": 0.3692,
+          "p25": 0.3602,
+          "p75": 0.3814,
+          "min": 0.3556,
+          "max": 0.3956,
+          "area_weighted_mean": 0.3746,
+          "n_low_confidence_excluded": 0
+        },
+        "TreeCover_Pct": {
+          "n_valid": 4,
+          "median": 91.7398,
+          "p25": 87.6199,
+          "p75": 95.9291,
+          "min": 84.2863,
+          "max": 99.4712,
+          "area_weighted_mean": 91.2476,
+          "n_low_confidence_excluded": 0
+        },
+        "BuiltUp_Pct": {
+          "n_valid": 4,
+          "median": 0.0,
+          "p25": 0.0,
+          "p75": 22.708,
+          "min": 0.0,
+          "max": 90.832,
+          "area_weighted_mean": 27.3971,
+          "n_low_confidence_excluded": 0
+        },
+        "Elev_m": {
+          "n_valid": 4,
+          "median": 79.7123,
+          "p25": 79.3584,
+          "p75": 80.677,
+          "min": 79.3357,
+          "max": 82.5323,
+          "area_weighted_mean": 80.5092,
+          "n_low_confidence_excluded": 0
+        },
+        "ElevStd_m": {
+          "n_valid": 4,
+          "median": 1.6727,
+          "p25": 1.4906,
+          "p75": 1.851,
+          "min": 1.4218,
+          "max": 1.9085,
+          "area_weighted_mean": 1.7059,
+          "n_low_confidence_excluded": 0
+        },
+        "TRI_m": {
+          "n_valid": 4,
+          "median": 0.2702,
+          "p25": 0.2513,
+          "p75": 0.282,
+          "min": 0.1991,
+          "max": 0.3129,
+          "area_weighted_mean": 0.2729,
+          "n_low_confidence_excluded": 0
+        },
+        "Slope_deg": {
+          "n_valid": 4,
+          "median": 0.1361,
+          "p25": 0.1361,
+          "p75": 0.1361,
+          "min": 0.1361,
+          "max": 0.1361,
+          "area_weighted_mean": 0.1361,
+          "n_low_confidence_excluded": 0
+        },
+        "gHM": {
+          "n_valid": 4,
+          "median": 0.269,
+          "p25": 0.2581,
+          "p75": 0.2742,
+          "min": 0.2371,
+          "max": 0.2781,
+          "area_weighted_mean": 0.2613,
+          "n_low_confidence_excluded": 0
+        },
+        "DistWater_m": {
+          "n_valid": 4,
+          "median": 1762.8336,
+          "p25": 1714.9292,
+          "p75": 2320.2555,
+          "min": 1662.4142,
+          "max": 3901.3228,
+          "area_weighted_mean": 2393.08,
+          "n_low_confidence_excluded": 0
+        },
+        "LST_C": {
+          "n_valid": 4,
+          "median": 25.5747,
+          "p25": 25.557,
+          "p75": 25.9419,
+          "min": 25.5039,
+          "max": 27.0433,
+          "area_weighted_mean": 25.9976,
+          "n_low_confidence_excluded": 0
+        },
+        "NightLights": {
+          "n_valid": 4,
+          "median": 0.5452,
+          "p25": 0.5395,
+          "p75": 0.5883,
+          "min": 0.5383,
+          "max": 0.7014,
+          "area_weighted_mean": 0.5913,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_2km": {
+          "n_valid": 4,
+          "median": 58.3172,
+          "p25": 52.46,
+          "p75": 59.9849,
+          "min": 38.7011,
+          "max": 61.1747,
+          "area_weighted_mean": 52.7947,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_2km": {
+          "n_valid": 4,
+          "median": 8.7259,
+          "p25": 8.519,
+          "p75": 9.586,
+          "min": 8.2703,
+          "max": 11.7941,
+          "area_weighted_mean": 9.5845,
+          "n_low_confidence_excluded": 0
+        },
+        "NatCoverPct_500m": {
+          "n_valid": 4,
+          "median": 17.5394,
+          "p25": 13.9561,
+          "p75": 23.5937,
+          "min": 7.6071,
+          "max": 37.3554,
+          "area_weighted_mean": 22.1103,
+          "n_low_confidence_excluded": 0
+        },
+        "EdgeDensity_500m": {
+          "n_valid": 4,
+          "median": 6.5782,
+          "p25": 5.4293,
+          "p75": 7.4791,
+          "min": 3.6348,
+          "max": 8.5293,
+          "area_weighted_mean": 6.7379,
+          "n_low_confidence_excluded": 0
+        }
+      },
+      "ecological_rationale": "Ecological clustering over 4 tiles (see emu_delineation_report.json for active features and silhouette diagnostics)."
+    }
+  },
+  "project_covariates": {
+    "NDVI_raw": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 0.4339,
+      "min_emu_median": 0.3692,
+      "max_emu_median": 0.48,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_4",
+      "worst_emu_median": 0.3692
+    },
+    "TreeCover_Pct": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 98.3311,
+      "min_emu_median": 91.7398,
+      "max_emu_median": 99.0837,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_4",
+      "worst_emu_median": 91.7398
+    },
+    "BuiltUp_Pct": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 11.1454,
+      "min_emu_median": 0.0,
+      "max_emu_median": 97.2757,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_1",
+      "worst_emu_median": 97.2757,
+      "caveat": "BuiltUp_Pct's high end (up to 97.3, worst EMU FCF_Soova_EMU_Mayurbhanj_1) may reflect the land-cover classifier misclassification documented in 02_covariates' warnings, not necessarily real built area \u2014 cross-check against that project's NDVI values for the same candidates before treating this number as a finding."
+    },
+    "Elev_m": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 89.2796,
+      "min_emu_median": 79.7123,
+      "max_emu_median": 110.3983,
+      "worst_emu_id": null,
+      "worst_emu_median": null
+    },
+    "ElevStd_m": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 2.0031,
+      "min_emu_median": 1.6727,
+      "max_emu_median": 3.0013,
+      "worst_emu_id": null,
+      "worst_emu_median": null
+    },
+    "TRI_m": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 0.3425,
+      "min_emu_median": 0.2702,
+      "max_emu_median": 0.4181,
+      "worst_emu_id": null,
+      "worst_emu_median": null
+    },
+    "Slope_deg": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 0.1361,
+      "min_emu_median": 0.1361,
+      "max_emu_median": 0.1668,
+      "worst_emu_id": null,
+      "worst_emu_median": null
+    },
+    "gHM": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 0.269,
+      "min_emu_median": 0.1799,
+      "max_emu_median": 0.3317,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_1",
+      "worst_emu_median": 0.3317
+    },
+    "DistWater_m": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 2231.232,
+      "min_emu_median": 1019.5451,
+      "max_emu_median": 4953.2695,
+      "worst_emu_id": null,
+      "worst_emu_median": null
+    },
+    "LST_C": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 26.9987,
+      "min_emu_median": 25.5747,
+      "max_emu_median": 27.2242,
+      "worst_emu_id": null,
+      "worst_emu_median": null
+    },
+    "NightLights": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 0.5126,
+      "min_emu_median": 0.4691,
+      "max_emu_median": 0.5452,
+      "worst_emu_id": null,
+      "worst_emu_median": null
+    },
+    "NatCoverPct_2km": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 48.3357,
+      "min_emu_median": 22.6076,
+      "max_emu_median": 69.3701,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_1",
+      "worst_emu_median": 22.6076
+    },
+    "EdgeDensity_2km": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 6.5909,
+      "min_emu_median": 6.0047,
+      "max_emu_median": 8.7259,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_4",
+      "worst_emu_median": 8.7259
+    },
+    "NatCoverPct_500m": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 36.4386,
+      "min_emu_median": 17.5394,
+      "max_emu_median": 51.966,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_4",
+      "worst_emu_median": 17.5394
+    },
+    "EdgeDensity_500m": {
+      "n_emus_with_data": 5,
+      "median_of_emu_medians": 8.9156,
+      "min_emu_median": 6.1594,
+      "max_emu_median": 10.0957,
+      "worst_emu_id": "FCF_Soova_EMU_Mayurbhanj_5",
+      "worst_emu_median": 10.0957
+    }
+  },
+  "warnings": [
+    "BuiltUp_Pct's high end (up to 97.3, worst EMU FCF_Soova_EMU_Mayurbhanj_1) may reflect the land-cover classifier misclassification documented in 02_covariates' warnings, not necessarily real built area \u2014 cross-check against that project's NDVI values for the same candidates before treating this number as a finding."
+  ]
+}
