@@ -101,7 +101,7 @@ def resolve_tile_paths(manifest: dict, manifest_path: Path) -> list[str]:
     return resolved
 
 
-def find_manifest_by_project_name(repo_root: Path, project_name: str) -> Path:
+def find_manifest_by_project_name(repo_root, project_name: str) -> Path:
     """REAL CONNECTION (client-requested: 'reduce this manual downloading
     and uploading process... the two pipelines can be connected'). With
     the site-selection pipeline pushed into this same repository, its
@@ -121,6 +121,9 @@ def find_manifest_by_project_name(repo_root: Path, project_name: str) -> Path:
     real match — ambiguity (e.g. two different site-selection checkouts
     both containing the same project name) is a real problem to surface
     and resolve explicitly, never silently guessed at."""
+    repo_root = Path(repo_root)  # accepts a plain string too (e.g. from a
+    # notebook's os.path.dirname(...)) — confirmed directly this call
+    # pattern is real, not hypothetical, before making this defensive.
     pattern = f"projects/{project_name}/outputs/07_reference_handoff/tile_manifest.json"
     matches = [p for p in repo_root.rglob("tile_manifest.json")
               if str(p.relative_to(repo_root)).replace("\\", "/").endswith(pattern)]
