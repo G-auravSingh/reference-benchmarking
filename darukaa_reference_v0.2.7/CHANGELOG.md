@@ -3,7 +3,59 @@
 Format: Keep a Changelog; SemVer. Every entry cites a change-set (CS-xx) and, where
 applicable, the reviewer comment (Cxx) and HMI/SEED audit fix (F-HMI-x).
 
-## [0.2.7] -- Real site-selection integration, client-facing report rebuild, and a connected multi-pipeline handoff
+## [0.2.7] -- Real site-selection integration, client-facing report rebuild, a connected multi-pipeline handoff, and real per-tile realm-aware combined reporting
+
+*(Consolidated: every real change below shipped within the 0.2.7 line --
+this changelog previously fragmented them across two stray "Unreleased"
+headers plus a separate dated entry, none of which corresponded to any
+real, different package version. `darukaa_reference.__version__` has
+been 0.2.7 throughout all of it; this is now the single, accurate record.)*
+
+### Real, per-indicator realm applicability (replaces a too-coarse module-based filter)
+Checked every one of the 12 currently-scored indicators' actual extraction logic
+individually, not assumed from a module tag. Excluded from aquatic (each gives a
+degenerate/misleading value on open water, confirmed directly): `natural_habitat`
+(`DW_NATURAL_CLASSES` checked directly -- excludes water entirely, so a pristine lake
+would have wrongly shown ~0% "natural"), `cpland` (land-vegetation classification
+layer), `forest_loss_rate` and `chm` (trivially ~0 on open water), `bii` (PREDICTS is
+an explicitly terrestrial model), `eii` (real water-pixel behaviour unverifiable
+without live GEE access -- conservative default), `flii` (forest-specific by
+definition). Kept for aquatic (genuinely meaningful landscape-pressure concepts):
+`ghm`, `hdi`, `light_pollution`, and `jrc_water_persistence` (found to be mistagged
+`module="core"` instead of `"aquatic"` -- a real tagging bug, fixed). New
+`applicable_realms` field (`registry.py`) is now the single, authoritative
+realm-filtering gate, derived automatically from the contract table for aquatic-module
+indicators (one source of truth) and set explicitly for the 12 core-scored ones.
+Verified directly: `realm='terrestrial'` keeps 11/12 scored indicators,
+`realm='aquatic'` keeps exactly 5 (`ghm`/`hdi`/`jrc_water_persistence`/
+`light_pollution`/`tspi`), `realm='mixed'` keeps all 12. A real bug in the FIRST
+attempt at this fix -- 5 registration-call edits had an inline comment that silently
+swallowed the rest of that line's arguments -- was caught immediately by actually
+building the registry before committing, not assumed to work from a syntax check alone.
+
+### Real, per-tile realm-aware combined reporting for a mixed project (client-requested
+directly: "if any project involves both aquatic + terrestrial the report can't be a
+separate one -- but if it is just aquatic or just terrestrial then it would be separate")
+Confirmed the existing non-compensatory aggregation math (`aggregate_tiles_noncompensatory`)
+already handles partial-coverage indicators correctly -- it skips a tile that has no
+data for a given indicator, so an indicator computed only for the terrestrial tiles
+(e.g. `chm`) or only for the aquatic ones (e.g. `tspi`) correctly finds its worst tile
+only among the tiles that actually have it. No change needed there. Built the real
+missing piece: `run_multi_tile_project` now accepts `tile_realms` (one realm per tile,
+via `dataclasses.replace` per-tile config override -- never mutates the shared config
+object other tiles still use), and `run_project_from_manifest.py` auto-detects and
+merges a project's real `<name>_Aquatic` companion manifest into ONE combined run
+whenever both exist -- each tile keeps its own correct realm, never one project-wide
+setting blindly applied to every tile. `--no-combine` forces a standalone terrestrial-only
+run; running the aquatic manifest directly always stays standalone (combining only ever
+starts from the terrestrial/base side). Verified directly, all three real cases:
+`--project TataMotors_Pimpri` auto-finds and combines all 15 real tiles (9 terrestrial +
+6 aquatic) with the correct realm each; `--project TataMotors_Pimpri_Aquatic` stays
+standalone; `--project SoulForest_Veltoor` (no aquatic companion) is completely
+unaffected. Full structural test confirms all 15 tiles in the combined run reach exactly
+the expected live-GEE-credentials boundary, no earlier crash.
+
+
 
 *(Consolidated: every real change below shipped within the 0.2.7 line -- this changelog previously fragmented them across two stray "Unreleased" headers plus a separate dated entry, none of which corresponded to any real, different package version. `darukaa_reference.__version__` has been 0.2.7 throughout all of it; this is now the single, accurate record.)*
 

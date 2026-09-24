@@ -146,8 +146,12 @@ from darukaa_reference.config import Config
 config = Config(
     gee_project="your-gee-project-id",
     output_dir="outputs",
-    # --- project context (drives which modules activate; does not change scoring) ---
-    realm="terrestrial",          # terrestrial | aquatic | mixed
+    # --- project context ---
+    realm="terrestrial",          # terrestrial | aquatic | mixed -- REAL, ACTIVE FILTER
+                                  # (was loaded but unused before this was completed; now
+                                  # genuinely determines which indicators get computed at
+                                  # all for a run -- see the real per-indicator breakdown
+                                  # just below this block, not a cosmetic label)
     archetype="conservation",     # conservation | agroforestry | aquatic |
                                   # corporate | solar | mining | materials
     assessment_mode="baseline",   # baseline (Year-0) | monitoring (Year-N, needs change.py)
@@ -159,6 +163,23 @@ config = Config(
     use_seed_kernel=False,
 )
 ```
+
+**`realm` — which of the 12 currently-scored indicators actually run, checked
+individually against real extraction logic, not guessed from a name or module tag**
+(client-requested directly: "our pipeline should be clean from all angles... not
+confusing"):
+
+| Indicator | terrestrial | aquatic | Why |
+|---|---|---|---|
+| `natural_habitat`, `cpland`, `forest_loss_rate`, `chm`, `bii`, `eii`, `flii` | yes | no | Land/vegetation-specific — checked directly: e.g. `DW_NATURAL_CLASSES` excludes water entirely, so a pristine lake would wrongly show ~0% "natural"; canopy height and forest loss are trivially ~0 on open water; BII's PREDICTS model is explicitly terrestrial. `eii` excluded as a conservative default — its real water-pixel behaviour isn't verifiable without live GEE access yet. |
+| `ghm`, `hdi`, `light_pollution` | yes | yes | Landscape-wide human-pressure surfaces — genuinely meaningful for a water body's surroundings, same as for land. |
+| `jrc_water_persistence` | yes | yes | Water-specific by definition (was actually mistagged `module="core"` instead of `"aquatic"` — a real tagging gap found and fixed). |
+| `tspi` | no | yes | Aquatic-only by definition (trophic state / algae proxy — meaningless on land). |
+
+`realm="mixed"` runs every indicator regardless of this table — useful for a genuinely
+uncertain site, but the result will include some indicators that don't really apply;
+prefer `terrestrial`/`aquatic` (or let a combined multi-tile run set this per-tile
+automatically — see §4a's multi-tile section) whenever you know which one you have.
 
 **Does the archetype/project-type change how you run this?** The fixed core constructs
 (C1 landscape, C2 vegetation, C3 fauna, C4 pressure) and the scoring logic are the same
@@ -242,12 +263,29 @@ for every project — that's what keeps results comparable. What changes by arch
   projects before shipping this — Tata Motors' 9 real zones, Soulforest's 7 real
   EMUs, GV's 6, and Soova's 5 (its EMU count changed in the latest site-selection
   push — this reads whatever the current real manifest says, not a remembered
-  count) all resolve and dissolve to their correct real areas. For Tata Motors,
-  Motors specifically, this means the pipeline genuinely runs once per real zone (9
+  count) all resolve and dissolve to their correct real areas. For Tata Motors
+  specifically, this means the pipeline genuinely runs once per real zone (9
   independent runs), not once over the whole 126.66 ha campus — the project-level
-  report is built FROM those 9 real per-zone results via the same non-compensatory
+  report is built FROM those real per-zone results via the same non-compensatory
   aggregation described above, and the rendered report's "per-zone breakdown" section
-  shows all 9 real results explicitly, not just the aggregate on top of them.
+  shows every real result explicitly, not just the aggregate on top of them.
+
+  **A project that has BOTH real terrestrial zones and real water bodies gets ONE
+  combined report, never two separate ones** (client-requested directly: "if any
+  project involves both aquatic + terrestrial the report can't be a separate one").
+  Running `--project TataMotors_Pimpri` automatically finds and merges in its real
+  `TataMotors_Pimpri_Aquatic` companion manifest if one exists (see
+  `extract_aquatic_tiles.py`) — no separate command needed. Each tile still gets its
+  own correct realm (`tile_realms` in `run_multi_tile_project`), never one
+  project-wide setting blindly applied to every tile: a terrestrial zone gets
+  terrestrial-applicable indicators, a water body gets aquatic-applicable ones (see
+  `applicable_realms` in `registry.py` — checked individually against real extraction
+  logic for every currently-scored indicator, not assumed from a module tag; §5 below
+  has the full real breakdown). Verified directly: Tata Motors' combined run correctly
+  attempts all 15 real tiles (9 terrestrial + 6 aquatic) with the right realm each.
+  Pass `--no-combine` to force a standalone terrestrial-only run instead. Running the
+  aquatic manifest directly (`--project TataMotors_Pimpri_Aquatic`) always stays
+  standalone — combining only ever happens starting from the terrestrial/base side.
 
   `run_corbett_northshahdol.py` remains as the reference example for the OTHER real
   case this same driver handles: a project with no site-selection pipeline involvement
