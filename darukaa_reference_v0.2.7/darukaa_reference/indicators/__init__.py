@@ -961,7 +961,8 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_natural_habitat, "tnfd_dim": 1})
 
-    r.register(name="natural_landcover", display_name="Natural Land Cover Proportion", source_type="gee",
+    r.register(name="natural_landcover", applicable_realms=("terrestrial", "mixed"),  # DW_NATURAL_CLASSES (checked directly) excludes water
+        display_name="Natural Land Cover Proportion", source_type="gee",
         extract_fn=extract_natural_landcover, unit="%", value_range=(0,100),
         citation="Friedl et al. (2019). MCD12Q1. DOI:10.5067/MODIS/MCD12Q1.061",
         tier2_eligible=True, reference_radius_km=50.0, pillar=1,
@@ -1001,13 +1002,15 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"tnfd_dim": 1, "note": "Requires KBA asset"})
 
     # ── DIM 2: ECOSYSTEM CONDITION — Terrestrial core ────────────────────────
-    r.register(name="ndvi", display_name="Vegetation Structure (NDVI)", source_type="gee",
+    r.register(name="ndvi", applicable_realms=("terrestrial", "mixed"),  # vegetation greenness index, not conceptually meaningful on open water
+        display_name="Vegetation Structure (NDVI)", source_type="gee",
         extract_fn=extract_ndvi, unit="index", value_range=(-1,1),
         citation="Sentinel-2 SCL. Drusch et al. (2012). DOI:10.1016/j.rse.2011.11.026",
         tier2_eligible=True, reference_radius_km=50.0, pillar=2,
         metadata={"gee_image_fn": _img_ndvi, "tnfd_dim": 2})
 
-    r.register(name="habitat_health", display_name="Habitat Health Index (HHI)", source_type="gee",
+    r.register(name="habitat_health", applicable_realms=("terrestrial", "mixed"),  # NDVI-derivative (z-score of greenness), same issue as ndvi
+        display_name="Habitat Health Index (HHI)", source_type="gee",
         extract_fn=extract_habitat_health, unit="z5/σ", value_range=(0,50),
         citation="Darukaa greenness stability = mean(z5/σ) from S2 NDVI.",
         tier2_eligible=True, reference_radius_km=50.0, pillar=2,
@@ -1039,19 +1042,22 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii, "tnfd_dim": 2})
 
-    r.register(name="eii_structural", display_name="EII: Structural Integrity", source_type="gee",
+    r.register(name="eii_structural", applicable_realms=("terrestrial", "mixed"),  # same real disposition as parent eii -- unverified over water, conservative default
+        display_name="EII: Structural Integrity", source_type="gee",
         extract_fn=extract_eii_s, unit="index", value_range=(0,1),
         citation="Hill et al. (2022). Kennedy et al. (2019). DOI:10.1111/gcb.14549",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii_s, "tnfd_dim": 2})
 
-    r.register(name="eii_compositional", display_name="EII: Compositional Integrity", source_type="gee",
+    r.register(name="eii_compositional", applicable_realms=("terrestrial", "mixed"),  # same real disposition as parent eii -- unverified over water, conservative default
+        display_name="EII: Compositional Integrity", source_type="gee",
         extract_fn=extract_eii_c, unit="index", value_range=(0,1),
         citation="IO BII 300m. Newbold et al. (2016). DOI:10.1126/science.aaf2201",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii_c, "tnfd_dim": 2})
 
-    r.register(name="eii_functional", display_name="EII: Functional Integrity", source_type="gee",
+    r.register(name="eii_functional", applicable_realms=("terrestrial", "mixed"),  # same real disposition as parent eii -- unverified over water, conservative default
+        display_name="EII: Functional Integrity", source_type="gee",
         extract_fn=extract_eii_f, unit="index", value_range=(0,1),
         citation="Actual/potential NPP. Hill et al. (2022).",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
@@ -1070,7 +1076,8 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _img_bii, "tnfd_dim": 3,
                  "display_name_report": "Biodiversity Intactness Index (fauna & flora abundance)"})
 
-    r.register(name="pdf", display_name="Potentially Disappeared Fraction", source_type="gee",
+    r.register(name="pdf", applicable_realms=("terrestrial", "mixed"),  # GLOBIO-style biodiversity model, terrestrial-vegetation-oriented
+        display_name="Potentially Disappeared Fraction", source_type="gee",
         extract_fn=extract_pdf, unit="fraction", value_range=(0,1),
         citation="Huijbregts et al. (2017). ReCiPe2016. DOI:10.1007/s11367-016-1246-y",
         tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=2,
@@ -1165,7 +1172,8 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"tnfd_dim": 2,
                   "note": "SCALAR metric only — no spatial map. Min=1.0 (circle). DO NOT confuse with sdi (disturbance)."})
 
-    r.register(name="lai", display_name="Leaf Area Index (MODIS MCD15A3H)", source_type="gee",
+    r.register(name="lai", applicable_realms=("terrestrial", "mixed"),  # Leaf Area Index -- definitionally ~0 on open water
+        display_name="Leaf Area Index (MODIS MCD15A3H)", source_type="gee",
         extract_fn=extract_lai, unit="m²/m²", value_range=(0,8),
         citation="Myneni RB et al. (2002) RSE 83:214. DOI:10.1016/S0034-4257(02)00074-3",
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=2,
@@ -1205,7 +1213,8 @@ def create_default_registry() -> IndicatorRegistry:
                   "removal once Map of Life API access is confirmed and extract_shi is implemented for real, "
                   "not a re-registration."})
 
-    r.register(name="flagship_habitat", display_name="Flagship Habitat Viability", source_type="gee",
+    r.register(name="flagship_habitat", applicable_realms=("terrestrial", "mixed"),  # HSI formula multiplies by forest=dw.eq(DW_TREES), trivially ~0 on water
+        display_name="Flagship Habitat Viability", source_type="gee",
         extract_fn=extract_flagship_habitat, unit="index", value_range=(0,1),
         citation="Forest × elevation_suit × inverse_pressure. Bird threatened overlay.",
         tier2_eligible=False, higher_is_better=True, reference_radius_km=50.0, pillar=3,
@@ -1232,7 +1241,8 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=False, higher_is_better=False, reference_radius_km=100.0, pillar=4,
         metadata={"tnfd_dim": 4})
 
-    r.register(name="star_t", display_name="STAR_T (Threat Abatement)", source_type="gee",
+    r.register(name="star_t", applicable_realms=("terrestrial", "mixed"),  # habitat-mask component uses DW_NATURAL_CLASSES, excludes water
+        display_name="STAR_T (Threat Abatement)", source_type="gee",
         extract_fn=extract_star_t, unit="score", value_range=(0,10),
         citation="Mair et al. (2021). Nat Ecol Evol. DOI:10.1038/s41559-021-01432-0",
         tier2_eligible=False, higher_is_better=True, reference_radius_km=100.0, pillar=4,
@@ -1311,7 +1321,8 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _img_iri, "tnfd_dim": "threats",
                   "note": "Road proxy = built-up edge (not true road dataset)."})
 
-    r.register(name="ivsi", display_name="Invasive Vegetation Spread Index", source_type="gee",
+    r.register(name="ivsi", applicable_realms=("terrestrial", "mixed"),  # detects NDVI expansion (vegetation-based), not meaningful on open water
+        display_name="Invasive Vegetation Spread Index", source_type="gee",
         extract_fn=extract_ivsi, unit="fraction (0-1)", value_range=(0,1),
         citation="Paz-Kagan T et al. (2019) RSE 233:111396. DOI:10.1016/j.rse.2019.111396",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
