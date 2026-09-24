@@ -221,6 +221,23 @@ def apply_contracts(registry) -> Dict[str, int]:
         spec.measurement_scale = c.get("measurement_scale")
         spec.input_layers = list(c.get("input_layers", []))
         spec.module = c.get("module", "core")
+        # REAL FIX: applicable_realms is the authoritative realm-filtering
+        # gate (see registry.py's field docstring for why module alone
+        # wasn't safe to use directly). Derived here from the SAME
+        # contract-table module tag, as one single source of truth,
+        # rather than set separately in indicators/__init__.py for these
+        # contract-driven indicators too. An explicit "applicable_realms"
+        # key in the contract entry overrides this default derivation,
+        # for the rare case a module="aquatic" indicator is still
+        # genuinely meaningful on land (or vice versa) -- checked
+        # directly, none currently need that override, but the escape
+        # hatch is real, not hypothetical busywork.
+        if "applicable_realms" in c:
+            spec.applicable_realms = tuple(c["applicable_realms"])
+        elif spec.module == "aquatic":
+            spec.applicable_realms = ("aquatic", "mixed")
+        # else: leave whatever indicators/__init__.py's own registration
+        # set (defaults to all realms if that file didn't restrict it).
         spec.evidence_tier = _TIER[disp]
         spec.metadata["disposition"] = disp
         spec.metadata["contract_note"] = c.get("note", "")

@@ -92,6 +92,18 @@ class IndicatorSpec:
     evidence_tier: str = "contextual"     # screening | contextual | baseline | monitoring
     realm: str = "terrestrial"            # terrestrial | aquatic | mixed
     module: str = "core"                  # core | conservation | agroforestry | aquatic | optional
+    # REAL FIX: "module" groups indicators by which archetype/programme
+    # designed them (metadata only, until this field). It does NOT mean
+    # "only valid in that realm" -- confirmed directly by checking real
+    # extraction logic: 10 of 12 currently-scored indicators are tagged
+    # module="core" but several are land-cover-specific in a way that
+    # gives a degenerate, misleading value on open water (chm: canopy
+    # height ~0m on a lake; forest_loss_rate: trivially 0% on a lake;
+    # natural_habitat: DW_NATURAL_CLASSES excludes water entirely, so a
+    # pristine lake would wrongly show ~0% "natural"). applicable_realms
+    # is the real, authoritative gate for realm-based filtering; module
+    # stays as the original archetype-grouping metadata, unchanged.
+    applicable_realms: tuple = ("terrestrial", "aquatic", "mixed")
 
     # -- reference & benchmarking --
     reference_type: Optional[str] = None  # contemporary_best_on_offer | regional_distribution |

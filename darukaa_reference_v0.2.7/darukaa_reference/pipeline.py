@@ -128,28 +128,34 @@ class Pipeline:
         indicators = [s for s in indicators if getattr(s, "registered", True)
                       and getattr(s, "active", True)]
 
-        # REAL FIX: config.realm ("terrestrial" | "aquatic" | "mixed") was
-        # already loaded and logged every run, but never actually used to
-        # filter anything — confirmed directly, not assumed, before
-        # completing it. Without this, an aquatic-focused run (e.g. Tata
-        # Motors' real water bodies) computed every terrestrial indicator
-        # too, mostly returning null/low-confidence on a small pond
-        # polygon rather than being cleanly excluded. "mixed" (or an
-        # unrecognised value) keeps every module, preserving the exact
-        # prior behaviour for every existing project/config — this is
-        # additive, not a change to default behaviour.
+        # REAL FIX (round 2): config.realm ("terrestrial" | "aquatic" |
+        # "mixed") was already loaded and logged every run, but never
+        # actually used to filter anything — confirmed directly, not
+        # assumed, before completing it. The FIRST version of this fix
+        # filtered by `module` (core/aquatic/...), which was too coarse:
+        # checked directly against real extraction logic and found 5 of
+        # the 12 currently-scored "core" indicators give a degenerate,
+        # misleading value on open water (chm: canopy height ~0m on a
+        # lake; forest_loss_rate: trivially ~0% on a lake;
+        # natural_habitat: DW_NATURAL_CLASSES excludes water entirely, so
+        # a pristine lake would wrongly show ~0% "natural"; cpland: a
+        # land-vegetation classification layer; bii: PREDICTS is an
+        # explicitly terrestrial model). `applicable_realms` (registry.py)
+        # is the real, per-indicator-verified gate now — every one of the
+        # 12 core-scored indicators and all 9 aquatic-module indicators
+        # were checked individually before being set, not assumed from
+        # their module tag. "mixed" (or an unrecognised realm) keeps
+        # every indicator, preserving the exact prior behaviour for every
+        # existing project/config unless realm is explicitly changed.
         realm = getattr(self.config, "realm", "terrestrial")
-        if realm == "aquatic":
-            indicators = [s for s in indicators if getattr(s, "module", "core") in ("core", "aquatic")]
-        elif realm == "terrestrial":
-            indicators = [s for s in indicators if getattr(s, "module", "core") != "aquatic"]
-        # realm == "mixed" (or anything else): no module filtering, same as before this fix.
+        if realm in ("terrestrial", "aquatic"):
+            indicators = [s for s in indicators if realm in getattr(s, "applicable_realms", ("terrestrial", "aquatic", "mixed"))]
+        # realm == "mixed" (or anything else): no realm filtering, same as before this fix.
 
         mode = getattr(self.config, "assessment_mode", "baseline")
         logger.info(f"Assessment mode: {mode} | realm={realm} "
                     f"| archetype={getattr(self.config,'archetype','conservation')}")
-        logger.info(f"Realm filter kept {len(indicators)} indicator(s) "
-                    f"({'aquatic + core' if realm == 'aquatic' else 'non-aquatic' if realm == 'terrestrial' else 'all modules'})")
+        logger.info(f"Realm filter kept {len(indicators)} indicator(s) for realm='{realm}'")
         if mode == "monitoring":
             logger.warning(
                 "Monitoring mode: change-vs-baseline scoring requires a stored Year-0 "

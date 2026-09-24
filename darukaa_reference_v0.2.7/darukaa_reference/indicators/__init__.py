@@ -955,6 +955,7 @@ def create_default_registry() -> IndicatorRegistry:
 
     # ── DIM 1: ECOSYSTEM EXTENT ───────────────────────────────────────────────
     r.register(name="natural_habitat", display_name="Natural Habitat Extent", source_type="gee",
+        applicable_realms=("terrestrial", "mixed"),  # DW_NATURAL_CLASSES (checked directly) excludes water
         extract_fn=extract_natural_habitat, unit="%", value_range=(0,100),
         citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4",
         tier2_eligible=True, reference_radius_km=50.0, pillar=1,
@@ -966,14 +967,18 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_natural_landcover, "tnfd_dim": 1})
 
-    r.register(name="cpland", display_name="Landscape Connectivity (CPLAND)", source_type="gee",
+    r.register(name="cpland", applicable_realms=("terrestrial", "mixed"),
+        # PV_Binary is land-vegetation-specific, meaningless on open water
+        display_name="Landscape Connectivity (CPLAND)", source_type="gee",
         extract_fn=extract_cpland, unit="%", value_range=(0,100),
         citation="McGarigal & Marks (1995). Darukaa PV binary.",
         tier2_eligible=False, reference_radius_km=30.0, pillar=1,
         metadata={"tnfd_dim": 1, "note": "India-only PV binary asset",
                   "gee_image_fn": _img_cpland_binary})
 
-    r.register(name="forest_loss_rate", display_name="Tree Cover Loss Rate", source_type="gee",
+    r.register(name="forest_loss_rate", applicable_realms=("terrestrial", "mixed"),
+        # Forest loss/gain is trivially ~0 on open water, not informative
+        display_name="Tree Cover Loss Rate", source_type="gee",
         extract_fn=extract_forest_loss_rate, unit="% per year", value_range=(0,100),
         citation="Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
              "NOTE: metric detects loss of tree canopy ≥30% density only. "
@@ -1008,7 +1013,14 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=True, reference_radius_km=50.0, pillar=2,
         metadata={"gee_image_fn": _img_hhi, "tnfd_dim": 2})
 
-    r.register(name="flii", display_name="Forest Fragmentation & Pressure Proxy (Darukaa)", source_type="gee",
+    r.register(name="flii", applicable_realms=("terrestrial", "mixed"),
+        # Forest-specific by definition (fragmentation/pressure on forest
+        # landscape) -- was already excluded from aquatic via module=
+        # "conservation", but applicable_realms is now the real,
+        # authoritative gate, so this needs to be set explicitly too or
+        # it would wrongly default to "applies everywhere" once the
+        # module-based filter is retired.
+        display_name="Forest Fragmentation & Pressure Proxy (Darukaa)", source_type="gee",
         extract_fn=extract_flii, unit="0–10", value_range=(0,10),
         citation=("Darukaa-computed proxy (VIIRS night-light pressure + Dynamic-World forest "
                  "fragmentation), NOT the published Forest Landscape Integrity Index raster "
@@ -1021,6 +1033,7 @@ def create_default_registry() -> IndicatorRegistry:
                  "display_name_report": "Forest Fragmentation & Pressure Proxy (Darukaa)"})
 
     r.register(name="eii", display_name="Ecosystem Integrity Index", source_type="gee",
+        applicable_realms=("terrestrial", "mixed"),  # unverified over water pixels -- conservative default, see registry.py
         extract_fn=extract_eii, unit="index", value_range=(0,1),
         citation="Hill et al. (2022). bioRxiv. DOI:10.1101/2022.08.21.504707. Landbanking 300m.",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
@@ -1044,7 +1057,8 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii_f, "tnfd_dim": 2})
 
-    r.register(name="bii", display_name="Biodiversity Intactness Index", source_type="gee",
+    r.register(name="bii", applicable_realms=("terrestrial", "mixed"),  # PREDICTS is a terrestrial biodiversity model
+        display_name="Biodiversity Intactness Index", source_type="gee",
         extract_fn=extract_bii, unit="index", value_range=(0,1),
         citation=("Newbold et al. (2016). Science 353:288-291. DOI:10.1126/science.aaf2201 "
                  "(BII methodology); Hudson et al. (2017). Ecol. Evol. 7:145-188 (PREDICTS "
@@ -1135,7 +1149,9 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _img_riparian_ndvi_trend, "tnfd_dim": 2,
                   "note": "Linear slope NDVI/year in riparian zone. Negative = degradation trend."})
 
-    r.register(name="jrc_water_persistence", display_name="JRC Water Persistence (Permanent Fraction)", source_type="gee",
+    r.register(name="jrc_water_persistence", applicable_realms=("terrestrial", "aquatic", "mixed"),
+        # Water-specific by definition -- was mistagged module="core" instead of "aquatic"
+        display_name="JRC Water Persistence (Permanent Fraction)", source_type="gee",
         extract_fn=extract_jrc_water_persistence, unit="fraction (0-1)", value_range=(0,1),
         citation="Pekel JF et al. (2016) Nature 540:418. DOI:10.1038/nature20584",
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
@@ -1156,7 +1172,9 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _img_lai, "tnfd_dim": 2,
                   "note": "MODIS 500m. Scale factor 0.1 applied."})
 
-    r.register(name="chm", display_name="Canopy Height Model (GEDI L2A rh98)", source_type="gee",
+    r.register(name="chm", applicable_realms=("terrestrial", "mixed"),
+        # Canopy height is trivially ~0m on open water, not informative
+        display_name="Canopy Height Model (GEDI L2A rh98)", source_type="gee",
         extract_fn=extract_chm, unit="metres", value_range=(0,80),
         citation="Dubayah R et al. (2020) Sci Remote Sens 1:100002. DOI:10.1016/j.srs.2020.100002",
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=2,
@@ -1238,19 +1256,22 @@ def create_default_registry() -> IndicatorRegistry:
                   "note": "IUCN_Plant_Redlist. CR/EN/VU. Returns n_CR/n_EN/n_VU counts."})
 
     # ── THREATS & PRESSURES (pillar=5) ───────────────────────────────────────
-    r.register(name="ghm", display_name="Global Human Modification", source_type="gee",
+    r.register(name="ghm", applicable_realms=("terrestrial", "aquatic", "mixed"),
+        # Landscape-wide human-pressure surface, genuinely valid for water too
+        display_name="Global Human Modification", source_type="gee",
         extract_fn=extract_ghm, unit="index", value_range=(0,1),
         citation="Kennedy et al. (2019). DOI:10.1111/gcb.14549",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=50.0, pillar=5,
         metadata={"gee_image_fn": _img_ghm, "tnfd_dim": "threats"})
 
-    r.register(name="light_pollution", display_name="Light Pollution (VIIRS)", source_type="gee",
+    r.register(name="light_pollution", applicable_realms=("terrestrial", "aquatic", "mixed"), display_name="Light Pollution (VIIRS)", source_type="gee",
         extract_fn=extract_light_pollution, unit="nW/cm²/sr", value_range=(0,500),
         citation="Elvidge et al. (2017). DOI:10.1080/01431161.2017.1342050",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_viirs, "tnfd_dim": "threats"})
 
     r.register(name="hdi", display_name="Human Disturbance Index", source_type="gee",
+        applicable_realms=("terrestrial", "aquatic", "mixed"),
         extract_fn=extract_hdi, unit="index", value_range=(0,1),
         citation="ESA WorldCover v200. DOI:10.5281/zenodo.7254221",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
