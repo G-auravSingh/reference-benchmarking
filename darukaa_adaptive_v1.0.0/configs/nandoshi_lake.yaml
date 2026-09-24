@@ -1,0 +1,23 @@
+project:
+  name: SayTrees_Nandoshi_Lake
+  profile: aquatic_lake
+  site_file: input/Nandoshi lake.kml
+  assessment_year: 2025
+
+gee:
+  project: darukaa-earth-product
+
+water:
+  dynamic_world_probability: 0.50
+  reference_probability: 0.70
+
+spatial:
+  riparian_buffer_m: 100
+  reference_buffer_km: 25
+
+reference:
+  hmi_ceiling: 0.10
+  min_pixels: 20
+
+output:
+  directory: output/nandoshi
