@@ -1434,7 +1434,7 @@ def extract_forest_loss_rate(g, c):
         ]
         primary_label = getattr(c, "forest_loss_primary_window", "loss_longterm_2001_2025")
 
-        loss_rates, gain_rates, net_rates = {}, {}, {}
+        loss_rates, gain_rates, net_rates, loss_ha_by_window = {}, {}, {}, {}
         for key, yr_start, yr_end, n_years in windows:
             l = (gfc.select("lossyear")
                  .gte(yr_start)
@@ -1443,7 +1443,9 @@ def extract_forest_loss_rate(g, c):
             al = pa.updateMask(l).reduceRegion(
                 reducer=ee.Reducer.sum(), geometry=eg,
                 scale=30, maxPixels=1e13)
-            loss_rate = (ee.Number(al.get("area"))
+            loss_area_m2 = ee.Number(al.get("area"))
+            loss_ha_by_window[key] = round(loss_area_m2.getInfo() / 10000, 4)
+            loss_rate = (loss_area_m2
                         .divide(baseline_m2.max(1))
                         .multiply(100)
                         .divide(n_years))
@@ -1471,6 +1473,30 @@ def extract_forest_loss_rate(g, c):
                           f"the first configured window for scoring.")
             primary_value = next(iter(net_rates.values()), None)
 
+        # REAL BUG FIXED HERE (found directly from a real Tata Motors run:
+        # Deccan forest's real Hansen 2000 baseline was 0.01 ha -- Dynamic
+        # World now finds 24.26 ha of real, current tree cover there,
+        # which is very likely a genuine restoration/afforestation story,
+        # not noise. But dividing that real gain by a near-zero baseline
+        # to get a PERCENTAGE rate is arithmetically meaningless --
+        # site_value came out as 10,851%/year, which silently poisoned
+        # this indicator's score and, through the non-compensatory
+        # limiting-factor rule, the WHOLE C1_landscape component down to
+        # ~0. low_baseline_flag already correctly DETECTED this exact
+        # case, but nothing downstream ever actually acted on it -- the
+        # exploded value still flowed into scoring as if it were a real
+        # number. Suppressed to None here instead: the real, useful
+        # numbers (baseline_forest_ha, gain_detected_ha, an absolute
+        # ha/yr change) stay fully available in metadata for the report
+        # to show honestly, but a percentage rate this unstable no longer
+        # gets treated as a trustworthy score input.
+        if low_baseline:
+            logger.warning(f"forest_loss_rate: baseline_forest_ha={baseline_ha} is below the "
+                          f"5ha stability floor — percentage rate ({primary_value}%/yr) is "
+                          f"arithmetically unstable and has been suppressed from scoring. "
+                          f"See metadata for absolute area change instead.")
+            primary_value = None
+
         return {
             "value": primary_value,   # NET rate (gain - loss), %/yr; positive = regrowth
             "pixels": None,
@@ -1481,6 +1507,8 @@ def extract_forest_loss_rate(g, c):
                 "primary_window": primary_label,     # which one drove the score
                 "baseline_forest_ha":         baseline_ha,
                 "gain_detected_ha":            gain_ha,
+                "loss_ha_by_window": loss_ha_by_window,
+                "absolute_net_change_ha": round(gain_ha - loss_ha_by_window.get(primary_label, 0), 2),
                 "low_baseline_flag":     low_baseline,
                 "note": (f"site_value is the NET rate (gain - loss) for '{primary_label}', "
                         f"used for cross-site comparability (see "
@@ -1770,8 +1798,21 @@ def extract_wcpi(g,c):
     import ee
     eg=_to_ee(g); wcpi_raw=_img_wcpi(c)
     if wcpi_raw is None: return {"value":None,"pixels":None}
-    stats=wcpi_raw.reduceRegion(reducer=ee.Reducer.minMax(),geometry=eg,scale=10,maxPixels=1e13)
-    mn=ee.Number(stats.get('WCPI_min')); mx=ee.Number(stats.get('WCPI_max'))
+    stats=wcpi_raw.reduceRegion(reducer=ee.Reducer.minMax(),geometry=eg,scale=10,maxPixels=1e13).getInfo()
+    # REAL BUG FIXED HERE (found directly from a real Tata Motors run:
+    # "Number.subtract: Parameter 'left' is required and may not be
+    # null" for small real pond polygons). reduceRegion returns no
+    # WCPI_min/WCPI_max keys at all when zero valid pixels fall inside
+    # the geometry at this scale (a genuine, real case for a very small
+    # pond) -- ee.Number(None) then crashed .subtract() rather than
+    # producing a real "no data" result. Checked explicitly now, the
+    # same way every other extract_* function in this module checks a
+    # reduceRegion result client-side after one real .getInfo() call.
+    min_val, max_val = stats.get('WCPI_min'), stats.get('WCPI_max')
+    if min_val is None or max_val is None:
+        return {"value": None, "pixels": None,
+                "metadata": {"reason": "No valid WCPI pixels found within this geometry at this scale."}}
+    mn=ee.Number(min_val); mx=ee.Number(max_val)
     span=mx.subtract(mn).max(1e-6)
     wcpi_norm=wcpi_raw.subtract(mn).divide(span).clamp(0,1)
     return _reduce(wcpi_norm,g,10)
@@ -1794,9 +1835,23 @@ def extract_sdi(g,c):
             .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20)).map(msk))
         composite=s2.median().clip(eg)
         ndwi=composite.normalizedDifference(['B3','B8'])
-        water_vec=ndwi.gt(0).selfMask().reduceToVectors(
-            geometry=eg,scale=10,geometryType='polygon',eightConnected=True,maxPixels=1e13)
-        water_geom=water_vec.geometry(1); shore_buf=water_geom.buffer(100)
+        # REAL BUG FIXED HERE (found directly from a real Tata Motors
+        # run: "Image.clip: The geometry for image clipping must not be
+        # empty"). This was a FOURTH place in this codebase with the
+        # same fragile water_vec.geometry(1) pattern the v0.2.5 fix
+        # already found and fixed in three others (extract_rci,
+        # extract_riparian_ndvi_trend, extract_shdi) — missed here.
+        # geometry(1) returns empty when fewer than 2 water polygons are
+        # vectorised (the normal case for a small real pond), and
+        # .buffer(100) on an empty geometry produces exactly this
+        # crash. Now uses the same shared, real, largest-polygon helper
+        # every other water-adjacent indicator uses.
+        water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)
+        if water_geom is None:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry — SDI is a "
+                                          "shoreline-disturbance metric and genuinely does not apply here."}}
+        shore_buf=water_geom.buffer(100)
         disturbed=_img_sdi(c)
         pa=ee.Image.pixelArea()
         dist_area=pa.updateMask(disturbed.clip(shore_buf)).reduceRegion(
