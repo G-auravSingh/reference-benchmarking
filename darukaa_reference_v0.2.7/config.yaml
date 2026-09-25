@@ -13,7 +13,7 @@ project:
   reference_estimator_default: "auto"      # auto (by scale) | log_response_ratio | robust_z
 
 gee:
-  project: "your-gee-project-id"         # Google Earth Engine project ID
+  project: "darukaa-earth-product"         # Google Earth Engine project ID
   service_account: null                    # Optional: for server-side auth
   key_path: null                           # Optional: path to SA key JSON
 
@@ -35,9 +35,9 @@ tier2:
   elevation_band_m: 300.0                  # ±m elevation filter for Tier 2
 
 # Remote sensing parameters
-ndvi_year: 2024
+ndvi_year: 2025
 ndvi_cloud_threshold: 20                   # Max cloud cover % for Sentinel-2
-lst_year: 2024
+lst_year: 2025
 
 # Statistical comparison parameters
 statistics:
