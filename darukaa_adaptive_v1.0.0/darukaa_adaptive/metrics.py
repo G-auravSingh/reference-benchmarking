@@ -61,6 +61,7 @@ class LakeMetrics:
         import ee
 
         def mask(img):
+            img = ee.Image(img)
             scl = img.select("SCL")
             good = (
                 scl.neq(3)
@@ -208,6 +209,8 @@ class LakeMetrics:
         )
 
     def bloom_frequency(self, geometry, start, end):
+        import ee
+
         s2 = self._s2(geometry, start, end)
         n = self._collection_size(s2)
         if n == 0:
@@ -217,6 +220,7 @@ class LakeMetrics:
         wm, method, _ = self.water.water_mask_for_period(geometry, start, end)
 
         def fai(img):
+            img = ee.Image(img)
             red = img.select("B4")
             nir = img.select("B8")
             swir = img.select("B11")
@@ -225,8 +229,14 @@ class LakeMetrics:
             )
             return nir.subtract(baseline).rename("FAI").copyProperties(img, ["system:time_start"])
 
-        blooms = s2.map(lambda img: fai(img).gt(self.config.water.fai_bloom_threshold)
-                        .rename("bloom").updateMask(wm))
+        blooms = s2.map(
+            lambda img: (
+                ee.Image(fai(ee.Image(img)))
+                .gt(self.config.water.fai_bloom_threshold)
+                .rename("bloom")
+                .updateMask(wm)
+            )
+        )
         frequency = blooms.mean().rename("bloom_frequency")
         stats = self._reduce_stats(frequency, geometry, 20)
         return self._make(
@@ -275,12 +285,21 @@ class LakeMetrics:
         for year in range(start_year, end_year + 1):
             s2 = self._s2(riparian_zone, f"{year}-01-01", f"{year + 1}-01-01")
             if months != list(range(1, 13)):
-                s2 = s2.map(lambda img: img.set("_month", img.date().get("month")))
+                s2 = s2.map(
+                    lambda img: ee.Image(img).set(
+                        "_month",
+                        ee.Image(img).date().get("month"),
+                    )
+                )
                 s2 = s2.filter(ee.Filter.inList("_month", months))
             n = self._collection_size(s2)
             if n == 0:
                 continue
-            ndvi = s2.map(lambda img: img.normalizedDifference(["B8", "B4"]).rename("NDVI")).median()
+            ndvi = s2.map(
+                lambda img: ee.Image(img)
+                .normalizedDifference(["B8", "B4"])
+                .rename("NDVI")
+            ).median()
             stats = self._reduce_stats(ndvi, riparian_zone, 10)
             if stats["mean"] is not None:
                 years.append(year)
