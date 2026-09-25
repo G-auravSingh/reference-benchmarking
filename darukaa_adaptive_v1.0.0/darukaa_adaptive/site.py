@@ -103,6 +103,12 @@ def read_kml(path: str | Path) -> Tuple[BaseGeometry, Dict[str, BaseGeometry]]:
     try:
         geoms = _extract_with_fastkml(data)
     except Exception:
+        geoms = {}
+
+    # fastkml can successfully parse a KML document but return no geometry
+    # for otherwise valid Polygon placemarks (API/version differences).
+    # Always fall back to the namespace-aware XML parser when that happens.
+    if not geoms:
         from lxml import etree
         root = etree.fromstring(data)
         for name, geom in _iter_lxml_placemarks(root):
