@@ -208,16 +208,24 @@ class LakeMetrics:
         )
 
     def bloom_frequency(self, geometry, start, end):
+        import ee
+
         s2 = self._s2(geometry, start, end)
-        n = self._collection_size(s2)
-        if n == 0:
-            return self._make("surface_algal_bloom_frequency", None, "insufficient_data",
-                              _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED", 20, 0)
+        if self._collection_size(s2) == 0:
+            return self._make(
+                "bloom_frequency",
+                None,
+                "fraction",
+                geometry_name="boundary",
+                temporal_window=_window_label(start, end),
+                status="insufficient_data",
+                notes="No Sentinel-2 observations available.",
+            )
+
 
         wm, method, _ = self.water.water_mask_for_period(geometry, start, end)
 
         def fai(img):
-            import ee
             img = ee.Image(img)
             red = img.select("B4")
             nir = img.select("B8")
@@ -229,19 +237,28 @@ class LakeMetrics:
 
         blooms = s2.map(
             lambda img: (
-                fai(ee.Image(img))
+                fai(img)
                 .gt(self.config.water.fai_bloom_threshold)
                 .rename("bloom")
                 .updateMask(wm)
             )
         )
         frequency = blooms.mean().rename("bloom_frequency")
-        stats = self._reduce_stats(frequency, geometry, 20)
+        stats = self._reduce_stats(frequency, geometry, 10)
+        
         return self._make(
-            "surface_algal_bloom_frequency", stats["mean"],
-            "ok" if stats["mean"] is not None else "insufficient_water_or_data",
-            _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, n, stats,
-            f"FAI bloom-proxy frequency using threshold {self.config.water.fai_bloom_threshold}; validate against field observations.",
+            "bloom_frequency",
+            stats["mean"],
+            "fraction",
+            geometry_name="boundary",
+            temporal_window=_window_label(start, end),
+            status="ok",
+            valid_observations=self._collection_size(s2),
+            valid_pixels=stats["count"],
+            std_dev=stats["std_dev"],
+            p05=stats["p05"],
+            p95=stats["p95"],
+            notes=f"Water-mask method: {method}.",
         )
 
     def shoreline_disturbance(self, riparian_zone, start, end):
