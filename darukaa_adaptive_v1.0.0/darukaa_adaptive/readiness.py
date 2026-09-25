@@ -45,13 +45,22 @@ def assess_readiness(config, boundary_area_ha: float, metrics: Iterable, benchma
             "tier2_approved_for_scoring": config.reference.tier2_approved_for_scoring,
         },
         "ecological_thresholds": {
-            "status": "configured" if config.scoring.thresholds_by_metric else "not_configured",
-            "n_threshold_sets": len(config.scoring.thresholds_by_metric),
+            "status": "fixed_product_convention",
+            "bands_0_to_100": {
+                "0-<20": "Very High",
+                "20-<40": "High",
+                "40-<60": "Moderate",
+                "60-<80": "Low",
+                "80-100": "Very Low",
+            },
+            "basis": "Declared Darukaa product convention; not a universal ecological threshold.",
             "reference_relative_enabled": config.scoring.reference_relative_enabled,
         },
         "composite_son": {
-            "status": "ready_when_evidence_is_sufficient" if config.scoring.composite_son_enabled else "disabled_by_default",
-            "reason": "P2/P3 biological evidence is not created from EO proxies alone.",
+            "status": "ready_when_evidence_is_sufficient" if config.scoring.composite_son_enabled else "disabled",
+            "aggregation_method": config.scoring.aggregation_method,
+            "pillar_structure": ["C1_extent", "C2_vegetation", "C3_fauna", "C4_pressure"],
+            "reason": "A complete overall score requires scoreable evidence across all four pillars.",
         },
         "field_validation": {
             "status": "required_for_calibration",

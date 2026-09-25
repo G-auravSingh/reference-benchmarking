@@ -1,19 +1,18 @@
 # Changelog
 
-## 1.1.0 — adaptive lake production pass
+## 1.2.0 — universal intactness and four-pillar scoring
 
-- Added explicit date-driven Year-0 baseline support (default: 2025-08-01 through 2026-08-31).
-- Kept separate historical 2018–2026 trend/context window.
-- Added canonical configuration validation with backward support for the earlier `gEE` key.
-- Added native aquatic indicator contracts and retained the frozen 44-indicator legacy crosswalk.
-- Added metric-level Tier-1/Tier-2 benchmark model with explicit reference provenance.
-- Added optional reference KML and reference CSV pathways for Tier-1 benchmarks.
-- Added uncertainty-ready metric statistics and richer metric provenance fields.
-- Added gated 1–5 metric concern scoring, pillar aggregation and legacy-compatible 0–10 overall scoring.
-- Added formal pillar coverage and score-eligibility rules so missing evidence cannot silently alter the composite.
-- Added readiness reporting for temporal, reference, threshold and field-validation status.
-- Added reusable monthly/annual period helpers.
-- Updated the Nandoshi Colab notebook for clean cell-by-cell execution and repeatable GitHub pull/install behavior.
-- Added output registry/crosswalk tables and expanded assessment manifest provenance.
-- Added documentation describing the reference and scoring model.
-- Legacy package content remains unchanged.
+- Replaced the legacy adaptive scoring path with a universal 0–100 intactness framework.
+- Standardized the common pillars to **C1 Extent, C2 Vegetation, C3 Fauna, C4 Pressure**.
+- Added direction-aware reference comparison for higher-is-better, lower-is-better and reference-target indicators.
+- Declared the five fixed concern bands: 0–<20 Very High, 20–<40 High, 40–<60 Moderate, 60–<80 Low, 80–100 Very Low.
+- Documented the bands as a Darukaa product convention rather than universal ecological thresholds.
+- Changed pillar aggregation to the geometric mean of continuous 0–100 intactness scores.
+- Changed overall SoN aggregation to the geometric mean of the four pillar scores.
+- Added explicit limiting-indicator reporting for each pillar and limiting-pillar/limiting-indicator reporting for overall SoN.
+- Added explicit reference approval gating so candidate/reference values can be displayed without silently affecting scores.
+- Added a generic external-observation scoring interface for field, terrestrial, acoustic, eDNA and other validated observations.
+- Added baseline riparian NDVI as a C2 vegetation metric; retained riparian NDVI trend as contextual.
+- Extended aquatic reference calculation to water extent, water persistence and baseline riparian NDVI.
+- Updated readiness, documentation and notebook interpretation guardrails.
+- Kept `legacy/darukaa_reference_v0.1.0/` unchanged.

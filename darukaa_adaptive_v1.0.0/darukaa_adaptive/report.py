@@ -36,6 +36,7 @@ def write_assessment(
     pillar_df=None,
     overall=None,
     landcover=None,
+    metric_qa=None,
     extra_manifest: Optional[dict] = None,
 ):
     out = Path(output_dir)
@@ -66,6 +67,11 @@ def write_assessment(
             out / "landcover_composition.csv", index=False
         )
 
+    if metric_qa is not None:
+        metric_qa.to_csv(out / "metric_qa_scorecard.csv", index=False)
+    else:
+        pd.DataFrame().to_csv(out / "metric_qa_scorecard.csv", index=False)
+
     (out / "readiness.json").write_text(json.dumps(readiness, indent=2, default=str), encoding="utf-8")
     (out / "overall_scorecard.json").write_text(json.dumps(overall or {}, indent=2, default=str), encoding="utf-8")
     pd.DataFrame(indicator_table()).to_csv(out / "indicator_registry.csv", index=False)
@@ -90,6 +96,7 @@ def write_assessment(
             "dynamic_water_generated_per_period": True,
         },
         "metrics": [m.to_dict() for m in metrics],
+        "metric_qa": metric_qa.to_dict(orient="records") if metric_qa is not None else [],
     }
     if extra_manifest:
         manifest.update(extra_manifest)
@@ -98,11 +105,12 @@ def write_assessment(
 
     (out / "README_OUTPUTS.md").write_text(
         "# Assessment outputs\n\n"
-        "`metric_scorecard.csv` contains the raw metric measurements and provenance.\n\n"
-        "`benchmark_scorecard.csv` contains Tier-1/Tier-2 reference values and direction-aware relative comparison where applicable.\n\n"
-        "`metric_concern_scorecard.csv` contains 1-5 concern scores only where approved thresholds or explicitly enabled reference-relative bands exist.\n\n"
-        "`pillar_scorecard.csv` aggregates only scored metrics with a minimum-evidence rule.\n\n"
-        "`overall_scorecard.json` reports the 0-10 composite only when the required pillar coverage is met.\n\n"
+        "`metric_scorecard.csv` contains the raw metric measurements, provenance and metric-level metadata.\n\n"
+        "`metric_qa_scorecard.csv` contains automated structural/measurement QA flags; scientific/ecological interpretation remains subject to review.\n\n"
+        "`benchmark_scorecard.csv` contains Tier-1/Tier-2 reference values, raw comparison and 0–100 intactness where available.\n\n"
+        "`metric_concern_scorecard.csv` contains raw value, selected reference, intactness (0–100) and fixed five-band concern for scoreable metrics.\n\n"
+        "`pillar_scorecard.csv` contains C1 Extent, C2 Vegetation, C3 Fauna and C4 Pressure geometric-mean scores, concern levels and limiting indicators.\n\n"
+        "`overall_scorecard.json` contains the 0–100 State of Nature composite, concern level, limiting pillar and limiting indicator when all required pillars are represented.\n\n"
         "`water_periods.csv` contains dynamic surface-water summaries.\n\n"
         "`readiness.json` records baseline, reference and field-validation readiness.\n\n"
         "`assessment_manifest.json` captures configuration and input SHA-256 provenance.\n",

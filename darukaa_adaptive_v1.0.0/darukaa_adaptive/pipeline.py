@@ -9,6 +9,7 @@ from .config import AssessmentConfig
 from .metrics import LakeMetrics
 from .readiness import assess_readiness
 from .report import write_assessment
+from .qa import qa_metrics
 from .scoring import build_scorecard
 from .site import area_ha, make_domains, read_kml
 from .water import WaterDetector
@@ -47,6 +48,7 @@ class LakePipeline:
         metrics = LakeMetrics(self.config, water)
         baseline_start, baseline_end = self.config.temporal.baseline_dates()
         metric_results = metrics.run(domains["boundary"], domains["riparian_fixed"], baseline_start, baseline_end)
+        metric_qa = qa_metrics(metric_results)
 
         reference_engine = ReferenceEngine(self.config, metrics)
         tier1_geometry = reference_engine.build_tier1_geometry(self.config.reference.tier1_reference_kml)
@@ -85,6 +87,7 @@ class LakePipeline:
             pillar_df=pillar_df,
             overall=overall,
             landcover=landcover,
+            metric_qa=metric_qa,
             extra_manifest={
                 "baseline_window_inclusive": {
                     "start": self.config.temporal.baseline_start_date,
@@ -105,6 +108,7 @@ class LakePipeline:
             "parts": parts,
             "domains": domains,
             "metrics": metric_results,
+            "metric_qa": metric_qa,
             "benchmarks": benchmarks,
             "metric_concern": scored_df,
             "pillars": pillar_df,

@@ -1,32 +1,25 @@
-# TEMPLATE ONLY — no ecological thresholds are recommended by this file.
-# Replace the placeholders with scientifically reviewed, metric-specific thresholds.
-# Copy the structure into profiles/aquatic_lake.yaml under `scoring` only after review.
+# Darukaa fixed concern convention — no metric-specific raw thresholds are required.
 #
-# For direct threshold scoring, t1<t2<t3<t4.
-# The metric registry determines whether higher or lower values are more concerning.
-
-# scoring:
-#   composite_son_enabled: true
-#   thresholds_by_metric:
-#     ndci_proxy:
-#       t1: <reviewed_value_1>
-#       t2: <reviewed_value_2>
-#       t3: <reviewed_value_3>
-#       t4: <reviewed_value_4>
-
-# Alternative: approved direction-aware reference-relative intactness bands.
-# Higher intactness means lower concern.
+# Every scoreable indicator follows:
+#   raw value → approved comparable reference → metric-specific intactness transform
+#   → 0–100 intactness → fixed concern band
 #
-# scoring:
-#   composite_son_enabled: true
-#   reference_relative_enabled: true
-#   reference_ratio_thresholds_by_metric:
-#     ndci_proxy:
-#       r1: <reviewed_ratio_1>
-#       r2: <reviewed_ratio_2>
-#       r3: <reviewed_ratio_3>
-#       r4: <reviewed_ratio_4>
+# Fixed product bands:
+#   80–100%  Very Low concern
+#   60–<80%  Low concern
+#   40–<60%  Moderate concern
+#   20–<40%  High concern
+#   0–<20%   Very High concern
+#
+# These bands are a declared Darukaa product convention, not universal ecological thresholds.
+#
+# References are still metric-specific. For a score to be eligible, the selected reference
+# must be explicitly approved in the profile:
+#
 # reference:
 #   tier1_approved_for_scoring: true
-#   # or, for an approved Tier-2 peer benchmark:
+#   # OR
 #   tier2_approved_for_scoring: true
+#
+# No metric-specific threshold table is necessary for the fixed-band scoring model.
+# Use scoring.reference_ratio_thresholds_by_metric only for legacy migration, not new work.

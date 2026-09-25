@@ -2,7 +2,7 @@
 
 ## Scope
 
-This release validates the adaptive package structure, configuration logic, pure-Python geometry utilities, benchmark/scoring functions, notebook syntax and output schema without claiming that Earth Engine-derived ecological proxies are field-validated.
+This release validates the adaptive package structure, configuration logic, pure-Python geometry utilities, reference benchmarking, universal 0–100 intactness scoring, four-pillar aggregation, notebook syntax and output schema without claiming that Earth Engine-derived ecological proxies are field-validated.
 
 ## Automated checks
 
@@ -11,11 +11,14 @@ The test suite covers:
 - explicit inclusive baseline date handling;
 - baseline shifting and monthly/annual period generation;
 - geometry parsing and area calculation;
-- direction-aware benchmark ratios;
-- 1–5 threshold concern scoring;
-- reference-relative intactness scoring;
-- pillar aggregation and overall-score gating;
-- prevention of scoring when the composite is disabled;
+- direction-aware reference comparisons;
+- the fixed 0–100 concern bands;
+- reference-target intactness;
+- geometric-mean pillar and overall aggregation;
+- explicit limiting-indicator and limiting-pillar reporting;
+- reference-approval scoring gates;
+- generic field/external observation scoring;
+- four-pillar C1/C2/C3/C4 registry structure;
 - legacy 44-indicator crosswalk completeness;
 - trajectory comparison semantics.
 
@@ -26,7 +29,7 @@ The package cannot authenticate the user's Earth Engine account from this build 
 - Dynamic World/Sentinel-1 water detection;
 - Sentinel-2 optical metrics;
 - GEE reduceRegion/sample results;
-- Nandoshi-specific benchmark extraction;
+- Nandoshi-specific reference extraction;
 - end-to-end map rendering;
 - project-account dataset access.
 
@@ -34,4 +37,8 @@ The notebook includes explicit dataset initialization checks and prints the exac
 
 ## Interpretation boundary
 
-EO proxies such as NDCI, red-band reflectance and FAI bloom frequency are retained as screening indicators unless independent field observations support calibration. Biological P2/P3 evidence is not manufactured from EO-only layers, and overall SoN scoring is withheld by default when complete pillar evidence is absent.
+EO proxies such as NDCI, red-band reflectance and FAI bloom frequency remain screening indicators unless an appropriate comparable reference and independent validation support their use in the ecological score.
+
+The five concern bands are a declared Darukaa product convention, not universal ecological thresholds.
+
+A complete overall State of Nature score requires scoreable evidence in all four pillars. C3 Fauna must be supplied by appropriate biodiversity observations (for example field surveys, acoustics or eDNA) rather than inferred from EO water proxies.

@@ -273,6 +273,32 @@ class LakeMetrics:
             result[str(cls)] = stats["mean"]
         return result
 
+    def riparian_ndvi(self, riparian_zone, start, end):
+        """Baseline median NDVI for the fixed riparian vegetation domain."""
+        import ee
+
+        s2 = self._s2(riparian_zone, start, end)
+        n = self._collection_size(s2)
+        if n == 0:
+            return self._make(
+                "riparian_ndvi", None, "insufficient_data",
+                _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED", 10, 0,
+                notes="No Sentinel-2 observations met the configured cloud filter."
+            )
+
+        ndvi = s2.map(
+            lambda img: ee.Image(img)
+            .normalizedDifference(["B8", "B4"])
+            .rename("NDVI")
+        ).median()
+        stats = self._reduce_stats(ndvi, riparian_zone, 10)
+        return self._make(
+            "riparian_ndvi", stats["mean"],
+            "ok" if stats["mean"] is not None else "insufficient_data",
+            _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED", 10, n, stats,
+            notes="Baseline median NDVI in the fixed 100 m riparian domain; vegetation-condition proxy."
+        )
+
     def riparian_ndvi_trend(self, riparian_zone, start_year, end_year):
         """Annual median NDVI with Theil-Sen slope and Kendall tau p-value."""
         import numpy as np
@@ -334,6 +360,7 @@ class LakeMetrics:
             self.ndci(boundary, baseline_start, baseline_end),
             self.turbidity_proxy(boundary, baseline_start, baseline_end),
             self.bloom_frequency(boundary, baseline_start, baseline_end),
+            self.riparian_ndvi(riparian_zone, baseline_start, baseline_end),
             self.shoreline_disturbance(riparian_zone, baseline_start, baseline_end),
             self.riparian_ndvi_trend(
                 riparian_zone,

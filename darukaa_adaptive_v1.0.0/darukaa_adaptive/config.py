@@ -42,7 +42,10 @@ class TemporalConfig:
         return start.isoformat(), (end_inclusive + timedelta(days=1)).isoformat()
 
     def baseline_inclusive_window(self) -> tuple[str, str]:
-        return self._coerce_date(self.baseline_start_date).isoformat(), self._coerce_date(self.baseline_end_date).isoformat()
+        return (
+            self._coerce_date(self.baseline_start_date).isoformat(),
+            self._coerce_date(self.baseline_end_date).isoformat(),
+        )
 
     def trend_dates(self) -> tuple[str, str]:
         if self.end_year < self.start_year:
@@ -86,8 +89,12 @@ class ReferenceConfig:
     enabled: bool = True
     tier1_enabled: bool = True
     tier2_enabled: bool = True
+
+    # Approval is a governance decision: the benchmark may be visible before it is
+    # allowed to influence ecological scoring.
     tier1_approved_for_scoring: bool = False
     tier2_approved_for_scoring: bool = False
+
     tier1_reference_kml: Optional[str] = None
     tier1_reference_csv: Optional[str] = None
     tier2_min_water_occurrence: float = 0.50
@@ -97,12 +104,23 @@ class ReferenceConfig:
 @dataclass
 class ScoringConfig:
     enabled: bool = True
-    composite_son_enabled: bool = False
-    reference_relative_enabled: bool = False
+    composite_son_enabled: bool = True
+    reference_relative_enabled: bool = True
+
+    # One universal product convention across all realms and indicator sources.
+    aggregation_method: str = "geometric_mean"
+    concern_band_upper_percent: List[float] = field(
+        default_factory=lambda: [20.0, 40.0, 60.0, 80.0]
+    )
+
     min_valid_metrics_per_pillar: int = 1
     min_valid_pillars: int = 4
     total_pillars: int = 4
     require_complete_pillars: bool = True
+
+    # Retained only for migration compatibility. Production scoring does not use
+    # raw-value thresholds; it uses reference-relative intactness and the fixed
+    # 0–100 concern bands.
     thresholds_by_metric: Dict[str, Dict[str, float]] = field(default_factory=dict)
     reference_ratio_thresholds_by_metric: Dict[str, Dict[str, float]] = field(default_factory=dict)
 
@@ -110,7 +128,7 @@ class ScoringConfig:
 @dataclass
 class ProfileConfig:
     name: str = "aquatic_lake"
-    version: str = "1.1.0"
+    version: str = "1.2.0"
     allow_terrestrial_metrics: bool = False
     notes: str = ""
 
@@ -132,7 +150,6 @@ class AssessmentConfig:
         with open(path, "r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
 
-        # Backward compatible with the earlier profile typo/casing used in v1.0.0.
         gee_raw = raw.get("gee")
         if gee_raw is None:
             gee_raw = raw.get("gEE", {})
@@ -157,10 +174,12 @@ class AssessmentConfig:
 
         if self.temporal.start_year > self.temporal.end_year:
             errors.append("temporal.start_year must be <= temporal.end_year")
+
         try:
             self.temporal.baseline_dates()
         except Exception as exc:
             errors.append(f"invalid baseline dates: {exc}")
+
         if not 0 < self.water.primary_probability_threshold <= 1:
             errors.append("water.primary_probability_threshold must be in (0,1]")
         if not 0 < self.water.fallback_majority_fraction <= 1:
@@ -171,31 +190,42 @@ class AssessmentConfig:
             errors.append("spatial.riparian_buffer_m must be > 0")
         if self.temporal.min_years_for_trend < 5:
             errors.append("temporal.min_years_for_trend should be >= 5 for long-term trend screening")
+
         if sorted(set(self.temporal.monitoring_months)) != sorted(self.temporal.monitoring_months):
             errors.append("temporal.monitoring_months must not contain duplicate months")
         if any(m < 1 or m > 12 for m in self.temporal.monitoring_months):
             errors.append("temporal.monitoring_months values must be between 1 and 12")
+
+        if self.scoring.aggregation_method != "geometric_mean":
+            errors.append("scoring.aggregation_method must be 'geometric_mean'")
+        if self.scoring.concern_band_upper_percent != [20.0, 40.0, 60.0, 80.0]:
+            errors.append("scoring.concern_band_upper_percent must remain [20,40,60,80] as the declared product convention")
+
         if self.scoring.min_valid_metrics_per_pillar < 1:
             errors.append("scoring.min_valid_metrics_per_pillar must be >= 1")
         if self.scoring.min_valid_pillars < 1:
             errors.append("scoring.min_valid_pillars must be >= 1")
-        if self.scoring.total_pillars < self.scoring.min_valid_pillars:
-            errors.append("scoring.total_pillars must be >= min_valid_pillars")
+        if self.scoring.total_pillars != 4:
+            errors.append("scoring.total_pillars must be 4 for C1/C2/C3/C4")
+        if self.scoring.min_valid_pillars > self.scoring.total_pillars:
+            errors.append("scoring.min_valid_pillars cannot exceed total_pillars")
 
+        # Warn on deprecated raw-threshold configuration rather than silently applying it.
         for name, thresholds in self.scoring.thresholds_by_metric.items():
             if set(thresholds) != {"t1", "t2", "t3", "t4"}:
-                errors.append(f"scoring threshold set for {name} must contain t1..t4 only")
+                errors.append(f"legacy raw threshold set for {name} must contain t1..t4 only")
             else:
                 vals = [float(thresholds[k]) for k in ("t1", "t2", "t3", "t4")]
                 if not vals[0] < vals[1] < vals[2] < vals[3]:
-                    errors.append(f"scoring threshold set for {name} must satisfy t1<t2<t3<t4")
+                    errors.append(f"legacy raw threshold set for {name} must satisfy t1<t2<t3<t4")
 
+        # Kept for compatibility with older configs; fixed product bands supersede these.
         for name, thresholds in self.scoring.reference_ratio_thresholds_by_metric.items():
             if set(thresholds) != {"r1", "r2", "r3", "r4"}:
-                errors.append(f"reference ratio thresholds for {name} must contain r1..r4 only")
+                errors.append(f"legacy reference ratio thresholds for {name} must contain r1..r4 only")
             else:
                 vals = [float(thresholds[k]) for k in ("r1", "r2", "r3", "r4")]
                 if not vals[0] < vals[1] < vals[2] < vals[3]:
-                    errors.append(f"reference ratio thresholds for {name} must satisfy r1<r2<r3<r4")
+                    errors.append(f"legacy reference ratio thresholds for {name} must satisfy r1<r2<r3<r4")
 
         return errors

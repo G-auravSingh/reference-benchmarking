@@ -14,7 +14,7 @@ Dynamic World is the primary water source when at least the configured minimum n
 
 When optical coverage is insufficient and fallback is enabled, Sentinel-1 VV is converted to a per-image water detection using the configured backscatter threshold. The fallback water mask is the configured majority fraction of those observations. Fallback output is explicitly labelled.
 
-Water extent is a descriptive quantity. It should be compared using the same seasonal window and should not be interpreted as a monotonic ecological-quality score without hydrological context.
+Water extent and water persistence are reference-target indicators when a comparable reference is available. They are not assumed to be universally higher-is-better or lower-is-better.
 
 ## 3. Baseline and monitoring
 
@@ -32,31 +32,34 @@ These are remote-sensing proxies. They are not calibrated chlorophyll-a, turbidi
 
 The fixed riparian domain is a standardized external buffer generated in a local UTM projection to avoid applying a degree-based buffer in geographic coordinates.
 
+Baseline riparian NDVI is reported as a vegetation-condition proxy in **C2 Vegetation**. The historical Theil–Sen/Kendall trend remains a contextual monitoring indicator and is not directly converted to intactness.
+
 Shoreline disturbance is a transparent land-cover pressure proxy derived from Dynamic World mode classes for crops, built and bare land. Bare substrate can be natural, so the metric must not be equated directly with anthropogenic impact without local interpretation.
 
-Riparian vegetation trend uses annual Sentinel-2 median NDVI composites, Theil–Sen slope and Kendall tau significance. The slope is a descriptive trend statistic and is not automatically labelled ecological recovery or degradation.
+## 6. Universal reference and scoring model
 
-## 6. Reference framework
+The adaptive framework uses one common architecture across ecosystem realms:
 
-### Tier-1
+`raw value → comparable reference → intactness 0–100 → concern → pillar geometric mean → overall geometric mean`
 
-Tier-1 is an externally justified reference. It can come from a reference KML/KMZ or a metric-value CSV. It is preferred over Tier-2 when available.
+The four common pillars are:
 
-### Tier-2
+- C1 Extent
+- C2 Vegetation
+- C3 Fauna
+- C4 Pressure
 
-Tier-2 is generated from the standardized context ring and is treated as a candidate peer/context benchmark. For water-quality metrics, the same metric code applies the dynamic water mask within the Tier-2 zone. For riparian disturbance, the candidate zone is treated as an external context ring rather than falsely calling the entire landscape an intact shoreline.
+Concern bands are fixed at 0–<20, 20–<40, 40–<60, 60–<80 and 80–100, corresponding to Very High, High, Moderate, Low and Very Low concern. These are an explicit Darukaa product convention, not universal ecological thresholds.
 
-Tier-2 is not automatically approved for scoring.
+Direction is indicator-specific. Higher-is-better and lower-is-better indicators use direction-aware ratios; reference-target indicators use bounded proportional distance from the reference.
 
-## 7. Scoring
+Tier-1 references are preferred when available. Tier-2 is a candidate regional/context benchmark. Scoring requires explicit approval of the selected reference tier.
 
-Metric-level concern classes are 1–5, where a larger score means greater concern. The mapping is allowed only after a metric-specific threshold basis is supplied.
+## 7. Field and other indicators
 
-For threshold scoring, the four ordered cut points are `t1<t2<t3<t4`. Lower-is-better metrics use the higher-value side as greater concern; higher-is-better metrics reverse that mapping.
+The scoring engine can consume field, terrestrial, acoustic and other validated observations through the generic external-observation interface. Those observations must carry their own pillar, direction and reference metadata.
 
-Reference-relative scoring uses a direction-aware intactness ratio capped to 0–1. Reference-relative concern bands are also metric-specific and must be explicitly configured.
-
-Pillar scores are the mean of eligible metric concern scores after a minimum metric-coverage rule. The overall 0–10 score is only produced when the configured minimum number of pillars is satisfied; the default aquatic profile requires all four pillars.
+The domain module remains responsible for calculating the raw indicator; the common scoring engine does not invent field values or references.
 
 ## 8. JRC historical context
 
@@ -64,4 +67,4 @@ JRC Global Surface Water v1.4 is treated as historical context only. It is not u
 
 ## 9. Biological evidence boundary
 
-Remote sensing cannot establish local species occurrence, population size, eDNA persistence or acoustic biodiversity health by itself. P2 species assemblage and P3 population-status evidence should be supplied by field observations, eDNA, acoustics or other independent biodiversity modules before a complete four-pillar composite is considered.
+Remote sensing cannot establish local species occurrence, population size, eDNA persistence or acoustic biodiversity health by itself. C3 Fauna should therefore be supplied by field observations, eDNA, acoustics or other independent biodiversity modules before a complete four-pillar composite is considered.
