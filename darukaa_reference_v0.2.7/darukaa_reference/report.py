@@ -80,6 +80,11 @@ class ReportGenerator:
                 "unit": spec.unit if spec else "",
                 "ref_radius_km": spec.reference_radius_km if spec else None,
                 "higher_is_better": spec.higher_is_better if spec else True,
+                # Client-requested (in-situ metrics have no valid spatial reference
+                # pool -- see son_score.py's in-situ handling): lets the report
+                # layer tell a real field-collected indicator apart from a
+                # remote-sensed one without a separate lookup.
+                "source_type": spec.source_type if spec else "gee",
                 # v0.2.0 contract fields (CS-1/CS-4) — construct placement + scoring status
                 "construct": getattr(spec, "construct", None) if spec else None,
                 "subdimension": getattr(spec, "subdimension", None) if spec else None,

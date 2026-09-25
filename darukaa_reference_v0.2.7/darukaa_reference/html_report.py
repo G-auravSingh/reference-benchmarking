@@ -136,7 +136,33 @@ def _indicator_state(row: Dict) -> str:
     # with no stated reason — shown as such, not disguised as N/A
 
 
-def _indicator_row_html(row: Dict) -> str:
+def _within_project_rank(row: Dict, all_project_rows: Optional[List[Dict]]) -> Optional[tuple]:
+    """Real rank of this zone's value for this SAME indicator among all real
+    zones in this project that have real data for it. 1 = best (respecting
+    the indicator's own higher_is_better), N = worst. This is the real,
+    meaningful comparative context an in-situ metric CAN offer at baseline
+    even with no valid spatial reference pool (see son_score.py / change.py:
+    "self-referential thresholds are not a baseline") -- "how does this
+    zone compare to the other real zones in THIS project", never a claim
+    about external ecoregion condition. Returns None when all_project_rows
+    isn't available (a single-site report) or fewer than 2 real zones have
+    data for this indicator."""
+    if not all_project_rows:
+        return None
+    indicator = row.get("indicator")
+    higher_is_better = row.get("higher_is_better", True)
+    same_indicator = [(r.get("site_id"), r.get("site_value")) for r in all_project_rows
+                      if r.get("indicator") == indicator and r.get("site_value") is not None]
+    if len(same_indicator) < 2:
+        return None
+    ranked = sorted(same_indicator, key=lambda t: t[1], reverse=higher_is_better)
+    for i, (site_id, _) in enumerate(ranked, start=1):
+        if site_id == row.get("site_id"):
+            return (i, len(ranked))
+    return None
+
+
+def _indicator_row_html(row: Dict, all_project_rows: Optional[List[Dict]] = None) -> str:
     state = _indicator_state(row)
     name = row.get("display_name") or row.get("indicator")
     unit = row.get("unit") or ""
@@ -147,6 +173,27 @@ def _indicator_row_html(row: Dict) -> str:
         raw = f'<span class="dk-muted" title="{_esc(reason)}">Not applicable — {_esc(reason)}</span>'
     else:
         raw = '<span class="dk-warn">Unavailable — real extraction attempt found no data</span>'
+
+    # Client-requested directly: in-situ (field-collected) metrics have no
+    # valid spatial reference pool the way a remote-sensed indicator does
+    # (no equivalent "other nearby pristine sites surveyed with the same
+    # camera-trap/eDNA protocol" to benchmark against) -- a concern level
+    # here would fabricate a comparison that doesn't exist. Real,
+    # documented answer already existed in change.py before this report
+    # rebuild: baseline shows a real value + within-project rank, never a
+    # concern class; a genuine signal (change vs this site's own Year-0)
+    # only becomes available from monitoring cycles onward. No real
+    # in_situ indicator is registered yet — this path is forward-looking,
+    # not yet exercised by a real run, and clearly marked as such below.
+    if row.get("source_type") == "in_situ":
+        rank = _within_project_rank(row, all_project_rows)
+        rank_str = (f"Rank {rank[0]} of {rank[1]} zones in this project"
+                   if rank else "Not enough real zones with data to rank")
+        intactness_cell = '<span class="dk-muted">no spatial reference pool</span>'
+        concern_cell = (f'<span class="dk-muted">{_esc(rank_str)}</span><br>'
+                       f'<span class="dk-insitu-tag">in-situ — baseline, no concern level</span>')
+        return (f'<tr><td>{_esc(name)}</td><td>{raw}</td>'
+               f'<td>{intactness_cell}</td><td>{concern_cell}</td></tr>')
 
     tier = row.get("evidence_tier") or "contextual"
     if tier not in ("baseline", "monitoring"):
@@ -178,7 +225,8 @@ def _indicator_row_html(row: Dict) -> str:
            f'<td>{intactness_cell}</td><td>{concern_cell}</td></tr>')
 
 
-def _pillar_card_html(pillar: Dict, all_rows_for_pillar: List[Dict]) -> str:
+def _pillar_card_html(pillar: Dict, all_rows_for_pillar: List[Dict],
+                      all_project_rows: Optional[List[Dict]] = None) -> str:
     color = _concern_color(pillar.get("concern_class"))
     limiting = pillar.get("limiting_indicators") or []
     limiting_str = " & ".join(limiting) if limiting else (pillar.get("limiting_subdimension") or "—")
@@ -188,13 +236,28 @@ def _pillar_card_html(pillar: Dict, all_rows_for_pillar: List[Dict]) -> str:
               f'<div class="dk-pillar-score">{_esc(pillar.get("score_pct"))} '
               f'<span style="color:{color};font-weight:700">{_esc(pillar.get("concern_class"))}</span></div>'
               f'<div class="dk-muted">limited by: <b>{_esc(limiting_str)}</b></div></div>')
-    scored_rows = [r for r in all_rows_for_pillar if r.get("evidence_tier") in ("baseline", "monitoring")]
-    context_rows = [r for r in all_rows_for_pillar if r.get("evidence_tier") not in ("baseline", "monitoring")]
+    scored_rows = [r for r in all_rows_for_pillar
+                  if r.get("evidence_tier") in ("baseline", "monitoring")
+                  and r.get("source_type") != "in_situ"]
+    insitu_rows = [r for r in all_rows_for_pillar if r.get("source_type") == "in_situ"]
+    context_rows = [r for r in all_rows_for_pillar
+                    if r.get("evidence_tier") not in ("baseline", "monitoring")
+                    and r.get("source_type") != "in_situ"]
     if scored_rows:
         out.append('<table class="dk-table"><tr><th>Indicator</th><th>Raw value</th>'
                   '<th>Intactness</th><th>Concern</th></tr>')
         for r in scored_rows:
-            out.append(_indicator_row_html(r))
+            out.append(_indicator_row_html(r, all_project_rows))
+        out.append('</table>')
+    if insitu_rows:
+        out.append('<div class="dk-insitu-note">In-situ (field-collected) metrics in this pillar — '
+                  'baseline year, real values shown with within-project rank, never a concern level '
+                  '(no valid spatial reference pool exists for field data). A real trend signal becomes '
+                  'available from Year-1 monitoring onward, comparing each site to its own baseline.</div>')
+        out.append('<table class="dk-table"><tr><th>Indicator</th><th>Raw value</th>'
+                  '<th>Reference</th><th>Rank / status</th></tr>')
+        for r in insitu_rows:
+            out.append(_indicator_row_html(r, all_project_rows))
         out.append('</table>')
     if context_rows:
         out.append('<details class="dk-collapsible"><summary>Context indicators in this pillar '
@@ -202,7 +265,7 @@ def _pillar_card_html(pillar: Dict, all_rows_for_pillar: List[Dict]) -> str:
         out.append('<table class="dk-table"><tr><th>Indicator</th><th>Raw value</th>'
                   '<th>Intactness</th><th>Status</th></tr>')
         for r in context_rows:
-            out.append(_indicator_row_html(r))
+            out.append(_indicator_row_html(r, all_project_rows))
         out.append('</table></details>')
     out.append('</div>')
     return "".join(out)
@@ -446,6 +509,8 @@ table.dk-table tr.dk-row-worst{background:#fdecea}
 .dk-dist-label{font-size:11.5px;text-align:center;margin-top:6px;color:var(--dk-muted);line-height:1.4}
 .dk-insitu-note{background:#f0eefb;border-left:4px solid #5a2a82;padding:10px 16px;
      font-size:12.5px;margin:8px 0;border-radius:0 6px 6px 0}
+.dk-insitu-tag{background:#5a2a82;color:#fff;padding:1px 7px;border-radius:9px;
+     font-size:10px;font-weight:600;display:inline-block;margin-top:3px}
 """
 
 
@@ -703,9 +768,10 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
                           f'{_esc(s.get("overall_condition", {}).get("concern_class"))}</summary>')
                 out.append(_son_hero_html(s))
                 zrows = per_zone_rows.get(z, [])
+                all_project_rows_flat = [r for zr in per_zone_rows.values() for r in zr]
                 for pillar_data in s.get("pillars", []):
                     pillar_rows = [r for r in zrows if r.get("construct") == pillar_data["pillar"]]
-                    out.append(_pillar_card_html(pillar_data, pillar_rows))
+                    out.append(_pillar_card_html(pillar_data, pillar_rows, all_project_rows_flat))
                 out.append('</details>')
 
         if mts.get("n_tiles_total", 0) > mts.get("n_tiles", 0) or (mts.get("aggregation_rule")):
@@ -750,7 +816,7 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
             site_rows = [r for r in rows if r.get("site_id") == site_id]
             for pillar_data in s.get("pillars", []):
                 pillar_rows = [r for r in site_rows if r.get("construct") == pillar_data["pillar"]]
-                out.append(_pillar_card_html(pillar_data, pillar_rows))
+                out.append(_pillar_card_html(pillar_data, pillar_rows, rows))
             press = prof.get("pressure", {})
             sens = (prof.get("condition", {}) or {}).get("sensitivity", {})
             stab = "STABLE" if sens.get("stable") else "UNSTABLE"
