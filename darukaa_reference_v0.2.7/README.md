@@ -296,6 +296,12 @@ for every project — that's what keeps results comparable. What changes by arch
   aquatic manifest directly (`--project TataMotors_Pimpri_Aquatic`) always stays
   standalone — combining only ever happens starting from the terrestrial/base side.
 
+  `notebooks/run_pipeline.ipynb`'s Section 11 has the same real combining logic
+  (`COMBINE_AQUATIC` toggle in its manifest-discovery cell) — it had drifted out of
+  sync with the script for a while (found directly: it still only discovered a single
+  manifest, no aquatic merge, no per-tile realm), fixed to match exactly rather than
+  left as a script-only feature.
+
   `run_corbett_northshahdol.py` remains as the reference example for the OTHER real
   case this same driver handles: a project with no site-selection pipeline involvement
   at all (raw KML boundaries only) — build a manifest by hand in the same shape

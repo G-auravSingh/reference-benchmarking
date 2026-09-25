@@ -5,6 +5,22 @@ applicable, the reviewer comment (Cxx) and HMI/SEED audit fix (F-HMI-x).
 
 ## [0.2.7] -- Real site-selection integration, client-facing report rebuild, a connected multi-pipeline handoff, and real per-tile realm-aware combined reporting
 
+### A real gap between the notebook and the script, caught before the client hit it
+`notebooks/run_pipeline.ipynb`'s Section 11 reused 3 helper functions from
+`run_project_from_manifest.py` directly in its cells (manifest discovery), but was
+never updated when the script later gained real combining logic (aquatic-companion
+auto-merge) and per-tile `tile_realms` -- confirmed directly: running the notebook
+cell-by-cell as it stood would have silently given only the 9 terrestrial zones, no
+aquatic water bodies, no realm filtering, even though the standalone script already
+had the complete, correct behaviour. Caught before the client reached the affected
+cell (confirmed directly against their actual uploaded notebook: only cells 2 and 4
+had been executed so far). Cell 28 now replicates the real combining logic inline
+(`COMBINE_AQUATIC` toggle, auto-finds and merges a real `<project>_Aquatic` companion
+manifest, builds `TILE_REALMS` correctly), cell 32 passes `tile_realms` through to
+`run_multi_tile_project`. Verified directly: simulated cell 28's exact logic against
+the real repo, correctly finds and combines Tata Motors' 9 terrestrial + 6 aquatic
+tiles into 15 total, all real files present, zero missing.
+
 *(Consolidated: every real change below shipped within the 0.2.7 line --
 this changelog previously fragmented them across two stray "Unreleased"
 headers plus a separate dated entry, none of which corresponded to any
