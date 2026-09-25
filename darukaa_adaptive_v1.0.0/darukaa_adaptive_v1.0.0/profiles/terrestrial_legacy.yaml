@@ -1,0 +1,8 @@
+profile:
+  name: terrestrial_legacy
+  version: legacy-wrapper-1.0
+  composite_son_enabled: true
+  allow_terrestrial_metrics: true
+  notes: >-
+    This profile points users to the frozen legacy package. Do not replace the legacy
+    calculation code in-place when backwards-compatible reproduction is required.
