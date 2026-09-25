@@ -113,6 +113,170 @@ def _render_classification(cls: Dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Indicator-table rendering (client-requested rebuild): raw value, intactness
+# %, concern level per indicator, grouped by real pillar — replacing the
+# earlier flat scorecard table. "No bare dashes" rule: every empty-looking
+# cell states WHY (not applicable to this geometry/realm vs. a real
+# extraction failure vs. genuinely not scored), never a silent "—" a reader
+# has to guess at.
+# ---------------------------------------------------------------------------
+
+def _indicator_state(row: Dict) -> str:
+    """Distinguishes the three real, different reasons a cell can look
+    empty — client-requested directly ("many empty dashes... very
+    confusing"). Never returns a bare dash."""
+    if row.get("site_value") is not None:
+        return "ok"
+    reason = ((row.get("metadata") or {}).get("reason") or "")
+    if reason:
+        return "not_applicable"  # e.g. "no open water detected" — a real,
+        # informative reason the extraction function itself gave, not a
+        # crash and not silence
+    return "unavailable"  # a real extraction attempt that produced nothing,
+    # with no stated reason — shown as such, not disguised as N/A
+
+
+def _indicator_row_html(row: Dict) -> str:
+    state = _indicator_state(row)
+    name = row.get("display_name") or row.get("indicator")
+    unit = row.get("unit") or ""
+    if state == "ok":
+        raw = f"{_num(row.get('site_value'), 3)} {_esc(unit)}".strip()
+    elif state == "not_applicable":
+        reason = (row.get("metadata") or {}).get("reason", "")
+        raw = f'<span class="dk-muted" title="{_esc(reason)}">Not applicable — {_esc(reason)}</span>'
+    else:
+        raw = '<span class="dk-warn">Unavailable — real extraction attempt found no data</span>'
+
+    tier = row.get("evidence_tier") or "contextual"
+    if tier not in ("baseline", "monitoring"):
+        # Real, computed context — genuinely shown, genuinely not scored.
+        # Never a score_pct or concern badge for these (would misrepresent
+        # them as benchmarked when they are not).
+        intactness_cell = '<span class="dk-muted">not scored</span>'
+        concern_cell = _badge(tier)
+    elif row.get("tier2_benchmark") is None:
+        intactness_cell = '<span class="dk-warn">reference comparison unavailable</span>'
+        concern_cell = "—"
+    else:
+        # The bounded 0-1 score (already computed by scoring.normalize's
+        # logistic — see son_score.py) is what belongs here, not the raw,
+        # unbounded z-score/LRR value, which is real and kept in the full
+        # audit CSV/JSON but is not something a report reader should have
+        # to interpret directly (client-requested: "converting to 1-100%
+        # intactness and not just using z score").
+        from darukaa_reference import scoring as _scoring
+        bounded = _scoring.normalize(row.get("tier2_benchmark"), row.get("tier2_benchmark_estimator") or "")
+        pct = _score_pct(bounded)
+        cls = (row.get("classification") or {}).get("reference_relative") or {}
+        concern = cls.get("class")
+        intactness_cell = pct
+        concern_cell = (f'<span style="color:{_concern_color(concern)};font-weight:600">{_esc(concern)}</span>'
+                       if concern else "—")
+
+    return (f'<tr><td>{_esc(name)}</td><td>{raw}</td>'
+           f'<td>{intactness_cell}</td><td>{concern_cell}</td></tr>')
+
+
+def _pillar_card_html(pillar: Dict, all_rows_for_pillar: List[Dict]) -> str:
+    color = _concern_color(pillar.get("concern_class"))
+    limiting = pillar.get("limiting_indicators") or []
+    limiting_str = " & ".join(limiting) if limiting else (pillar.get("limiting_subdimension") or "—")
+    out = [f'<div class="dk-pillar-card">']
+    out.append(f'<div class="dk-pillar-head" style="border-left-color:{color}">'
+              f'<h3 class="dk-h3">{_esc(pillar.get("pillar_label"))}</h3>'
+              f'<div class="dk-pillar-score">{_esc(pillar.get("score_pct"))} '
+              f'<span style="color:{color};font-weight:700">{_esc(pillar.get("concern_class"))}</span></div>'
+              f'<div class="dk-muted">limited by: <b>{_esc(limiting_str)}</b></div></div>')
+    scored_rows = [r for r in all_rows_for_pillar if r.get("evidence_tier") in ("baseline", "monitoring")]
+    context_rows = [r for r in all_rows_for_pillar if r.get("evidence_tier") not in ("baseline", "monitoring")]
+    if scored_rows:
+        out.append('<table class="dk-table"><tr><th>Indicator</th><th>Raw value</th>'
+                  '<th>Intactness</th><th>Concern</th></tr>')
+        for r in scored_rows:
+            out.append(_indicator_row_html(r))
+        out.append('</table>')
+    if context_rows:
+        out.append('<details class="dk-collapsible"><summary>Context indicators in this pillar '
+                  f'({len(context_rows)}) — shown, real, not scored</summary>')
+        out.append('<table class="dk-table"><tr><th>Indicator</th><th>Raw value</th>'
+                  '<th>Intactness</th><th>Status</th></tr>')
+        for r in context_rows:
+            out.append(_indicator_row_html(r))
+        out.append('</table></details>')
+    out.append('</div>')
+    return "".join(out)
+
+
+def _project_distribution_html(zone_sons: Dict[str, Dict]) -> str:
+    """Real project-level summary statistics (client-requested directly:
+    "3 out of 5 zones sit in this concern level... some way of showing
+    that... when we do this for agroforestry it will run on each parcel
+    within an EMU also... project-level information would always help").
+    A distribution, not just a ranked list -- matters more, not less, as
+    the real number of real units in a project grows (agroforestry's many
+    real parcels vs a handful of conservation zones)."""
+    from collections import Counter
+    concern_counts = Counter(s.get("overall_condition", {}).get("concern_class")
+                             for s in zone_sons.values())
+    n = len(zone_sons)
+    out = ['<div class="dk-dist-grid">']
+    for concern in CONCERN_ORDER_LOCAL:
+        count = concern_counts.get(concern, 0)
+        pct = round(100 * count / n) if n else 0
+        color = _concern_color(concern)
+        out.append(f'<div class="dk-dist-cell"><div class="dk-dist-bar" '
+                  f'style="background:{color};height:{max(4,pct)}px"></div>'
+                  f'<div class="dk-dist-label">{count}/{n}<br>{_esc(concern)}</div></div>')
+    out.append('</div>')
+    out.append(f'<p class="dk-muted">{n} real zone(s)/unit(s) assessed. '
+              f'{concern_counts.get("High",0)+concern_counts.get("Very High",0)} of {n} sit in '
+              f'High or Very High concern.</p>')
+    return "".join(out)
+
+
+CONCERN_ORDER_LOCAL = ["Very Low", "Low", "Moderate", "High", "Very High"]
+
+from darukaa_reference.son_score import PILLAR_NAMES  # single source of truth
+from darukaa_reference.son_score import _pct as _score_pct  # REAL BUG FIXED HERE
+# (caught by rendering this in a real browser, not assumed correct): this
+# module already had its OWN, different, pre-existing _pct(x) (formats an
+# ALREADY-multiplied percentage number, e.g. tier2_display_pct_of_reference
+# -- no *100). My new code calling a bare _pct(0-1 score) was silently
+# resolving to THAT local function instead of son_score's (which expects a
+# raw 0-1 fraction and multiplies by 100) -- 0.30 became "0%", not "30%".
+# Imported under an explicit, non-colliding alias instead of renaming
+# either original function, since both are real and still needed for
+# their own original purpose.
+
+
+def _son_hero_html(son_data: Dict, label: str = "") -> str:
+    oc = son_data.get("overall_condition", {})
+    color = _concern_color(oc.get("concern_class"))
+    chain = son_data.get("limiting_chain") or {}
+    chain_str = chain.get("display", "")
+    out = [f'<div class="dk-son-hero" style="background:{color}">']
+    if label:
+        out.append(f'<div class="dk-badge-label">{_esc(label)}</div>')
+    out.append(f'<div class="dk-score">{_esc(oc.get("score_pct"))} '
+              f'&nbsp;{_esc(oc.get("concern_class"))}</div>')
+    if chain_str:
+        # REAL BUG FIXED HERE (caught by actually rendering this in a
+        # browser, not assumed correct): Python's .capitalize() lowercases
+        # every OTHER character too, mangling real proper nouns already
+        # correctly capitalized inside the chain string itself (e.g. "C1
+        # — Landscape extent" became "C1 — landscape extent" — and
+        # "Forest Fragmentation & Pressure Proxy" lost its own
+        # capitalisation). Only the true first character needs
+        # capitalising here; the rest of the string is left exactly as
+        # limiting_chain() already built it.
+        display_chain = chain_str[0].upper() + chain_str[1:] if chain_str else chain_str
+        out.append(f'<div class="dk-chain">{_esc(display_chain)}</div>')
+    out.append('</div>')
+    return "".join(out)
+
+
+# ---------------------------------------------------------------------------
 # Inline SVG visuals — no external chart library, stays self-contained.
 # ---------------------------------------------------------------------------
 
@@ -144,7 +308,7 @@ def _svg_zone_bar_chart(zone_scores: List[Dict], width: int = 900) -> str:
             f'<rect x="{left_pad}" y="{y+4}" width="{bar_w}" height="{row_h-14}" '
             f'fill="{color}" rx="3"/>'
             f'<text x="{left_pad+chart_w+8}" y="{y+row_h/2+4}" class="dk-svg-value">'
-            f'{_num(z["score"],2)}</text>'
+            f'{_score_pct(z["score"])}</text>'
         )
     # Reference line at 0.5 (at-reference)
     ref_x = left_pad + chart_w * 0.5
@@ -267,6 +431,21 @@ table.dk-table tr.dk-row-worst{background:#fdecea}
 .dk-client-tag{background:#5a2a82;color:#fff;padding:1px 6px;border-radius:10px;
      font-size:10px;font-weight:600}
 .dk-collapsible summary{cursor:pointer;font-weight:600;color:var(--dk-green);padding:4px 0}
+.dk-pillar-card{border:1px solid var(--dk-border);border-radius:10px;margin:14px 0;overflow:hidden}
+.dk-pillar-head{padding:14px 18px;border-left:6px solid #555;background:#fafbfa}
+.dk-pillar-head h3{margin:0 0 4px}
+.dk-pillar-score{font-size:22px;font-weight:800}
+.dk-pillar-card table{margin:0;border-top:1px solid var(--dk-border)}
+.dk-pillar-card table th,.dk-pillar-card table td{border-left:none;border-right:none}
+.dk-son-hero{border-radius:12px;padding:24px 28px;color:#fff;margin:14px 0}
+.dk-son-hero .dk-score{font-size:44px;font-weight:800;line-height:1.1}
+.dk-son-hero .dk-chain{font-size:14px;margin-top:8px;opacity:0.95}
+.dk-dist-grid{display:flex;align-items:flex-end;gap:14px;margin:14px 0;height:110px}
+.dk-dist-cell{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.dk-dist-bar{width:100%;border-radius:4px 4px 0 0;min-height:4px}
+.dk-dist-label{font-size:11.5px;text-align:center;margin-top:6px;color:var(--dk-muted);line-height:1.4}
+.dk-insitu-note{background:#f0eefb;border-left:4px solid #5a2a82;padding:10px 16px;
+     font-size:12.5px;margin:8px 0;border-radius:0 6px 6px 0}
 """
 
 
@@ -409,17 +588,23 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
     # single-site report's is — compute it here from the real project
     # profile AND from each real zone's own tile_report, so both the
     # aggregate headline and the true per-zone breakdown are real, not
-    # re-derived approximations.
+    # re-derived approximations. scorecard_rows passed through so the
+    # limiting chain (pillar -> subdimension -> real indicator name) is
+    # available, not just the bare score.
     if is_project_level and not son:
         from darukaa_reference import son_score
-        son = {"PROJECT": son_score.son_summary(profiles.get("PROJECT", {}))}
+        proj_rows = [r for r in rows if r.get("indicator")]  # project scorecard rows (worst-tile driven)
+        son = {"PROJECT": son_score.son_summary(profiles.get("PROJECT", {}), proj_rows, PILLAR_NAMES)}
     per_zone_son = {}
+    per_zone_rows: Dict[str, List[Dict]] = {}
     if is_project_level and tile_reports:
         from darukaa_reference import son_score
         for zone_id, tr in tile_reports.items():
             zp = (tr.get("site_profiles") or {}).get(zone_id)
+            zrows = [r for r in (tr.get("scorecard") or []) if r.get("site_id") == zone_id]
+            per_zone_rows[zone_id] = zrows
             if zp:
-                per_zone_son[zone_id] = son_score.son_summary(zp)
+                per_zone_son[zone_id] = son_score.son_summary(zp, zrows, PILLAR_NAMES)
 
     out = [f"<!doctype html><html><head><meta charset='utf-8'>",
           f"<meta name='viewport' content='width=device-width, initial-scale=1'>",
@@ -460,6 +645,7 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
     # --- Project-level: headline + per-zone visuals + per-zone table ---
     if is_project_level:
         out.append('<h2 class="dk-h2">Project headline (non-compensatory)</h2>')
+        out.append(_son_hero_html(son.get("PROJECT", {})))
         out.append(_project_headline(son, mts))
 
         if per_zone_son:
@@ -474,13 +660,16 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
                       f'real, independent results the aggregate above was built from.</p>')
             out.append(_svg_zone_bar_chart(zone_scores))
 
+            out.append('<h3 class="dk-h3">Concern-level distribution across all real zones</h3>')
+            out.append(_project_distribution_html(per_zone_son))
+
             out.append('<div class="dk-grid">')
             quad_points = [{"zone": z, "condition": s.get("overall_condition", {}).get("score") or 0,
                             "pressure": s.get("overall_pressure", {}).get("score") or 0}
                           for z, s in per_zone_son.items()]
             out.append(f'<div>{_svg_condition_pressure_quadrant(quad_points)}</div>')
 
-            out.append('<div><table class="dk-table"><tr><th>Zone</th><th>Condition</th>'
+            out.append('<div><table class="dk-table"><tr><th>Zone</th><th>SoN</th>'
                       '<th>Class</th><th>Pressure</th><th>Class</th><th>Matrix cell</th></tr>')
             worst_zone = zone_scores[0]["zone"] if zone_scores else None
             for z, s in per_zone_son.items():
@@ -488,14 +677,36 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
                 row_cls = ' class="dk-row-worst"' if z == worst_zone else ''
                 out.append(f'<tr{row_cls}><td><b>{_esc(z)}</b>'
                           f'{" <span class=\'dk-warn\'>(worst)</span>" if z == worst_zone else ""}</td>'
-                          f'<td>{_num(oc.get("score"))}</td>'
+                          f'<td>{_esc(oc.get("score_pct"))}</td>'
                           f'<td><span style="color:{_concern_color(oc.get("concern_class"))};font-weight:600">'
                           f'{_esc(oc.get("concern_class"))}</span></td>'
-                          f'<td>{_num(op.get("score"))}</td>'
+                          f'<td>{_esc(op.get("score_pct"))}</td>'
                           f'<td><span style="color:{_concern_color(op.get("concern_class"))};font-weight:600">'
                           f'{_esc(op.get("concern_class"))}</span></td>'
                           f'<td>{_matrix_pill(s.get("matrix_cell"))}</td></tr>')
             out.append('</table></div></div>')
+
+            # --- Full per-zone detail: every real zone's own SoN hero + 4
+            # pillar cards, each with every applicable indicator's raw
+            # value, intactness %, and concern level. Client-requested
+            # directly ("each zone should also show raw values of each
+            # 44-45 indicators... concern level as well... pillar wise
+            # results also for each zone"). Collapsed by default so the
+            # project summary above stays scannable, but every real number
+            # is here, one click away — never only in a separate per-tile
+            # file a reader has to go find.
+            out.append('<h3 class="dk-h3">Full detail, every real zone</h3>')
+            for z, s in sorted(per_zone_son.items(),
+                              key=lambda kv: (kv[1].get("overall_condition", {}).get("score") or 0)):
+                out.append(f'<details class="dk-collapsible"><summary>{_esc(z)} — '
+                          f'{_esc(s.get("overall_condition", {}).get("score_pct"))} '
+                          f'{_esc(s.get("overall_condition", {}).get("concern_class"))}</summary>')
+                out.append(_son_hero_html(s))
+                zrows = per_zone_rows.get(z, [])
+                for pillar_data in s.get("pillars", []):
+                    pillar_rows = [r for r in zrows if r.get("construct") == pillar_data["pillar"]]
+                    out.append(_pillar_card_html(pillar_data, pillar_rows))
+                out.append('</details>')
 
         if mts.get("n_tiles_total", 0) > mts.get("n_tiles", 0) or (mts.get("aggregation_rule")):
             out.append(f'<p class="dk-muted">{_esc(mts.get("aggregation_rule",""))}</p>')
@@ -527,35 +738,30 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
     # --- Single-site profiles (only when NOT project-level; project-level
     # already showed its per-zone breakdown above) ---
     if not is_project_level:
-        out.append('<h2 class="dk-h2" id="dk-profiles">Site profile(s) (profile-first)</h2>')
+        out.append('<h2 class="dk-h2" id="dk-profiles">Site profile(s)</h2>')
         if not profiles:
             out.append('<p class="dk-warn">No sites carry a propagated benchmark yet — profiles '
                       'pending upstream computation.</p>')
         for site_id, prof in profiles.items():
-            cond, press = prof.get("condition", {}), prof.get("pressure", {})
-            sens = cond.get("sensitivity", {})
-            out.append(f'<div class="dk-card"><h3 class="dk-h3">Site: {_esc(site_id)} &nbsp; '
+            s = son.get(site_id, {})
+            out.append(f'<h3 class="dk-h3">Site: {_esc(site_id)} &nbsp; '
                       f'{_matrix_pill(prof.get("matrix_cell"))}</h3>')
-            out.append('<table class="dk-table"><tr><th>Component</th><th>Limiting subdimension</th>'
-                      '<th>Component score (limiting factor)</th><th>Subdimension profile</th></tr>')
-            for comp, cs in prof.get("components", {}).items():
-                profile_str = ", ".join(f"{_esc(k)}={_num(v,2)}" for k, v in cs.get("profile", {}).items())
-                out.append(f'<tr><td>{_esc(comp)}</td><td class="dk-limiting">'
-                          f'{_esc(cs.get("limiting_subdimension"))}</td>'
-                          f'<td><b>{_num(cs.get("headline"),3)}</b> '
-                          f'<span class="dk-muted">(mean {_num(cs.get("mean"),2)})</span></td>'
-                          f'<td class="dk-muted">{profile_str}</td></tr>')
-            out.append('</table>')
+            out.append(_son_hero_html(s))
+            site_rows = [r for r in rows if r.get("site_id") == site_id]
+            for pillar_data in s.get("pillars", []):
+                pillar_rows = [r for r in site_rows if r.get("construct") == pillar_data["pillar"]]
+                out.append(_pillar_card_html(pillar_data, pillar_rows))
+            press = prof.get("pressure", {})
+            sens = (prof.get("condition", {}) or {}).get("sensitivity", {})
             stab = "STABLE" if sens.get("stable") else "UNSTABLE"
             stab_cls = "" if sens.get("stable") else "dk-warn"
-            out.append(f'<p><b>Condition roll-up (secondary):</b> {_num(cond.get("rollup"),3)} '
-                      f'&nbsp;|&nbsp; <b>minimum component:</b> {_num(cond.get("minimum"),3)} '
-                      f'({_esc(cond.get("minimum_component"))}) '
-                      f'&nbsp;|&nbsp; <b>pressure axis:</b> {_num(press.get("headline"),3)} '
+            out.append(f'<p><b>Pressure axis:</b> {_esc(s.get("overall_pressure",{}).get("score_pct"))} '
+                      f'<span style="color:{_concern_color(s.get("overall_pressure",{}).get("concern_class"))}">'
+                      f'{_esc(s.get("overall_pressure",{}).get("concern_class"))}</span> '
                       f'&nbsp;|&nbsp; <span class="{stab_cls}">sensitivity: {stab}</span></p>')
             if not sens.get("stable"):
                 out.append(f'<p class="dk-warn">⚠ {_esc(sens.get("note"))}</p>')
-            out.append(f'<div class="dk-framing">{_esc(cond.get("framing"))}</div></div>')
+            out.append(f'<div class="dk-framing">{_esc((prof.get("condition") or {}).get("framing"))}</div>')
 
     # --- Scorecard ---
     out.append('<h2 class="dk-h2" id="dk-scorecard">Indicator scorecard (evidence-graded)</h2>')

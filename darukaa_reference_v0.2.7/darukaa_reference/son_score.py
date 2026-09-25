@@ -65,6 +65,14 @@ DEFAULT_BANDS = [
 
 CONCERN_ORDER = ["Very Low", "Low", "Moderate", "High", "Very High"]
 
+# Real, declared display names for the 4 condition pillars — a single source
+# of truth both report.py and html_report.py import from, rather than each
+# redeclaring its own copy that could drift out of sync.
+PILLAR_NAMES = {
+    "C1_landscape": "C1 — Landscape extent", "C2_vegetation": "C2 — Vegetation condition",
+    "C3_fauna": "C3 — Faunal condition", "C4_pressure": "C4 — Pressures & human interface",
+}
+
 # ---------------------------------------------------------------------------
 # Literature-anchored RAW-VALUE breakpoints (v0.2.4). Populated ONLY where a
 # document review (v0.2.3, see CHANGELOG) found a breakpoint argued in the literature
@@ -187,9 +195,11 @@ def overall_condition(profile: Dict) -> Dict:
 
     return {
         "score": round(score, 4) if score is not None else None,
+        "score_pct": _pct(score),
         "concern_class": classify(score, DEFAULT_BANDS),
         "minimum_component": cond.get("minimum_component"),
         "minimum_component_score": cond.get("minimum"),
+        "minimum_component_score_pct": _pct(cond.get("minimum")),
         "stable": sens.get("stable"),
         "confidence": conf,
         "framing": cond.get("framing"),
@@ -204,6 +214,7 @@ def overall_pressure(profile: Dict) -> Dict:
     score = press.get("headline")
     return {
         "score": round(score, 4) if score is not None else None,
+        "score_pct": _pct(score),
         "concern_class": classify(score, DEFAULT_BANDS),
         "limiting_subdimension": press.get("limiting_subdimension"),
         "note": ("Pressure is deliberately NOT blended into overall_condition. Kept "
@@ -212,12 +223,121 @@ def overall_pressure(profile: Dict) -> Dict:
     }
 
 
-def son_summary(profile: Dict) -> Dict:
-    """The complete client/dashboard-facing summary for one site or project profile:
-    both badges, matrix cell, and confidence — the thing a product team binds a
-    dashboard to."""
+def limiting_chain(profile: Dict, scorecard_rows: List[Dict],
+                   pillar_names: Optional[Dict[str, str]] = None) -> Dict:
+    """The full, traceable chain behind the overall condition score: which PILLAR is
+    limiting it, which SUBDIMENSION within that pillar is limiting the pillar, and
+    which real SCORED INDICATOR(S) feed that subdimension — client-requested directly
+    ("for overall SoN i think we can say which pillar is dragging down or which
+    metrics") so a reader (or an auditor) never has to manually cross-reference three
+    different tables to find out what's actually driving a headline number.
+
+    profile        : the dict from scoring.build_site_profile() for this site/project.
+    scorecard_rows : this site's/project's real scorecard rows (already has construct,
+                     subdimension, indicator per row — no separate lookup needed).
+    pillar_names   : optional display-name override, e.g. {"C1_landscape": "C1 -- Landscape extent"}.
+
+    Every subdimension in the current real indicator set maps to exactly one scored
+    indicator except C4_pressure/land_use_pressure (ghm + hdi, averaged) — checked
+    directly against the live registry before writing this, not assumed. Handles
+    that real case by naming both rather than picking one arbitrarily.
+    """
+    pillar_names = pillar_names or {}
+    cond = profile.get("condition", {}) or {}
+    limiting_pillar = cond.get("minimum_component")
+    if limiting_pillar is None:
+        return {"available": False, "reason": "No pillar had scored data this run."}
+
+    pillar_data = (profile.get("components", {}) or {}).get(limiting_pillar, {})
+    limiting_subdim = pillar_data.get("limiting_subdimension")
+
+    indicator_rows = [r for r in scorecard_rows
+                      if r.get("construct") == limiting_pillar
+                      and r.get("subdimension") == limiting_subdim
+                      and r.get("site_value") is not None]
+    indicator_names = [r.get("display_name") or r.get("indicator") for r in indicator_rows]
+
+    pillar_label = pillar_names.get(limiting_pillar, limiting_pillar)
+    if len(indicator_names) == 1:
+        indicator_str = indicator_names[0]
+    elif indicator_names:
+        indicator_str = " & ".join(indicator_names) + " (averaged within this subdimension)"
+    else:
+        indicator_str = limiting_subdim or "unknown"
+
+    # REAL BUG FIXED HERE (caught by testing this against real synthetic
+    # data before shipping, not assumed correct): condition_rollup()'s
+    # raw output key for this value is "minimum", not
+    # "minimum_component_score" -- that longer name only exists on
+    # overall_condition()'s OWN processed output dict, a different dict
+    # from the raw profile["condition"] this function reads.
+    pillar_score = cond.get("minimum")
+    display = (f"limited primarily by {pillar_label} "
+              f"({_pct(pillar_score)}), itself limited by {indicator_str}")
+
     return {
+        "available": True,
+        "limiting_pillar": limiting_pillar,
+        "limiting_pillar_label": pillar_label,
+        "limiting_pillar_score": pillar_score,
+        "limiting_subdimension": limiting_subdim,
+        "limiting_indicators": indicator_names,
+        "display": display,
+    }
+
+
+def _pct(score: Optional[float]) -> str:
+    """0-1 score -> a real, human-facing percentage string. Client-requested
+    directly ("converting to 1-100% intactness and not just using z score") —
+    the underlying bounded score already existed (scoring.normalize's logistic);
+    this is the missing display step, applied everywhere a score reaches a
+    person rather than internal aggregation math."""
+    return "N/A" if score is None else f"{round(score * 100)}%"
+
+
+def pillar_summary(profile: Dict, scorecard_rows: List[Dict],
+                   pillar_names: Optional[Dict[str, str]] = None) -> List[Dict]:
+    """One real row per pillar (C1-C4 condition pillars; pressure kept separate,
+    see overall_pressure): score as a %, concern class, and its own limiting
+    subdimension/indicator named — the per-pillar half of the same traceable
+    chain limiting_chain() builds for the overall score."""
+    pillar_names = pillar_names or {}
+    out = []
+    for pillar, data in (profile.get("components", {}) or {}).items():
+        score = data.get("headline")
+        limiting_subdim = data.get("limiting_subdimension")
+        indicator_rows = [r for r in scorecard_rows
+                          if r.get("construct") == pillar
+                          and r.get("subdimension") == limiting_subdim
+                          and r.get("site_value") is not None]
+        indicator_names = [r.get("display_name") or r.get("indicator") for r in indicator_rows]
+        out.append({
+            "pillar": pillar,
+            "pillar_label": pillar_names.get(pillar, pillar),
+            "score": score,
+            "score_pct": _pct(score),
+            "concern_class": classify(score, DEFAULT_BANDS),
+            "limiting_subdimension": limiting_subdim,
+            "limiting_indicators": indicator_names,
+            "mean_context": data.get("mean"),
+        })
+    return out
+
+
+def son_summary(profile: Dict, scorecard_rows: Optional[List[Dict]] = None,
+                pillar_names: Optional[Dict[str, str]] = None) -> Dict:
+    """The complete client/dashboard-facing summary for one site or project profile:
+    both badges, matrix cell, confidence, and — when scorecard_rows is given — the
+    full traceable limiting chain (overall -> pillar -> subdimension -> indicator)
+    and a per-pillar summary table. scorecard_rows is optional and defaults to no
+    chain data, so every existing caller of this function keeps working unchanged;
+    the report layer is the one real caller that now passes real rows through."""
+    out = {
         "overall_condition": overall_condition(profile),
         "overall_pressure": overall_pressure(profile),
         "matrix_cell": profile.get("matrix_cell"),
     }
+    if scorecard_rows is not None:
+        out["limiting_chain"] = limiting_chain(profile, scorecard_rows, pillar_names)
+        out["pillars"] = pillar_summary(profile, scorecard_rows, pillar_names)
+    return out

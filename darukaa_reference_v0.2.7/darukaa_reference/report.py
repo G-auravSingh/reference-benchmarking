@@ -178,9 +178,14 @@ class ReportGenerator:
         # v0.2.4: product/dashboard-facing layer on top of each profile — one condition
         # score+class, one SEPARATE pressure score+class, and a confidence flag. Never
         # replaces the profile above; every consumer that needs it is still fed by it.
+        # REAL FIX: now passes each site's own real scorecard rows through, so
+        # son_summary can build the full traceable limiting chain (overall ->
+        # pillar -> subdimension -> real indicator name) the report needs —
+        # previously called with no rows at all, so no chain was ever available.
         from darukaa_reference import son_score
         report["son_summary"] = {
-            site_id: son_score.son_summary(profile)
+            site_id: son_score.son_summary(
+                profile, [r for r in rows if r.get("site_id") == site_id], son_score.PILLAR_NAMES)
             for site_id, profile in report["site_profiles"].items()
         }
 
