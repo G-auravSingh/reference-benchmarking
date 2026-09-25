@@ -1,0 +1,32 @@
+# TEMPLATE ONLY — no ecological thresholds are recommended by this file.
+# Replace the placeholders with scientifically reviewed, metric-specific thresholds.
+# Copy the structure into profiles/aquatic_lake.yaml under `scoring` only after review.
+#
+# For direct threshold scoring, t1<t2<t3<t4.
+# The metric registry determines whether higher or lower values are more concerning.
+
+# scoring:
+#   composite_son_enabled: true
+#   thresholds_by_metric:
+#     ndci_proxy:
+#       t1: <reviewed_value_1>
+#       t2: <reviewed_value_2>
+#       t3: <reviewed_value_3>
+#       t4: <reviewed_value_4>
+
+# Alternative: approved direction-aware reference-relative intactness bands.
+# Higher intactness means lower concern.
+#
+# scoring:
+#   composite_son_enabled: true
+#   reference_relative_enabled: true
+#   reference_ratio_thresholds_by_metric:
+#     ndci_proxy:
+#       r1: <reviewed_ratio_1>
+#       r2: <reviewed_ratio_2>
+#       r3: <reviewed_ratio_3>
+#       r4: <reviewed_ratio_4>
+# reference:
+#   tier1_approved_for_scoring: true
+#   # or, for an approved Tier-2 peer benchmark:
+#   tier2_approved_for_scoring: true

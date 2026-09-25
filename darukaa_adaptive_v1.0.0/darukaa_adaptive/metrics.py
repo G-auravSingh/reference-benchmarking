@@ -1,14 +1,19 @@
 """Aquatic/lake metric calculations with explicit spatial domains and provenance."""
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
+from datetime import date, timedelta
 from typing import Any, Dict, Optional
+
+from .registry import get_indicator_spec
 
 
 @dataclass
 class MetricResult:
     metric: str
     pillar: str
+    construct: str
+    subdimension: str
     domain: str
     value: Optional[float]
     units: str
@@ -17,30 +22,55 @@ class MetricResult:
     dataset: str
     scale_m: int
     direction: str
-    score_eligible: bool
+    evidence_tier: str
+    reference_type: str
+    reference_allowed: bool
+    score_eligible: bool = False
     valid_observations: Optional[int] = None
+    valid_pixels: Optional[int] = None
+    std_dev: Optional[float] = None
+    p05: Optional[float] = None
+    p95: Optional[float] = None
     notes: str = ""
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
-class LakeMetrics:
-    """Metrics are deliberately kept interpretable and domain-specific.
+def _window_label(start: str, end_exclusive: str) -> str:
+    try:
+        end_inclusive = date.fromisoformat(end_exclusive) - timedelta(days=1)
+        return f"{start}:{end_inclusive.isoformat()}"
+    except Exception:
+        return f"{start}:{end_exclusive}"
 
-    Metrics without validated ecological thresholds are returned as raw proxies and
-    are not automatically included in a composite State-of-Nature score.
+
+class LakeMetrics:
+    """Metric runner for the aquatic lake profile.
+
+    Metric extraction is separate from reference benchmarking and scoring. This is
+    deliberate: a value can be valid and reportable without being benchmarkable or
+    score-eligible.
     """
+
     def __init__(self, config, water_detector):
         self.config = config
         self.water = water_detector
 
     def _s2(self, geometry, start, end):
         import ee
+
         def mask(img):
             scl = img.select("SCL")
-            good = (scl.neq(3).And(scl.neq(8)).And(scl.neq(9)).And(scl.neq(10)).And(scl.neq(11)))
+            good = (
+                scl.neq(3)
+                .And(scl.neq(8))
+                .And(scl.neq(9))
+                .And(scl.neq(10))
+                .And(scl.neq(11))
+            )
             return img.updateMask(good).divide(10000).copyProperties(img, ["system:time_start"])
+
         return (
             ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
             .filterBounds(geometry)
@@ -53,154 +83,243 @@ class LakeMetrics:
         import ee
         return (
             ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
-            .filterBounds(geometry).filterDate(start, end).select("label").mode()
+            .filterBounds(geometry)
+            .filterDate(start, end)
+            .select("label")
+            .mode()
         )
 
-    def _reduce(self, image, geometry, scale=10):
-        import ee
-        out = image.reduceRegion(
-            reducer=ee.Reducer.mean().combine(ee.Reducer.count(), sharedInputs=True),
-            geometry=geometry, scale=scale, maxPixels=1e8, bestEffort=True,
-        ).getInfo() or {}
-        mean = None; count = None
-        for k, v in out.items():
-            lk = k.lower()
-            if "mean" in lk and v is not None: mean = float(v)
-            if "count" in lk and v is not None: count = int(v)
-        return mean, count
+    @staticmethod
+    def _collection_size(collection) -> int:
+        return int(collection.size().getInfo())
 
-    def _make(self, metric, pillar, domain, value, units, status, window, dataset, scale,
-              direction="none", score_eligible=False, valid_observations=None, notes=""):
-        return MetricResult(metric, pillar, domain, value, units, status, window, dataset, scale,
-                            direction, score_eligible, valid_observations, notes)
+    def _reduce_stats(self, image, geometry, scale=10) -> Dict[str, Optional[float]]:
+        import ee
+
+        reducer = (
+            ee.Reducer.mean()
+            .combine(ee.Reducer.stdDev(), sharedInputs=True)
+            .combine(ee.Reducer.percentile([5, 95]), sharedInputs=True)
+            .combine(ee.Reducer.count(), sharedInputs=True)
+        )
+        data = image.reduceRegion(
+            reducer=reducer,
+            geometry=geometry,
+            scale=scale,
+            maxPixels=1e8,
+            bestEffort=True,
+        ).getInfo() or {}
+
+        def pick(keyword: str) -> Optional[float]:
+            for key, value in data.items():
+                if keyword in key.lower() and value is not None:
+                    return float(value)
+            return None
+
+        count = pick("count")
+        return {
+            "mean": pick("mean"),
+            "std_dev": pick("stddev"),
+            "p05": pick("p5"),
+            "p95": pick("p95"),
+            "count": int(count) if count is not None else None,
+        }
+
+    def _make(self, metric: str, value: Optional[float], status: str, window: str, dataset: str,
+              scale: int, valid_observations: Optional[int] = None, stats: Optional[Dict] = None,
+              notes: str = "") -> MetricResult:
+        spec = get_indicator_spec(metric)
+        stats = stats or {}
+        return MetricResult(
+            metric=metric,
+            pillar=spec.pillar,
+            construct=spec.construct,
+            subdimension=spec.subdimension,
+            domain=spec.domain,
+            value=value,
+            units=spec.units,
+            status=status,
+            temporal_window=window,
+            dataset=dataset,
+            scale_m=scale,
+            direction=spec.direction,
+            evidence_tier=spec.evidence_tier,
+            reference_type=spec.reference_type,
+            reference_allowed=spec.reference_allowed,
+            score_eligible=False,
+            valid_observations=valid_observations,
+            valid_pixels=stats.get("count"),
+            std_dev=stats.get("std_dev"),
+            p05=stats.get("p05"),
+            p95=stats.get("p95"),
+            notes=notes,
+        )
 
     def water_extent(self, geometry, start, end):
         r = self.water.area_summary(geometry, start, end)
-        return self._make("water_extent", "P1_ecosystem_extent", "dynamic_water",
-                          r["water_fraction_pct"], "% of master boundary", "ok" if r["water_fraction_pct"] is not None else "insufficient_data",
-                          f"{start}:{end}", r["method"], 10, "context_dependent", False, r["images_used"],
-                          "Dynamic surface-water extent; not treated as inherently better/worse because hydroperiod is system-specific.")
+        return self._make(
+            "water_extent", r["water_fraction_pct"],
+            r["status"], _window_label(start, end), r["method"], 10,
+            r["images_used"], None,
+            "Dynamic surface-water extent; not treated as inherently better/worse because hydroperiod is system-specific.",
+        )
 
     def water_persistence(self, geometry, start, end):
         r = self.water.persistence(geometry, start, end)
-        return self._make("water_persistence", "P1_ecosystem_extent", "master_boundary",
-                          r["water_occurrence_fraction"], "fraction", "ok" if r["water_occurrence_fraction"] is not None else "insufficient_data",
-                          f"{start}:{end}", r["method"], 10, "higher_is_more_persistent", False, r["n_images"],
-                          "Fraction of valid Dynamic World observations classified as water at each pixel, spatially averaged.")
+        return self._make(
+            "water_persistence", r["water_occurrence_fraction"],
+            r["status"], _window_label(start, end), r["method"], 10,
+            r["n_images"], None,
+            "Fraction of valid observations classified as water, spatially averaged over the master boundary.",
+        )
 
     def ndci(self, geometry, start, end):
-        import ee
         s2 = self._s2(geometry, start, end)
-        if int(s2.size().getInfo()) == 0:
-            return self._make("ndci_proxy", "P2_ecosystem_condition", "dynamic_water", None, "NDCI", "insufficient_data",
-                              f"{start}:{end}", "COPERNICUS/S2_SR_HARMONIZED", 20, "lower_is_better", False, 0)
-        comp = s2.median()
+        n = self._collection_size(s2)
+        if n == 0:
+            return self._make("ndci_proxy", None, "insufficient_data", _window_label(start, end),
+                              "COPERNICUS/S2_SR_HARMONIZED", 20, 0,
+                              notes="No Sentinel-2 observations met the configured cloud filter.")
+        composite = s2.median()
         wm, method, _ = self.water.water_mask_for_period(geometry, start, end)
-        img = comp.normalizedDifference(["B5", "B4"]).updateMask(wm)
-        value, count = self._reduce(img, geometry, 20)
-        return self._make("ndci_proxy", "P2_ecosystem_condition", "dynamic_water", value, "NDCI", "ok" if value is not None else "insufficient_water_or_data",
-                          f"{start}:{end}", "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, "lower_is_better", False, count,
-                          "Chlorophyll/trophic proxy. Raw value only; site- and water-type calibration is required before ecological threshold scoring.")
+        img = composite.normalizedDifference(["B5", "B4"]).updateMask(wm).rename("NDCI")
+        stats = self._reduce_stats(img, geometry, 20)
+        return self._make(
+            "ndci_proxy", stats["mean"], "ok" if stats["mean"] is not None else "insufficient_water_or_data",
+            _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, n, stats,
+            "Water-masked chlorophyll/trophic proxy. Requires site and water-type calibration before ecological threshold scoring.",
+        )
 
     def turbidity_proxy(self, geometry, start, end):
-        import ee
         s2 = self._s2(geometry, start, end)
-        if int(s2.size().getInfo()) == 0:
-            return self._make("red_reflectance_turbidity_proxy", "P2_ecosystem_condition", "dynamic_water", None, "unitless", "insufficient_data",
-                              f"{start}:{end}", "COPERNICUS/S2_SR_HARMONIZED", 20, "lower_is_better", False, 0)
-        comp=s2.median(); wm, method, _ = self.water.water_mask_for_period(geometry, start, end)
-        img=comp.select("B4").updateMask(wm)
-        value,count=self._reduce(img,geometry,20)
-        return self._make("red_reflectance_turbidity_proxy", "P2_ecosystem_condition", "dynamic_water", value, "surface reflectance", "ok" if value is not None else "insufficient_water_or_data",
-                          f"{start}:{end}", "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, "lower_is_better", False, count,
-                          "Water-masked red-band proxy. Do not interpret as calibrated turbidity without field/sensor validation.")
+        n = self._collection_size(s2)
+        if n == 0:
+            return self._make("red_reflectance_turbidity_proxy", None, "insufficient_data",
+                              _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED", 20, 0)
+        composite = s2.median()
+        wm, method, _ = self.water.water_mask_for_period(geometry, start, end)
+        img = composite.select("B4").updateMask(wm).rename("red_reflectance")
+        stats = self._reduce_stats(img, geometry, 20)
+        return self._make(
+            "red_reflectance_turbidity_proxy", stats["mean"],
+            "ok" if stats["mean"] is not None else "insufficient_water_or_data",
+            _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, n, stats,
+            "Water-masked red-band proxy. Do not report as calibrated turbidity without field/sensor validation.",
+        )
 
     def bloom_frequency(self, geometry, start, end):
-        import ee
-        s2=self._s2(geometry,start,end)
-        n=int(s2.size().getInfo())
-        if n==0:
-            return self._make("surface_algal_bloom_frequency", "P2_ecosystem_condition", "dynamic_water", None, "fraction", "insufficient_data",
-                              f"{start}:{end}", "COPERNICUS/S2_SR_HARMONIZED", 20, "lower_is_better", False, 0)
-        wm, method, _=self.water.water_mask_for_period(geometry,start,end)
+        s2 = self._s2(geometry, start, end)
+        n = self._collection_size(s2)
+        if n == 0:
+            return self._make("surface_algal_bloom_frequency", None, "insufficient_data",
+                              _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED", 20, 0)
+
+        wm, method, _ = self.water.water_mask_for_period(geometry, start, end)
+
         def fai(img):
-            red=img.select("B4"); nir=img.select("B8"); swir=img.select("B11")
-            baseline=red.add(swir.subtract(red).multiply((842-665)/(1610-665)))
-            return nir.subtract(baseline).rename("FAI").copyProperties(img,["system:time_start"])
-        blooms=s2.map(fai).map(lambda img: img.gt(self.config.water.fai_bloom_threshold).rename("bloom").updateMask(wm))
-        frac=blooms.mean()
-        value,count=self._reduce(frac,geometry,20)
-        return self._make("surface_algal_bloom_frequency", "P2_ecosystem_condition", "dynamic_water", value, "fraction", "ok" if value is not None else "insufficient_water_or_data",
-                          f"{start}:{end}", "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, "lower_is_better", False, count,
-                          f"FAI bloom-proxy frequency using configurable threshold {self.config.water.fai_bloom_threshold}; threshold requires validation.")
+            red = img.select("B4")
+            nir = img.select("B8")
+            swir = img.select("B11")
+            baseline = red.add(
+                swir.subtract(red).multiply((842.0 - 665.0) / (1610.0 - 665.0))
+            )
+            return nir.subtract(baseline).rename("FAI").copyProperties(img, ["system:time_start"])
+
+        blooms = s2.map(lambda img: fai(img).gt(self.config.water.fai_bloom_threshold)
+                        .rename("bloom").updateMask(wm))
+        frequency = blooms.mean().rename("bloom_frequency")
+        stats = self._reduce_stats(frequency, geometry, 20)
+        return self._make(
+            "surface_algal_bloom_frequency", stats["mean"],
+            "ok" if stats["mean"] is not None else "insufficient_water_or_data",
+            _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, n, stats,
+            f"FAI bloom-proxy frequency using threshold {self.config.water.fai_bloom_threshold}; validate against field observations.",
+        )
 
     def shoreline_disturbance(self, riparian_zone, start, end):
-        import ee
-        dw=self._dw_label_mode(riparian_zone,start,end)
-        disturb=dw.eq(4).Or(dw.eq(6)).Or(dw.eq(7))  # crops, built, bare
-        value,count=self._reduce(disturb,riparian_zone,10)
-        return self._make("shoreline_disturbance_fraction", "P2_ecosystem_condition", "fixed_riparian_100m", value, "fraction", "ok" if value is not None else "insufficient_data",
-                          f"{start}:{end}", "GOOGLE/DYNAMICWORLD/V1", 10, "lower_is_better", False, count,
-                          "Share of standardized 100 m fixed riparian ring mapped as crops, built area, or bare ground. Contextual pressure metric; not automatically scored.")
+        try:
+            dw = self._dw_label_mode(riparian_zone, start, end)
+            img_count = self._collection_size(
+                __import__("ee").ImageCollection("GOOGLE/DYNAMICWORLD/V1")
+                .filterBounds(riparian_zone).filterDate(start, end).select("label")
+            )
+        except Exception:
+            return self._make("shoreline_disturbance_fraction", None, "insufficient_data",
+                              _window_label(start, end), "GOOGLE/DYNAMICWORLD/V1", 10, 0)
+        disturb = dw.eq(4).Or(dw.eq(6)).Or(dw.eq(7)).rename("disturbance")
+        stats = self._reduce_stats(disturb, riparian_zone, 10)
+        return self._make(
+            "shoreline_disturbance_fraction", stats["mean"],
+            "ok" if stats["mean"] is not None else "insufficient_data",
+            _window_label(start, end), "GOOGLE/DYNAMICWORLD/V1", 10, img_count, stats,
+            "Share of the fixed 100 m ring mapped as crops, built or bare ground. This is a pressure proxy, not direct biodiversity loss.",
+        )
 
-    def landcover_composition(self, geometry, start, end):
-        import ee
-        dw=self._dw_label_mode(geometry,start,end)
-        labels=list(range(9)); result={}
-        for cls in labels:
-            mask=dw.eq(cls)
-            _,count=self._reduce(mask,geometry,10)
-            # Because a boolean selfMask has mean = fraction of true pixels.
-            value,_=self._reduce(mask,geometry,10)
-            result[str(cls)] = value
+    def landcover_composition(self, geometry, start, end) -> Dict[str, Optional[float]]:
+        dw = self._dw_label_mode(geometry, start, end)
+        result: Dict[str, Optional[float]] = {}
+        for cls in range(9):
+            stats = self._reduce_stats(dw.eq(cls).rename("fraction"), geometry, 10)
+            result[str(cls)] = stats["mean"]
         return result
 
     def riparian_ndvi_trend(self, riparian_zone, start_year, end_year):
-        """Annual seasonal median NDVI; Sen slope + Mann-Kendall p computed client-side."""
-        import ee
+        """Annual median NDVI with Theil-Sen slope and Kendall tau p-value."""
         import numpy as np
         from scipy.stats import kendalltau, theilslopes
-        years=[]; values=[]; image_counts=[]
-        months=set(self.config.temporal.monitoring_months)
-        for y in range(start_year,end_year+1):
-            start=f"{y}-01-01"; end=f"{y}-12-31"
-            # Use full calendar year unless monitoring_months is a subset.
-            s2=self._s2(riparian_zone,start,end)
-            if months != set(range(1,13)):
-                def add_month(img):
-                    return img.set("month", img.date().get("month"))
-                s2=s2.map(add_month).filter(ee.Filter.inList("month", list(months)))
-            n=int(s2.size().getInfo())
-            if n==0:
-                continue
-            ndvi=s2.map(lambda img: img.normalizedDifference(["B8","B4"]).rename("NDVI")).median()
-            v,cnt=self._reduce(ndvi,riparian_zone,10)
-            if v is not None:
-                years.append(y); values.append(v); image_counts.append(n)
-        if len(values)<self.config.temporal.min_years_for_trend:
-            return self._make("riparian_ndvi_sen_slope", "P2_ecosystem_condition", "fixed_riparian_100m", None, "NDVI/year", "insufficient_temporal_depth",
-                              f"{start_year}:{end_year}", "COPERNICUS/S2_SR_HARMONIZED", 10, "higher_is_better", False, len(values),
-                              f"Only {len(values)} years with usable annual composites; minimum {self.config.temporal.min_years_for_trend}.")
-        slope,_,_,_=theilslopes(values,years)
-        p=float(kendalltau(years,values).pvalue)
-        return self._make("riparian_ndvi_sen_slope", "P2_ecosystem_condition", "fixed_riparian_100m", float(slope), "NDVI/year", "ok",
-                          f"{start_year}:{end_year}", "COPERNICUS/S2_SR_HARMONIZED", 10, "higher_is_better", False, len(values),
-                          f"Robust Sen/Theil slope across {len(values)} annual seasonal composites; Mann-Kendall/Kendall tau p={p:.4g}. Raw trend statistic, not a claim of ecological causation.")
 
-    def run(self, boundary, riparian_zone, baseline_window: tuple[int,int] | None = None) -> list[MetricResult]:
-        y=end=self.config.temporal.end_year
-        if baseline_window is None:
-            start_year=self.config.temporal.start_year
-        else:
-            start_year=baseline_window[0]; end=baseline_window[1]
-        start=f"{start_year}-01-01"; end_date=f"{end+1}-01-01"
-        out=[
-            self.water_extent(boundary,start,end_date),
-            self.water_persistence(boundary,start,end_date),
-            self.ndci(boundary,start,end_date),
-            self.turbidity_proxy(boundary,start,end_date),
-            self.bloom_frequency(boundary,start,end_date),
-            self.shoreline_disturbance(riparian_zone,start,end_date),
-            self.riparian_ndvi_trend(riparian_zone,start_year,end),
+        years, values, image_counts = [], [], []
+        import ee
+
+        months = sorted(set(self.config.temporal.monitoring_months))
+        for year in range(start_year, end_year + 1):
+            s2 = self._s2(riparian_zone, f"{year}-01-01", f"{year + 1}-01-01")
+            if months != list(range(1, 13)):
+                s2 = s2.map(lambda img: img.set("_month", img.date().get("month")))
+                s2 = s2.filter(ee.Filter.inList("_month", months))
+            n = self._collection_size(s2)
+            if n == 0:
+                continue
+            ndvi = s2.map(lambda img: img.normalizedDifference(["B8", "B4"]).rename("NDVI")).median()
+            stats = self._reduce_stats(ndvi, riparian_zone, 10)
+            if stats["mean"] is not None:
+                years.append(year)
+                values.append(stats["mean"])
+                image_counts.append(n)
+
+        if len(values) < self.config.temporal.min_years_for_trend:
+            return self._make(
+                "riparian_ndvi_sen_slope", None, "insufficient_temporal_depth",
+                f"{start_year}:{end_year}", "COPERNICUS/S2_SR_HARMONIZED", 10, len(values),
+                notes=f"Only {len(values)} years had usable annual composites; minimum is {self.config.temporal.min_years_for_trend}.",
+            )
+
+        slope, _, _, _ = theilslopes(np.asarray(values), np.asarray(years, dtype=float))
+        p = float(kendalltau(years, values).pvalue)
+        return self._make(
+            "riparian_ndvi_sen_slope", float(slope), "ok",
+            f"{start_year}:{end_year}", "COPERNICUS/S2_SR_HARMONIZED", 10, len(values),
+            notes=(f"Theil-Sen slope over {len(values)} annual composites; Kendall tau p={p:.4g}. "
+                   "Trend is descriptive and not automatically interpreted as ecological recovery."),
+        )
+
+    def run(self, boundary, riparian_zone, baseline_start: Optional[str] = None,
+            baseline_end: Optional[str] = None) -> list[MetricResult]:
+        """Run the baseline metrics using an explicit date window."""
+        if baseline_start is None or baseline_end is None:
+            baseline_start, baseline_end = self.config.temporal.baseline_dates()
+
+        out = [
+            self.water_extent(boundary, baseline_start, baseline_end),
+            self.water_persistence(boundary, baseline_start, baseline_end),
+            self.ndci(boundary, baseline_start, baseline_end),
+            self.turbidity_proxy(boundary, baseline_start, baseline_end),
+            self.bloom_frequency(boundary, baseline_start, baseline_end),
+            self.shoreline_disturbance(riparian_zone, baseline_start, baseline_end),
+            self.riparian_ndvi_trend(
+                riparian_zone,
+                self.config.temporal.start_year,
+                self.config.temporal.end_year,
+            ),
         ]
         return out
