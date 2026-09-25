@@ -1,57 +1,83 @@
+# Adaptive aquatic/lake profile.
+# Edit this file in GitHub as the project matures; the Colab notebook pulls main before each run.
 profile:
   name: aquatic_lake
-  version: 1.0.0
-  composite_son_enabled: false
+  version: 1.1.0
   allow_terrestrial_metrics: false
   notes: >-
-    Aquatic/lake profile. The supplied KML is treated as the fixed master assessment
-    boundary. Water surfaces are derived dynamically from Earth observation; no hand-drawn
-    water mask is required. Proxy metrics without validated ecological thresholds are reported
-    as raw/contextual indicators and are not silently converted into a composite score.
+    Aquatic/lake profile. The supplied KML is treated as the fixed master assessment boundary.
+    Water surfaces are derived dynamically from Earth observation. Exposed pixels are not
+    automatically treated as terrestrial habitat. Metrics remain separate from benchmarks and
+    scoring. No generic aquatic threshold is embedded without scientific review.
 
 gEE:
+  # Kept for backward compatibility with v1.0.0. The loader also accepts canonical `gee`.
   project_id: null
   service_account: null
   key_path: null
 
 temporal:
+  # Historical window used for trend/context metrics.
   start_year: 2018
   end_year: 2026
 
+  # Year-0 baseline: one complete seasonal cycle ending August 2026.
   baseline_start_date: 2025-08-01
   baseline_end_date: 2026-08-31
+  baseline_label: "Year-0 (Aug 2025-Aug 2026)"
 
-  baseline_start_year: 2025
-  baseline_end_year: 2026
-
-  monitoring_months: [8,9,10,11,12,1,2,3,4,5,6,7,8]
-
+  # Full-year trend by default; change only after deciding the seasonal window.
+  monitoring_months: [1,2,3,4,5,6,7,8,9,10,11,12]
   min_years_for_trend: 5
   max_cloud_pct: 60
 
 water:
   primary_dataset: GOOGLE/DYNAMICWORLD/V1
   primary_probability_threshold: 0.50
-
+  min_primary_images: 3
   fallback_enabled: true
   fallback_dataset: COPERNICUS/S1_GRD
   fallback_vv_threshold_db: -17.0
-
-  min_primary_images: 3
+  fallback_majority_fraction: 0.50
   water_presence_area_fraction_threshold: 0.05
   fai_bloom_threshold: 0.005
 
 spatial:
   riparian_buffer_m: 100
   context_buffer_km: 5
-  reference_buffer_km: 5
   working_crs: EPSG:4326
 
-validation:
-  status: provisional
-  method: "To be validated against independent reference observations"
-  version: "1.0.0"
+reference:
+  enabled: true
+  tier1_enabled: true
+  tier2_enabled: true
+
+  # Tier-1 is never silently invented. Supply a scientifically justified reference KML
+  # or reference CSV when available.
+  tier1_approved_for_scoring: false
+  tier2_approved_for_scoring: false
+  tier1_reference_kml: null
+  tier1_reference_csv: null
+
+  # Tier-2 is automatically assembled from the fixed context ring as a candidate reference.
+  # It is benchmarked and reported, but not used for scoring until explicitly approved.
+  tier2_min_water_occurrence: 0.50
+  tier2_min_area_ha: 1.0
+
+scoring:
+  enabled: true
+  composite_son_enabled: false
+  reference_relative_enabled: false
+  min_valid_metrics_per_pillar: 1
+  min_valid_pillars: 4
+  total_pillars: 4
+  require_complete_pillars: true
+
+  # Add only reviewed metric-specific thresholds. Do not fill these with generic values.
+  thresholds_by_metric: {}
+
+  # Alternative: approved direction-aware intactness bands (r1<r2<r3<r4).
+  reference_ratio_thresholds_by_metric: {}
 
 output_dir: outputs
-
 site_boundary_type: assessment_boundary
