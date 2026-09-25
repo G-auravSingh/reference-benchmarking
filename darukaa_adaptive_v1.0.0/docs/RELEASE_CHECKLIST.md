@@ -11,5 +11,5 @@ Before using a build for a client run:
 - inspect all metric statuses and valid-pixel counts;
 - inspect Tier-1/Tier-2 benchmark availability and provenance;
 - confirm score eligibility and pillar coverage;
-- do not enable composite scoring until metric-specific thresholds/reference bands are reviewed;
+- confirm that the selected reference tiers are explicitly approved for scoring; apply the fixed Darukaa 0–100 intactness concern bands;
 - retain the complete output directory and Year-0 `baseline_metric_scorecard.csv`.

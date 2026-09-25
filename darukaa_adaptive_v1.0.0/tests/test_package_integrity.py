@@ -23,7 +23,7 @@ def test_required_project_files_present():
         "setup.py", "requirements.txt",
         "darukaa_adaptive/config.py", "darukaa_adaptive/site.py", "darukaa_adaptive/water.py",
         "darukaa_adaptive/metrics.py", "darukaa_adaptive/benchmark.py", "darukaa_adaptive/scoring.py",
-        "darukaa_adaptive/trajectory.py", "darukaa_adaptive/readiness.py", "darukaa_adaptive/report.py",
+        "darukaa_adaptive/trajectory.py", "darukaa_adaptive/readiness.py", "darukaa_adaptive/report.py", "darukaa_adaptive/qa.py",
         "darukaa_adaptive/pipeline.py", "darukaa_adaptive/registry.py", "darukaa_adaptive/periods.py",
         "profiles/aquatic_lake.yaml", "profiles/terrestrial_legacy.yaml",
         "profiles/aquatic_lake_thresholds.template.yaml",
