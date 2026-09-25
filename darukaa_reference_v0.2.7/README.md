@@ -135,6 +135,53 @@ project-level reports through an actual headless-Chromium browser during develop
 not just checked for Python syntax — including catching and fixing the label-overlap
 issue above before it shipped.
 
+### 4a.1 — Superseded by a real, deeper rebuild (client-requested: the version above
+still buried raw values, jumped straight to a confusing roll-up, and used numbers
+(like an uncapped z-score of -70) never meant to be client-facing)
+
+Every score shown is now a genuine **1–100% intactness score**, not a raw z-score —
+the underlying bounded value already existed (a logistic transform in
+`scoring.normalize`); this added the missing display conversion. Every level of the
+hierarchy is now real and traceable:
+
+- **Per indicator**: raw value (with unit) → intactness % → concern level (Very Low
+  through Very High), grouped into real pillar cards (C1–C4).
+- **Per pillar**: score (geometric mean of that pillar's indicators) + concern level +
+  the actual limiting indicator **named explicitly** — e.g. *"limited by: Tree Cover
+  Loss Rate"* — not just a bare number.
+- **Overall SoN**: score + concern + the full traceable chain, e.g. *"limited
+  primarily by C1 — Landscape extent (22%), itself limited by Forest Fragmentation &
+  Pressure Proxy."* One line, no cross-referencing three tables to find the real cause.
+- **"No bare dashes" rule**: every indicator that isn't a real value states which of
+  three real, different reasons it looks empty — genuinely "not applicable to this
+  geometry" (a real reason the extraction gave), a real extraction failure, or "not
+  scored" (context/screening tier) — never a silent `—`.
+- **Project-level distribution**: real "N of M zones in each concern band" summary
+  (`_project_distribution_html`), not just a ranked list — matters more, not less, as
+  the real unit count grows (an agroforestry project's many real parcels, not just a
+  handful of conservation zones).
+- **In-situ (field-collected) metrics** — species richness/diversity from camera
+  traps, eDNA, etc. — get their own clearly-separated section: real value + rank
+  among this project's own zones, explicitly **never** a concern level at baseline (no
+  valid spatial reference pool exists for field data — see `change.py`); a real trend
+  signal becomes available from Year-1 monitoring onward instead.
+
+Geometric mean (not arithmetic average) was a deliberate, real choice, not a default:
+arithmetic mean lets one strong indicator fully hide a real weak one; geometric mean
+is real precedent (the same reasoning the UN's Human Development Index used when it
+switched away from arithmetic mean) and is far less forgiving of a single bad number,
+while the always-named limiting indicator keeps the non-compensatory,
+worst-factor-matters principle fully visible alongside it — client-confirmed
+explicitly: showing both, chained, rather than two separate composite numbers that
+could disagree.
+
+Verified directly: rendered a realistic 9-zone project and a single-site case through
+the real pipeline functions (not fabricated JSON) in an actual headless-Chromium
+browser. Two real bugs were caught this way before shipping, not assumed correct from
+a syntax check — a name collision that silently turned "30%" into "0%" (this module
+already had its own, differently-scaled `_pct`), and Python's `str.capitalize()`
+lowercasing "C1" inside the limiting-chain text.
+
 ## 5. Configuration — the options that matter
 
 Everything is one `Config` object (`config.py`). The full field list is documented

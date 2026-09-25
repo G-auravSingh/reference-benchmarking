@@ -5,6 +5,52 @@ applicable, the reviewer comment (Cxx) and HMI/SEED audit fix (F-HMI-x).
 
 ## [0.2.7] -- Real site-selection integration, client-facing report rebuild, a connected multi-pipeline handoff, and real per-tile realm-aware combined reporting
 
+### A real, deeper report rebuild — bounded %, traceable limiting chain, pillar
+cards, project distribution stats, in-situ handling (client-reported the earlier
+version: "we would have nothing to show to the client... report looks very shitty")
+Real, important finding before writing new code: the geometric-mean +
+limiting-factor hierarchy discussed and confirmed with the client was ALREADY what
+`scoring.py` implemented (bounded logistic + geometric mean + published minimum) --
+the confusing `0.001` roll-up was real upstream bugs (a near-zero-baseline forest
+loss calculation exploding to 10,851%/year) feeding garbage into an otherwise-correct
+system, not a wrong methodology. This was substantially a presentation-layer rebuild
+surfacing existing, correct math, not new math.
+
+- `son_score.py`: new `limiting_chain()` and `pillar_summary()` -- built from each
+  site's own real scorecard rows, no separate lookup. Every subdimension maps to
+  exactly one real scored indicator today except `C4_pressure/land_use_pressure`
+  (ghm+hdi, averaged) -- checked directly against the live registry, handled by
+  naming both rather than picking one arbitrarily.
+- New `_pct()`: the missing 1-100% display conversion -- the bounded 0-1 score
+  already existed; this was the missing presentation step.
+- `PILLAR_NAMES` moved here as the single source of truth `report.py` and
+  `html_report.py` both import, avoiding a circular import between them.
+- `html_report.py`: new `_indicator_row_html()` (the "no bare dashes" rule),
+  `_pillar_card_html()`, `_son_hero_html()`, `_project_distribution_html()` (the real
+  "N of M zones per concern level" summary, requested directly for the multi-zone/
+  agroforestry case). Both single-site and multi-zone project paths rebuilt to use
+  these.
+- In-situ (field-collected) metric handling: real answer already existed in
+  `change.py` (baseline = real value + within-project rank, never a concern class;
+  monitoring cycles onward = a real trend signal instead) -- built into the report
+  for the first time. New `_within_project_rank()`. No real `in_situ` indicator is
+  registered yet (every one of the 45 registered indicators is `source_type="gee"`)
+  -- tested by injecting a synthetic in-situ row into a real, pipeline-generated
+  report and rendering it in an actual browser.
+- `higher_is_better` direction handling verified end-to-end with real computed
+  numbers (not just code inspection): a low `ghm` value (good, lower-is-better)
+  correctly produces a positive z-score, a high bounded score, and "Low" concern;
+  the reverse for a high value -- confirmed correct for every currently-scored
+  indicator.
+
+Two real bugs caught by actually rendering this in a headless browser before
+shipping, not assumed correct from a syntax check: a name collision between this
+module's own pre-existing `_pct(x)` (formats an already-multiplied percentage
+number) and the new, differently-scaled one imported from `son_score.py` --
+silently turned "30%" into "0%" everywhere it fired; and Python's `str.capitalize()`
+lowercasing every character after the first, mangling "C1 -- Landscape extent" into
+"c1 -- landscape extent" inside the limiting-chain text.
+
 ### A real gap between the notebook and the script, caught before the client hit it
 `notebooks/run_pipeline.ipynb`'s Section 11 reused 3 helper functions from
 `run_project_from_manifest.py` directly in its cells (manifest discovery), but was
