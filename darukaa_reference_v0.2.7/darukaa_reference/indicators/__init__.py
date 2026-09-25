@@ -187,7 +187,8 @@ def _to_ee(geometry):
     return ee.Geometry(mapping(geometry))
 
 def _largest_water_polygon(water_mask, geometry, scale=10):
-    """Vectorise a binary water mask and return the LARGEST polygon by area.
+    """Vectorise a binary water mask and return the LARGEST polygon by area,
+    or None if no water is found at all.
 
     v0.2.5 fix: a fragile pattern (`water_vec.geometry(N)` for a fixed literal index,
     usually N=1) was found independently in THREE places in this codebase
@@ -198,11 +199,24 @@ def _largest_water_polygon(water_mask, geometry, scale=10):
     polygons. This picks the genuinely largest polygon instead (the pattern already
     used correctly in extract_shdi) — the only water-body-selection heuristic every
     other water-adjacent indicator now shares.
-    """
+
+    REAL BUG FIXED HERE (found directly from a real Tata Motors run log: "Element.
+    geometry: Parameter 'feature' is required and may not be null", firing for RCI
+    and riparian_ndvi_trend on every real terrestrial zone with little/no open water
+    — Deccan forest, Trail plots, etc., which is the normal, expected case for most
+    of a real site, not an edge case). `.first()` on an EMPTY FeatureCollection
+    (no water pixels vectorised at all) returns a null server-side, and calling
+    `ee.Feature(null).geometry()` crashes with exactly that message. The outer
+    try/except in extract_rci/extract_riparian_ndvi_trend already caught this and
+    returned a null value, so this was never silently breaking a real run — but the
+    error text read like a real crash instead of "no water here, which is genuinely
+    expected." Checked explicitly now with a real, informative return instead."""
     import ee
     water_vec = water_mask.selfMask().reduceToVectors(
         geometry=geometry, scale=scale, geometryType="polygon",
         eightConnected=True, maxPixels=1e13)
+    if water_vec.size().getInfo() == 0:
+        return None
     with_area = water_vec.map(lambda f: f.set("_area", f.geometry().area(1)))
     largest = ee.Feature(with_area.sort("_area", False).first())
     return largest.geometry()
@@ -1871,6 +1885,10 @@ def extract_rci(g,c):
         composite=s2.median().clip(eg)
         ndwi=composite.normalizedDifference(['B3','B8'])
         water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)  # v0.2.5 fix (was .geometry(1))
+        if water_geom is None:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry — RCI is a "
+                                          "riparian-zone metric and genuinely does not apply here."}}
         outer=water_geom.buffer(100,1); riparian=outer.difference(water_geom.buffer(0,1),1)
         rci=_img_rci(c).clip(riparian)
         return _reduce(rci,riparian,10)
@@ -1894,6 +1912,10 @@ def extract_riparian_ndvi_trend(g,c):
         composite=s2.median().clip(eg)
         ndwi=composite.normalizedDifference(['B3','B8'])
         water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)  # v0.2.5 fix (was .geometry(1))
+        if water_geom is None:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry — riparian "
+                                          "NDVI trend genuinely does not apply here."}}
         outer=water_geom.buffer(100,1); riparian=outer.difference(water_geom.buffer(0,1),1)
         trend_img=_img_riparian_ndvi_trend(c).clip(riparian)
         return _reduce(trend_img,riparian,10)
@@ -1905,6 +1927,19 @@ def extract_jrc_water_persistence(g,c):
         y=c.ndvi_year
         jrc=(ee.ImageCollection('JRC/GSW1_4/MonthlyHistory')
              .filterDate(f"{y-1}-01-01",f"{y}-12-31").filterBounds(eg))
+        # REAL BUG FIXED HERE (found directly from a real Tata Motors run
+        # log: "Image.gt: If one image has no bands, the other must also
+        # have no bands. Got 0 and 1."). When no real JRC monthly image
+        # matches this geometry/date-range filter (a genuine, real case —
+        # confirmed against small real water body polygons, not
+        # hypothetical), .mean() on the empty collection returns a
+        # genuinely zero-band image, and comparing that against a
+        # constant threshold (.gt(0.75)) crashes rather than returning a
+        # real "no data" result. Checked explicitly now.
+        if jrc.size().getInfo() == 0:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No real JRC monthly water history image matched this "
+                                          "geometry/date range."}}
         monthly_water=jrc.map(lambda img: img.select('water').eq(2).rename('Water')
                               .copyProperties(img,['system:time_start']))
         occurrence=monthly_water.mean().clip(eg)
@@ -1931,6 +1966,15 @@ def extract_shdi(g,c):
         ndwi=composite.normalizedDifference(['B3','B8'])
         water_vec=ndwi.gt(0).selfMask().reduceToVectors(
             geometry=eg,scale=10,geometryType='polygon',eightConnected=True,maxPixels=1e13)
+        if water_vec.size().getInfo() == 0:
+            # REAL FIX (same class of bug as _largest_water_polygon's fix,
+            # duplicated here since this function has its own separate
+            # implementation rather than actually calling that shared
+            # helper, despite an earlier comment elsewhere claiming it
+            # does): no water detected -- return a real, informative null
+            # instead of crashing on ee.Feature(null).geometry().
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry."}}
         with_area=water_vec.map(lambda f: f.set('area',f.geometry().area(1)))
         lake=ee.Feature(with_area.sort('area',False).first())
         lake_geom=lake.geometry()

@@ -440,7 +440,21 @@ class ReferenceSelector:
 
         if getattr(cfg, "pnv_gee_asset", ""):
             pnv = ee.Image(cfg.pnv_gee_asset)
-            pnv = pnv.select(pnv.bandNames().get(0))
+            # REAL BUG FIXED HERE (found directly from the client's real run
+            # log: "Image.select, argument 'bandSelectors': Invalid type.
+            # Expected type: List<Object>. Actual type: String. Actual
+            # value: biome_type" -- failing for EVERY indicator's Tier2
+            # computation, not just some, because this function runs once
+            # per Tier2 attempt regardless of which indicator). Passing a
+            # bare server-side computed object (pnv.bandNames().get(0)) to
+            # .select() -- instead of wrapping it in a list -- trips this
+            # exact error in this client library version: the argument
+            # type-checker only recognises a literal Python str/list at
+            # this call site, not an unwrapped ee.ComputedObject, so it
+            # gets treated as an invalid single value instead of a
+            # one-element band selector list. Wrapping in [...] is the
+            # real, standard fix for this exact, well-known GEE gotcha.
+            pnv = pnv.select([pnv.bandNames().get(0)])
             crosswalk = getattr(cfg, "pnv_to_dw_crosswalk", {}) or {}
             if crosswalk:
                 pnv_as_dw = ee.Image.constant(-1)  # sentinel; stays -1 for unmapped PNV codes
