@@ -491,8 +491,6 @@ table.dk-table tr.dk-row-worst{background:#fdecea}
 .dk-toc a{color:var(--dk-green);text-decoration:none}.dk-toc a:hover{text-decoration:underline}
 .dk-footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--dk-border);
      font-size:11.5px;color:var(--dk-muted)}
-.dk-client-tag{background:#5a2a82;color:#fff;padding:1px 6px;border-radius:10px;
-     font-size:10px;font-weight:600}
 .dk-collapsible summary{cursor:pointer;font-weight:600;color:var(--dk-green);padding:4px 0}
 .dk-pillar-card{border:1px solid var(--dk-border);border-radius:10px;margin:14px 0;overflow:hidden}
 .dk-pillar-head{padding:14px 18px;border-left:6px solid #555;background:#fafbfa}
@@ -841,11 +839,16 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
                   '<th>Reference type</th><th>Class</th></tr>')
         for r in rows:
             tier = r.get("evidence_tier") or "—"
-            override_flag = ""
-            if r.get("client_override"):
-                override_flag = (f' <span class="dk-client-tag" '
-                                f'title="{_esc(r.get("client_override_note",""))}">CLIENT-ACTIVATED</span>')
-            out.append(f'<tr><td>{_esc(r.get("display_name") or r.get("indicator"))}{override_flag}</td>'
+            # REAL REMOVAL (client-requested directly): the CLIENT-ACTIVATED
+            # badge and its hover-text ("original disposition and caveat")
+            # exposed internal decision history to the client-facing report
+            # -- exactly what the client said must not happen ("this
+            # indicator was originally context only but has been scored"
+            # can read as wrong to a client). The report shows only the
+            # final, as-computed result now; the full disposition
+            # reasoning lives in contracts.py and the notebook's picker,
+            # not here.
+            out.append(f'<tr><td>{_esc(r.get("display_name") or r.get("indicator"))}</td>'
                       f'<td>{_esc(r.get("construct"))}</td><td>{_badge(tier)}</td>'
                       f'<td>{_num(r.get("site_value"))}</td>'
                       f'<td>{_num(r.get("tier2_benchmark"))} '
@@ -854,10 +857,6 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
                       f'<td class="dk-muted">{_esc(r.get("reference_type"))}</td>'
                       f'<td>{_render_classification(r.get("classification"))}</td></tr>')
         out.append('</table>')
-        if any(r.get("client_override") for r in rows):
-            out.append('<p class="dk-muted">Indicators marked <span class="dk-client-tag">'
-                      'CLIENT-ACTIVATED</span> were scored by explicit request beyond the Darukaa '
-                      'default set — hover for the original disposition and caveat.</p>')
 
     # --- References ---
     out.append('<h2 class="dk-h2" id="dk-refs">Methodology references</h2><ul class="dk-muted">')
