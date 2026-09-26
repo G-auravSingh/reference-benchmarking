@@ -1016,7 +1016,12 @@ def create_default_registry() -> IndicatorRegistry:
     r.register(name="natural_landcover", applicable_realms=("terrestrial", "mixed"),  # DW_NATURAL_CLASSES (checked directly) excludes water
         display_name="Natural Land Cover Proportion", source_type="gee",
         extract_fn=extract_natural_landcover, unit="%", value_range=(0,100),
-        citation="Friedl et al. (2019). MCD12Q1. DOI:10.5067/MODIS/MCD12Q1.061",
+        citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4. NOTE: this "
+                "citation was stale until this audit (previously cited MODIS MCD12Q1 -- a source "
+                "the v4.0 fix documented in _img_natural_landcover's own docstring deliberately "
+                "moved away from, specifically because MCD12Q1's 500m pixels produced real, "
+                "confirmed 'swallowed polygon' artifacts on small real sites; only the citation "
+                "string had never been updated to match the real, current source).",
         tier2_eligible=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_natural_landcover, "tnfd_dim": 1})
 
@@ -1335,7 +1340,11 @@ def create_default_registry() -> IndicatorRegistry:
     r.register(name="hdi", display_name="Human Disturbance Index", source_type="gee",
         applicable_realms=("terrestrial", "aquatic", "mixed"),
         extract_fn=extract_hdi, unit="index", value_range=(0,1),
-        citation="ESA WorldCover v200. DOI:10.5281/zenodo.7254221",
+        citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4 -- built-up "
+                "class proximity. NOTE: this citation was stale until this audit (previously "
+                "cited ESA WorldCover, a source deliberately retired in the v4.0 fix documented "
+                "in _img_hdi's own docstring -- HDI has used Dynamic World's built-up class for "
+                "several releases; only the citation string had never been updated to match).",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_hdi, "tnfd_dim": "threats"})
 
