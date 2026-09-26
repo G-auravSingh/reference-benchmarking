@@ -206,3 +206,54 @@ API documentation (not just the GEE catalog) for a country- or region-level SHI 
 mechanism, or contact Map of Life directly about programmatic access at the project-AOI
 scale. Until resolved, `bii` remains C3's sole scored indicator -- a genuinely
 independent, real signal (v0.2.4 fix), but not fauna-EXCLUSIVE (see SS9).
+
+## 13. Site size vs. reference dataset resolution -- real, quantified, not yet fully resolved
+
+Client-raised directly: "the site size, combinations of sites and reference region
+(resolution matters)... some zones would be very small." Checked directly against real
+site data: Tata Motors' smallest real zone (EMU_Wetland_forest) is 0.47 ha -- roughly
+68m x 68m if square. Checked every currently-SCORED indicator's real native resolution
+against that real, worst-case site size:
+
+- `chm` (GEDI): not a resolution problem in the traditional sense -- a sparsity problem
+  (sparse orbital-track shots, not a continuous grid at any resolution). See its own
+  documented issue and the ETH Global Canopy Height alternative already researched
+  (real, confirmed GEE asset, 10m continuous -- pending a real decision, not yet
+  switched).
+- `light_pollution` (VIIRS DNB): ~500m native resolution -- roughly 7x the site's own
+  linear dimension. A `reduceRegion` mean over a 68m x 68m polygon at this resolution is
+  not really measuring the site; it is sampling most of one much larger regional pixel.
+  Real, unresolved limitation for this indicator on small real sites.
+- `ghm` (TNC HM v3): 90m native resolution (checked directly -- this was itself already
+  upgraded from a stale 1km asset, v0.2.5 fix) -- roughly 1.3x the site's own linear
+  dimension. Meaningfully better than light_pollution's mismatch, but still coarser than
+  the site itself for real, very small zones.
+- 10m-native indicators (Dynamic World-based: `natural_habitat`, `hdi`; Sentinel-2-based:
+  most C2 vegetation/aquatic indicators) are the closest real match to sites this small
+  -- a 68m x 68m site is still only ~7x7 pixels at 10m, genuinely thin for a stable mean,
+  but at least sampling real, site-specific variation rather than one enclosing regional
+  pixel.
+
+**What this means, honestly:** for a real site this small, a coarse-resolution
+indicator's "site value" is closer to "the value of the one regional pixel this site
+happens to sit inside" than a genuine site-specific measurement. This is not a bug to
+fix in code -- it is a real, physical limit of what these public datasets can resolve --
+but it is a real reason to read a coarse indicator's result on a very small real zone
+with corresponding caution, and a real argument for eventually weighting confidence (or
+flagging fine-print) by the site-area-to-pixel-area ratio, not yet implemented. Not
+unique to Tata Motors' Wetland_forest zone -- the same real caution applies to any small
+real EMU or agroforestry parcel this pipeline is asked to assess.
+
+## 14. Fragmented (multi-polygon) sites -- verified correct, one real, named characteristic
+
+Also client-raised: "some zones are fragmented and we are calculating combined scores
+on the whole zones... composite of those fragments." Verified directly against a real
+Tata Motors zone (Deccan_forest, confirmed 19 real disconnected polygons after dissolve):
+`reduceRegion` over a real MultiPolygon geometry is natively, correctly supported by
+Earth Engine -- it aggregates across every real fragment together, which is the
+ecologically correct question ("what is this zone's overall condition, across all its
+real scattered pieces"), not a bug needing a fix. One real, named, honest characteristic
+worth keeping in mind: the geometric centroid used to anchor the (much larger, 10-150km)
+regional reference-search buffer can fall outside the fragmented shape itself (confirmed
+directly for Deccan_forest) -- inconsequential at that buffer scale, but worth knowing
+if a future indicator ever anchors something at a finer scale from that same centroid.
