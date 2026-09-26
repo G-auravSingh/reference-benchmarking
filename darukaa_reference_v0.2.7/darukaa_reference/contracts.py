@@ -69,23 +69,42 @@ C: Dict[str, dict] = {
  "jrc_water_persistence": dict(construct="C1_landscape", subdimension="hydrology", measurement_scale="ratio",
     reference_type="regional_distribution", reference_estimator="log_response_ratio",
     disposition="retain", input_layers=[JRC], note="Hydrology/surface-water permanence."),
- "rci": dict(construct="C1_landscape", subdimension="hydrology", measurement_scale="bounded",
+ "rci": dict(construct="C1_landscape", subdimension="riparian_complexity", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="context", input_layers=[NDVI], module="conservation",
-    note="Riparian complexity; riparian strata only. Citation corrected (Naiman & Decamps 1997)."),
+    disposition="retain", input_layers=[NDVI], module="conservation",
+    note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension -- "
+         "originally shared 'hydrology' with jrc_water_persistence (already scored there), "
+         "which would have averaged the two together; corrected. Citation corrected "
+         "(Naiman & Decamps 1997).")),
  "riparian_ndvi_trend": dict(construct="C1_landscape", subdimension="hydrology", measurement_scale="interval",
     disposition="context", input_layers=[NDVI], note="Trend-based (correct NDVI use); contextual at cycle-1."),
 
  # ---------------- C2 vegetation condition ----------------
  "eii": dict(construct="C2_vegetation", subdimension="integrity", measurement_scale="bounded",
+    disposition="context", input_layers=[EII_LAYER],
+    note=("DEMOTED (this audit, was 'retain'): the parent band is itself the dataset "
+         "provider's own hard-minimum of the 3 sub-scores (non-compensatory by "
+         "construction, confirmed v0.2.2) -- scoring the 3 sub-components separately "
+         "(now promoted, see below) gives the SAME worst-case-driven result but with real "
+         "visibility into WHICH dimension (structure/composition/function) is actually "
+         "limiting, which the single blended parent number hides. Kept as context, not "
+         "removed, so the pre-blended number is still shown for reference.")),
+ "eii_structural": dict(construct="C2_vegetation", subdimension="eii_structure", measurement_scale="bounded",
     reference_type="contemporary_best_on_offer", reference_estimator="robust_z",
-    disposition="retain", input_layers=[EII_LAYER], note="SCORED at PARENT (Landbanking limiting-factor minimum = hard min of 3 sub-scores, non-compensatory, Q4; confirmed v0.2.2, not fuzzy logic). Components shown as context."),
- "eii_structural": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="bounded",
-    disposition="context", input_layers=[EII_LAYER], note="Diagnostic context under parent EII (B2 double-count)."),
+    disposition="retain", input_layers=[EII_LAYER],
+    note="PROMOTED (this audit, default-to-scored strategy): own distinct subdimension -- originally shared 'structure' with chm (already scored there), which would have averaged the two together; corrected."),
  "eii_compositional": dict(construct="C2_vegetation", subdimension="composition", measurement_scale="bounded",
-    disposition="context", input_layers=[EII_LAYER], note="Diagnostic context under parent EII."),
+    reference_type="contemporary_best_on_offer", reference_estimator="robust_z",
+    disposition="retain", input_layers=[EII_LAYER],
+    note=("PROMOTED (this audit): own real subdimension. Real, remaining overlap risk with "
+         "bii (both proxy species-compositional intactness) is now empirical, not "
+         "structural -- bii's data source was already fixed (v0.2.4) to be genuinely "
+         "independent of this asset, so this is a correlation question to check once "
+         "enough real runs exist, not a known double-count.")),
  "eii_functional": dict(construct="C2_vegetation", subdimension="function", measurement_scale="bounded",
-    disposition="context", input_layers=[EII_LAYER], note="Diagnostic context under parent EII."),
+    reference_type="contemporary_best_on_offer", reference_estimator="robust_z",
+    disposition="retain", input_layers=[EII_LAYER],
+    note="PROMOTED (this audit): own real subdimension, no longer double-counted now that the parent is context-only."),
  "ndvi": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="interval",
     disposition="context", input_layers=[NDVI], note="Not ratio-scale; remove from intactness. Keep as trend/context (B1)."),
  "habitat_health": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="bounded",
@@ -123,20 +142,41 @@ C: Dict[str, dict] = {
          "literature-supported trophic-state index, not a proxy. Promoted context->"
          "scored; has a real published_threshold classification (see "
          "son_score.LITERATURE_BREAKPOINTS). Aquatic module only (needs a water body).")),
- "sabf": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="bounded",
-    disposition="context", input_layers=[S2], module="aquatic", note="Algal-bloom frequency; aquatic module."),
- "wcpi": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="bounded",
-    disposition="context", input_layers=[S2], module="aquatic", note="Water-clarity proxy; aquatic module."),
- "wsdi": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="bounded",
-    disposition="context", input_layers=[S2], module="aquatic", note="Surface-dynamics; aquatic module."),
- "hsas": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="bounded",
-    disposition="context", input_layers=["edna_points"], module="aquatic", note="Suitability model; contextual until eDNA-validated."),
- "edpp": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="bounded",
-    disposition="context", input_layers=[S2], module="aquatic", note="Persistence model; contextual."),
- "mspl": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="bounded",
-    disposition="context", input_layers=[S2], module="aquatic", note="Stress model; contextual."),
+ "sabf": dict(construct="C2_vegetation", subdimension="algal_bloom_frequency", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[S2], module="aquatic",
+    note=("PROMOTED (this audit, default-to-scored strategy): given its own distinct "
+         "subdimension rather than sharing 'water_quality' with the 5 other aquatic C2 "
+         "indicators below -- they were all one shared subdimension before, which would "
+         "AVERAGE them together if more than one were promoted at once, undermining this "
+         "pipeline's non-compensatory design (one genuinely bad signal diluted by others). "
+         "Distinct subdimensions preserve limiting-factor logic across all of them.")),
+ "wcpi": dict(construct="C2_vegetation", subdimension="water_clarity", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[S2], module="aquatic",
+    note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why."),
+ "wsdi": dict(construct="C2_vegetation", subdimension="water_surface_dynamics", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[S2], module="aquatic",
+    note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why."),
+ "hsas": dict(construct="C2_vegetation", subdimension="habitat_suitability", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=["edna_points"], module="aquatic",
+    note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension. "
+         "Real, honest caveat retained: this is a Darukaa-constructed composite (see "
+         "indicators/__init__.py citation), not yet eDNA-validated -- scored now under the "
+         "'score by default, refine with real evidence later' strategy, not because "
+         "validation is complete.")),
+ "edpp": dict(construct="C2_vegetation", subdimension="edna_persistence", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[S2], module="aquatic",
+    note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why. Darukaa composite, environmental drivers literature-supported (see citation), formula itself not externally validated."),
+ "mspl": dict(construct="C2_vegetation", subdimension="microbial_stress", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[S2], module="aquatic",
+    note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why. Darukaa composite, see citation."),
  "shdi": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="ratio",
-    disposition="context", input_layers=[S2], module="aquatic", note="Scalar-only morphometry; not cross-site comparable."),
+    disposition="context", input_layers=[S2], module="aquatic", note="Scalar-only morphometry; not cross-site comparable. Real structural reason (not caution) to keep context -- Tier2 needs a spatially benchmarkable value, which this single-number-per-site metric cannot provide."),
 
  # ---------------- C3 faunal condition ----------------
  "flagship_habitat": dict(construct="C3_fauna", subdimension="habitat_suitability", measurement_scale="bounded",
@@ -186,12 +226,23 @@ C: Dict[str, dict] = {
     disposition="context", input_layers=[MODIS_LST], note="Climate-exposure context."),
  "aridity_index": dict(construct="C4_pressure", subdimension="climate_exposure", measurement_scale="interval",
     disposition="context", input_layers=["chirps_terraclimate"], note="Climate context; moved from C2 to C4 climate exposure."),
- "sdi": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
-    disposition="context", input_layers=[S2], module="aquatic", note="Aquatic shoreline disturbance; aquatic module."),
+ "sdi": dict(construct="C4_pressure", subdimension="shoreline_disturbance", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[S2], module="aquatic",
+    note=("PROMOTED (this audit, default-to-scored strategy): given its own distinct "
+         "subdimension rather than sharing 'direct_pressure' with light_pollution (already "
+         "scored there) -- promoting into the same subdimension would have suddenly "
+         "averaged it with an existing, correctly-functioning scored indicator.")),
  "stsi": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
     disposition="context", input_layers=[MODIS_LST], note="Site-relative normalisation only; not cross-site comparable."),
- "iri": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
-    disposition="context", input_layers=[NDVI], note="Invasive RISK model; contextual until field-validated."),
+ "iri": dict(construct="C4_pressure", subdimension="invasive_risk", measurement_scale="bounded",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[NDVI],
+    note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension "
+         "(same reasoning as sdi -- avoids averaging with light_pollution). Real, honest "
+         "caveat retained: Darukaa-constructed composite (see indicators/__init__.py "
+         "citation), field-validation still pending -- scored now under 'score by default, "
+         "refine with real evidence later', not because validation is complete.")),
  "ivsi": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
     disposition="context", input_layers=[NDVI], note="Detects NDVI expansion, not taxonomic invasion (own docstring). Must NOT be labelled invasion."),
 }

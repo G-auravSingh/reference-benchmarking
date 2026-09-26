@@ -1199,15 +1199,24 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="edpp", display_name="eDNA Persistence Potential", source_type="gee",
         extract_fn=extract_edpp, unit="index (0-1)", value_range=(0,1),
-        citation=("Strickler KM et al. (2015) EST 49:4209. DOI:10.1021/es404734p; "
-                  "Roussel JM et al. (2015) Biol Conserv 183:50. DOI:10.1016/j.biocon.2014.11.038"),
+        citation=("Darukaa-constructed composite (thermal stress inverse x turbidity protection x "
+                 "moisture x inverse UV exposure) -- these environmental factors are directly "
+                 "supported as eDNA-persistence drivers by Strickler KM et al. (2015) EST 49:4209, "
+                 "DOI:10.1021/es404734p, and Roussel JM et al. (2015) Biol Conserv 183:50, "
+                 "DOI:10.1016/j.biocon.2014.11.038 -- but the specific multiplicative combination "
+                 "is Darukaa's own, not a formula published in either paper. Clarified during audit."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_edpp_bands, "tnfd_dim": 2,
                   "note": "Higher = better eDNA preservation conditions."})
 
     r.register(name="mspl", display_name="Microbial Stress Probability Layer", source_type="gee",
         extract_fn=extract_mspl, unit="probability (0-1)", value_range=(0,1),
-        citation="Shade A et al. (2012) Microb Ecol 63:795. DOI:10.1007/s00248-012-0159-y",
+        citation=("Darukaa-constructed weighted composite (nutrient-stress 0.35 + thermal 0.30 + "
+                 "turbidity 0.20 + water-persistence 0.15) -- these specific weights are Darukaa's "
+                 "own, informed by general microbial-disturbance principles (Shade A et al. 2012 "
+                 "Microb Ecol 63:795, DOI:10.1007/s00248-012-0159-y), not a validated formula "
+                 "published in that paper. Corrected during this audit -- same class of "
+                 "over-attribution found and fixed in hsas/iri."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_mspl_bands, "tnfd_dim": 2,
                   "note": "Proxy for eutrophic/microbial imbalance. Complements 16S eDNA."})
