@@ -6,14 +6,22 @@ Example: Full Darukaa Reference Benchmarking Pipeline
 Demonstrates the complete workflow:
     1. Load a KML file with project sites
     2. Resolve ecoregions for each site
-    3. Compute 7 indicators per site
+    3. Benchmark every registered, eligible indicator per site (real count is
+       live -- run create_default_registry() + contracts.apply_contracts() and
+       check len(registry.all())/len(registry.scored()) rather than trusting a
+       hardcoded number here; this docstring already drifted stale once,
+       claiming "7 indicators" against a live registry that's actually 45
+       registered / 12 scored)
     4. Derive Tier 1 (ecoregion-wide) and Tier 2 (least-disturbed) references
     5. Run statistical comparisons (Hedges' g, permutation tests, bootstrap CIs)
     6. Output a profile-first scorecard (JSON + CSV) and an evidence-graded HTML report
 
 Prerequisites:
     - Google Earth Engine authenticated: `earthengine authenticate`
-    - Config file pointing to local rasters (GLOBIO4, SEED)
+    - A real GEE project ID in config.yaml (every currently-registered indicator
+      is source_type="gee" -- checked directly; the local-raster path this
+      docstring used to mention is real, dead code today, never actually
+      invoked by any registered indicator)
     - A KML file with project site boundaries
 
 Usage:
@@ -112,19 +120,26 @@ def main():
           f"| Removed: {len(st.get('removed', []))}")
     print(f"  Scored indicators: {', '.join(st.get('scored', [])) or '—'}")
 
+    # REAL FIX (found during a full-repo consistency sweep, the exact same
+    # class of bug already caught and fixed in the notebook): this used to
+    # print raw, unbounded profile scores (e.g. "score=0.297") straight
+    # from the profile dict. Uses the same real son_score functions the
+    # HTML report itself uses, so this summary is consistent with the
+    # report, not a stale, separate view of the same data.
+    from darukaa_reference import son_score
     for site_id, prof in report.get("site_profiles", {}).items():
-        cond = prof.get("condition", {})
-        sens = cond.get("sensitivity", {})
-        stab = "stable" if sens.get("stable") else "UNSTABLE"
-        print(f"\n  ── {site_id} ── decision: {prof.get('matrix_cell')}")
-        for comp, cs in prof.get("components", {}).items():
-            print(f"     {comp:16s} score={cs.get('headline'):.3f}  "
-                  f"(limiting: {cs.get('limiting_subdimension')})")
-        if cond.get("rollup") is not None:
-            print(f"     condition roll-up: {cond['rollup']:.3f} "
-                  f"(min {cond['minimum']:.3f} @ {cond['minimum_component']}; sensitivity {stab})")
-        if prof.get("pressure", {}).get("headline") is not None:
-            print(f"     pressure axis:     {prof['pressure']['headline']:.3f}")
+        site_rows = [r for r in report["scorecard"] if r.get("site_id") == site_id]
+        summary = son_score.son_summary(prof, site_rows, son_score.PILLAR_NAMES)
+        oc, op = summary["overall_condition"], summary["overall_pressure"]
+        chain = summary["limiting_chain"]
+        chain_str = chain["display"] if chain["available"] else "no pillar had scored data this run"
+        chain_display = chain_str[0].upper() + chain_str[1:]  # not .capitalize() -- lowercases "C1" etc.
+        print(f"\n  ── {site_id} ── decision: {summary['matrix_cell']}")
+        print(f"     Overall SoN: {oc['score_pct']} {oc['concern_class']}  ({chain_display})")
+        for p in summary["pillars"]:
+            limiting = " & ".join(p["limiting_indicators"]) if p["limiting_indicators"] else p["limiting_subdimension"]
+            print(f"     {p['pillar_label']:32s} {p['score_pct']:>5s}  {p['concern_class']:10s} (limited by: {limiting})")
+        print(f"     Pressure axis: {op['score_pct']} {op['concern_class']}  (kept structurally separate)")
 
     out_base = args.output or (config.output_dir + "/benchmark_scorecard")
     print(f"\n  Reports written: {out_base}.json / .csv / .html  (open the .html Evidence Record)")
@@ -152,7 +167,7 @@ def custom_indicator_example():
     """
     Shows how to register a new indicator without touching core code.
 
-    Example: Adding CPLAND (connectivity metric from Darukaa's Pillar 1).
+    Example: Adding CPLAND (connectivity metric, Darukaa's C1 landscape-extent pillar).
     """
     from darukaa_reference import Pipeline, IndicatorRegistry
     from darukaa_reference.config import Config
@@ -167,16 +182,31 @@ def custom_indicator_example():
         # This could query your internal Darukaa API, compute from rasters, etc.
         return {"value": 0.2135, "pixels": None}
 
+    # REAL BUG FIXED HERE (found during a full-repo consistency sweep): this
+    # example used to pass pillar=1 -- confirmed directly, that field is
+    # accepted silently but does NOTHING for pillar-based scoring/reporting;
+    # the real field every pillar card, limiting-chain, and aggregation
+    # function actually groups by is `construct` (a string like
+    # "C1_landscape"), which stayed None the whole time. A developer
+    # following the old example would have gotten an indicator invisible
+    # to every pillar-level view in the report. subdimension is also real
+    # and required for the limiting-chain naming to resolve to this
+    # indicator specifically, not just its parent pillar.
     registry.register(
         name="cpland",
         display_name="Landscape Connectivity (CPLAND)",
         source_type="api",  # or "gee", "local_raster", "in_situ"
         extract_fn=extract_cpland,
+        construct="C1_landscape",   # real pillar this indicator belongs to
+        subdimension="configuration",  # real subdimension within that pillar
         unit="%",
         value_range=(0.0, 100.0),
         citation="McGarigal, K. & Marks, B.J. (1995). FRAGSTATS. USDA Forest Service.",
         tier2_eligible=True,
-        pillar=1,
+        evidence_tier="baseline",  # required alongside tier2_eligible for real scoring eligibility
+        reference_type="regional_distribution",
+        reference_estimator="robust_z",
+        uncertainty_method="bootstrap_ci",
     )
 
     # Run with the extended registry
