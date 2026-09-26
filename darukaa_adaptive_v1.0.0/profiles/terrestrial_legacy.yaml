@@ -1,0 +1,8 @@
+# Compatibility alias. The generalized terrestrial profile is in terrestrial.yaml.
+profile:
+  name: terrestrial
+  version: 1.2.0
+  mode: terrestrial
+  aquatic_enabled: false
+  terrestrial_enabled: true
+  notes: "Compatibility alias for the generalized terrestrial profile."

@@ -1,0 +1,7 @@
+# Deprecated compatibility file.
+# The adaptive engine does NOT require raw-value thresholds for scoring.
+# Indicator scoring is based on approved reference-relative intactness on a 0-100 scale.
+# Darukaa concern convention:
+#   80-100 = Very Low | 60-<80 = Low | 40-<60 = Moderate | 20-<40 = High | 0-<20 = Very High
+# Do not populate raw metric thresholds here unless a future profile explicitly declares
+# an evidence-backed exception.

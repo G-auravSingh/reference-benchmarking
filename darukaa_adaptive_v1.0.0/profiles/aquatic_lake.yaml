@@ -1,0 +1,77 @@
+profile:
+  name: aquatic_lake
+  version: 1.2.0
+  mode: aquatic
+  aquatic_enabled: true
+  terrestrial_enabled: false
+  notes: "Aquatic-only profile. Automatically derives dynamic water, littoral and riparian domains and uses the shared C1-C4 scoring architecture."
+
+gEE:
+  project_id: null
+  service_account: null
+  key_path: null
+
+temporal:
+  start_year: 2018
+  end_year: 2026
+  baseline_start_date: 2025-08-01
+  baseline_end_date: 2026-08-31
+  baseline_label: "Year-0 (Aug 2025-Aug 2026)"
+  monitoring_months: [1,2,3,4,5,6,7,8,9,10,11,12]
+  min_years_for_trend: 5
+  max_cloud_pct: 60
+water:
+  primary_dataset: GOOGLE/DYNAMICWORLD/V1
+  primary_probability_threshold: 0.50
+  min_primary_images: 3
+  fallback_enabled: true
+  fallback_dataset: COPERNICUS/S1_GRD
+  fallback_vv_threshold_db: -17.0
+  fallback_majority_fraction: 0.50
+  water_presence_area_fraction_threshold: 0.05
+  fai_bloom_threshold: 0.005
+spatial:
+  riparian_buffer_m: 100
+  littoral_band_m: 50
+  context_buffer_km: 5
+  reference_exclusion_buffer_m: 1000
+  working_crs: EPSG:4326
+reference:
+  enabled: true
+  strategy: auto_ecoregion_stratum
+  ecoregion_dataset: RESOLVE/ECOREGIONS/2017
+  human_modification_dataset: CSP/HM/GlobalHumanModification
+  human_modification_threshold: 0.05
+  terrestrial_search_radius_km: 75
+  aquatic_search_radius_km: 150
+  aquatic_area_ratio_min: 0.5
+  aquatic_area_ratio_max: 2.5
+  aquatic_max_candidates: 6
+  minimum_reference_n: 6
+  maximum_reference_relative_se: 0.25
+  bootstrap_iterations: 500
+  auto_approve: true
+  use_ecoregion_for_terrestrial: false
+  use_hydrolakes_for_aquatic: true
+  hydrolakes_asset: projects/sat-io/open-datasets/HydroLakes/lake_poly_v10
+  allow_historical_reference: false
+scoring:
+  enabled: true
+  composite_son_enabled: true
+  concern_band_reference_point: 0.50
+  logistic_ratio_scale: 0.6931471805599453
+  min_valid_metrics_per_pillar: 1
+  min_valid_pillars: 4
+  total_pillars: 4
+  require_complete_pillars: true
+  condition_pillars: [C1_extent, C2_vegetation, C3_fauna]
+  pressure_pillar: C4_pressure
+inputs:
+  field_csv: null
+  acoustic_csv: null
+  edna_csv: null
+  edna_pdf: null
+  edna_html: null
+  krona_html: null
+output_dir: outputs
+site_boundary_type: assessment_boundary

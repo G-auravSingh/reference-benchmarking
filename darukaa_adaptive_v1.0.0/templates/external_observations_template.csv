@@ -1,0 +1,7 @@
+metric,pillar,value,units,direction,source_type,evidence_class,temporal_window,reference_value,reference_level,reference_approved,uncertainty,sample_n,interpretation,notes
+species_richness,C3_fauna,,count,higher_is_better,field,measured,, ,external,false,,,"Comparable survey richness.","Reference must match sampling effort and protocol."
+species_diversity,C3_fauna,,index,higher_is_better,field,measured,, ,external,false,,,"Shannon or equivalent diversity.","Use same taxonomic scope and effort."
+mean_species_abundance,C3_fauna,,index,higher_is_better,field,measured,, ,external,false,,,"Mean species abundance.","Use comparable abundance sampling and effort."
+acoustic_health_index,C3_fauna,,index,higher_is_better,acoustic,measured,, ,external,false,,,"Acoustic health composite.","Use standardized recording effort."
+ndsi,C4_pressure,,index,higher_is_better,acoustic,measured,, ,external,false,,,"Biological vs anthropogenic sound balance.","Direction depends on the acoustic formulation."
+edna_fauna_taxonomic_richness,C3_fauna,,taxa,higher_is_better,edna,measured,, ,external,false,,,"Targeted faunal molecular richness.","Requires fauna-specific sampling/filtering and a matched reference."
