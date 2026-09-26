@@ -257,3 +257,31 @@ worth keeping in mind: the geometric centroid used to anchor the (much larger, 1
 regional reference-search buffer can fall outside the fragmented shape itself (confirmed
 directly for Deccan_forest) -- inconsequential at that buffer scale, but worth knowing
 if a future indicator ever anchors something at a finer scale from that same centroid.
+
+## 15. chm switched from GEDI L2A to ETH Global Canopy Height 2020 -- real, implemented
+
+Client approved implementing this if the real alternative was confirmed correct and
+better -- it was. Root cause of chm's widespread real site_value=None problem (see S-6
+above, and the real Tata Motors log) was GEDI's sparse orbital-track sampling: confirmed
+directly that the real, necessary quality mask (quality_flag/degrade_flag/sensitivity>0.9)
+compounds with GEDI's inherent sparsity, leaving most real zones (not just small ones --
+Deccan_forest, Wildlife, Narmada_valley all had zero valid shots) with nothing.
+
+Switched to `ee.Image("users/nlang/ETH_GlobalCanopyHeight_2020_10m_v1")` -- verified real
+and confirmed via multiple independent sources before switching (its own publication's
+GEE snippet, the community catalog, and an unrelated peer-reviewed paper's own
+dataset-reference table listing this exact asset ID), CC-BY-4.0 (genuinely open, no
+access barrier the way the real FLII's commercial API was), a genuinely dense,
+wall-to-wall 10m raster (fuses GEDI as training data with Sentinel-2 via deep learning,
+Lang et al. 2023, Nature Ecology & Evolution) -- so a reduceRegion over any real site
+geometry gets a real value, not a sparse-shot gamble.
+
+**Real, honest trade-off, not hidden**: a single global 2020 snapshot, not a live,
+per-year rolling window the way GEDI's monthly collection was. Appropriate as a real,
+current baseline for Year-0 assessments (2020 is recent, not a stale multi-decade-old
+baseline the way the old MODIS MCD12Q1 land-cover issue was) -- but this will need its
+own real decision once a future monitoring cycle needs a canopy-height comparison
+genuinely contemporaneous with a specific later year, since this product has no
+scheduled annual update. The old GEDI-based function is kept in the codebase, unused by
+default, as `_img_chm_gedi_legacy` -- real, working, quality-controlled code, not
+deleted, in case a future cross-validation against the continuous product is useful.
