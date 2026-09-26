@@ -1083,11 +1083,14 @@ def create_default_registry() -> IndicatorRegistry:
         display_name="Forest Fragmentation & Pressure Proxy (Darukaa)", source_type="gee",
         extract_fn=extract_flii, unit="0–10", value_range=(0,10),
         citation=("Darukaa-computed proxy (VIIRS night-light pressure + Dynamic-World forest "
-                 "fragmentation), NOT the published Forest Landscape Integrity Index raster "
-                 "(v0.2.1 audit corrected a prior citation that misattributed this to Grantham "
-                 "et al. 2020 — that dataset is a distinct, specific 300 m global product this "
-                 "code does not load; if/when a live GEE asset for it is confirmed, this should "
-                 "be replaced with the real product, not this proxy). See ASSUMPTIONS §1."),
+                 "fragmentation), NOT the published Forest Landscape Integrity Index. "
+                 "DECISION (this audit): investigated the real Grantham et al. (2020) FLII "
+                 "directly -- confirmed TNFD/SBTN do use it for exactly this purpose, but no "
+                 "open-access, directly-loadable GEE asset was found (accessible only via a "
+                 "third-party commercial API/SDK) -- staying with this proxy rather than adding "
+                 "an external paid dependency. Kept clearly distinct: this indicator's own name "
+                 "and citation must never imply it is the real, external FLII a TNFD reviewer "
+                 "might look up independently. See ASSUMPTIONS §1."),
         tier2_eligible=True, reference_radius_km=150.0, pillar=2,
         metadata={"gee_image_fn": _img_flii, "tnfd_dim": 2,
                  "display_name_report": "Forest Fragmentation & Pressure Proxy (Darukaa)"})
@@ -1184,7 +1187,12 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="hsas", display_name="Habitat Suitability Alignment Score", source_type="gee",
         extract_fn=extract_hsas, unit="index (0-1)", value_range=(0,1),
-        citation="Elith J & Leathwick JR (2009) Annu Rev Ecol Evol Syst 40:677. DOI:10.1146/annurev.ecolsys.110308.120159",
+        citation=("Darukaa-constructed weighted composite (NDVI 0.5 + water-proximity 0.3 + "
+                 "inverse-disturbance 0.2) -- these specific weights are Darukaa's own, informed "
+                 "by general species distribution modelling principles (Elith & Leathwick 2009 "
+                 "Annu Rev Ecol Evol Syst 40:677, DOI:10.1146/annurev.ecolsys.110308.120159), not "
+                 "a validated formula published in that paper. Corrected during this audit -- the "
+                 "prior citation implied a level of external validation this composite doesn't have."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_hsas, "tnfd_dim": 2,
                   "note": "Requires config.raster_paths['edna_points_asset']. Without eDNA points returns habitat suitability only."})
@@ -1382,8 +1390,13 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="iri", display_name="Invasive Risk Index", source_type="gee",
         extract_fn=extract_iri, unit="index (0-1)", value_range=(0,1),
-        citation=("Bellard C et al. (2016) Glob Change Biol 22:1869. DOI:10.1111/gcb.13004; "
-                  "Mandrak NE & Cudmore B (2009) Can J Fish Aquat Sci 67:1135. DOI:10.1139/F08-099"),
+        citation=("Darukaa-constructed weighted composite (connectivity 0.30 + nutrient 0.25 + "
+                 "human-pressure 0.20 + disturbance 0.15 + access 0.10) -- these specific weights "
+                 "are Darukaa's own, informed by general invasion-ecology principles (Bellard C et "
+                 "al. 2016 Glob Change Biol 22:1869, DOI:10.1111/gcb.13004; Mandrak NE & Cudmore B "
+                 "2009 Can J Fish Aquat Sci 67:1135, DOI:10.1139/F08-099), not a validated formula "
+                 "published in either paper. Corrected during this audit -- the prior citation "
+                 "implied a level of external validation this composite doesn't have."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=5,
         metadata={"gee_image_fn": _img_iri, "tnfd_dim": "threats",
                   "note": "Road proxy = built-up edge (not true road dataset)."})
