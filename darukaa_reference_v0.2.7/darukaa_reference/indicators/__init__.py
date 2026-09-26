@@ -1171,7 +1171,13 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="wsdi", display_name="Water Surface Dynamics Index", source_type="gee",
         extract_fn=extract_wsdi, unit="index (0-1)", value_range=(0,1),
-        citation="Pekel et al. (2016) Nature 540:418-422. DOI:10.1038/nature20584",
+        citation="Darukaa-implemented VV backscatter thresholding (Sentinel-1 GRD, IW mode) -- the "
+                "well-established SAR water-detection principle that open water gives a specular, "
+                "low-backscatter return (widely used in SAR flood/water-mapping literature; no single "
+                "canonical source paper for this generic technique -- NOT Pekel et al. 2016, which is "
+                "the JRC Global Surface Water product, a completely different Landsat OPTICAL "
+                "methodology mistakenly cited here until this audit; confirmed directly against "
+                "_img_wsdi's own real code, which uses Sentinel-1 VV, not Landsat optical).",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_wsdi, "tnfd_dim": 2,
                   "note": "Peaks at 0.5 occurrence = most dynamic/unstable. Lower = more stable."})
