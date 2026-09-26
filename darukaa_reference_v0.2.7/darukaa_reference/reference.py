@@ -629,6 +629,18 @@ class ReferenceSelector:
         # Get indicator image
         indicator_image = self._get_indicator_image(spec)
         if indicator_image is None:
+            # REAL GAP FIXED HERE (found while investigating a real Tata
+            # Motors run): this returned {} completely silently -- no log
+            # message at all, a genuinely different, harder-to-diagnose
+            # failure mode than the "insufficient reference pixels"
+            # warning below. This is exactly what jrc_water_persistence
+            # hit before its real fix (neither gee_image_fn nor
+            # tier1_layer registered) -- confirmed directly: it produced
+            # zero log output anywhere, not even a warning, for every one
+            # of 15 real tiles in that run.
+            logger.warning(f"Tier 2: {spec.name} has no gee_image_fn or tier1_layer registered -- "
+                          f"_get_indicator_image() returned None, so no reference comparison is "
+                          f"structurally possible for this indicator regardless of real data availability.")
             return {}
 
         # Try primary zone first
@@ -683,6 +695,35 @@ class ReferenceSelector:
         logger.warning(
             f"Tier 2: insufficient reference pixels for {spec.name}. "
             f"Buffer={radius_km}km, ceiling={hmi_ceiling}.")
+        # REAL DIAGNOSTIC ADDED HERE (found while investigating a real Tata
+        # Motors run where 4+ indicators failed this way across every real
+        # zone, with no way to tell WHY from the log alone -- ruled out
+        # several real hypotheses via static code inspection, none fully
+        # confirmed without this). Reports the actual HMI threshold and
+        # the real count of stratified (ecoregion+landcover) pixels
+        # available at 200km, even before HMI-ranking -- distinguishes
+        # "the stratum itself is essentially empty at this location" from
+        # "the stratum has pixels but none pass the HMI ceiling" from
+        # "this indicator's own asset has no valid data at the stratified
+        # pixel locations", which look identical without this.
+        try:
+            widest_zone = site_geometry.centroid().buffer(200 * 1000)
+            diag_lc = lc_image.clip(widest_zone)
+            strat_count = ee.Image.constant(1).updateMask(diag_lc.mask()).reduceRegion(
+                reducer=ee.Reducer.count(), geometry=widest_zone, scale=1000,
+                maxPixels=1e8, bestEffort=True).getInfo()
+            ind_count = indicator_image.clip(widest_zone).reduceRegion(
+                reducer=ee.Reducer.count(), geometry=widest_zone, scale=1000,
+                maxPixels=1e8, bestEffort=True).getInfo()
+            logger.warning(f"  Diagnostic: stratified (ecoregion+landcover) pixel count at 200km = "
+                          f"{strat_count}; this indicator's OWN valid-pixel count at 200km = {ind_count}. "
+                          f"If the indicator count is ~0 while the stratum count is real, the indicator's "
+                          f"own asset likely has no valid data here (a real, external data-coverage gap, "
+                          f"not a stratification problem). If both are ~0, the stratification itself is "
+                          f"the constraint.")
+        except Exception as diag_e:
+            logger.warning(f"  Diagnostic query itself failed ({diag_e}) -- cannot narrow this down further "
+                          f"without live GEE access to test directly.")
         return {}
 
     def _dynamic_hmi_threshold(self, ghm_image, geometry, ceiling):

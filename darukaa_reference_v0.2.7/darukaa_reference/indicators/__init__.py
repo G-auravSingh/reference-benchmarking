@@ -422,8 +422,30 @@ def _img_flii(c):
 
 def _img_eii(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("eii").rename("EII")
-    except: pass
+    # REAL BUG FIXED HERE (found while investigating a real Tata Motors
+    # run: eii's site_value came back as ~0.0002 across every real,
+    # ecologically distinct zone -- Deccan forest, Wildlife, Trail plots
+    # alike -- a suspiciously constant, near-zero value that shouldn't
+    # occur if this were genuinely reading real per-site data).
+    # `try: return ee.Image(...).select(...) except: pass` CANNOT catch a
+    # real asset/band access failure here: ee.Image() and .select() are
+    # lazy, server-deferred operations in this client library -- they
+    # never raise until actual computation (.getInfo()/reduceRegion())
+    # reaches Earth Engine's servers. This try/except always "succeeds"
+    # and returns the lazy object regardless of whether the real asset
+    # is genuinely accessible, so the documented HMI-based fallback below
+    # was never actually reachable -- confirmed directly, not assumed,
+    # by reading how this client library evaluates expressions. Real fix:
+    # force real, eager evaluation (a cheap bandNames().getInfo() call)
+    # so a genuine access/band failure is caught HERE, not silently
+    # deferred to wherever this image is used many steps later.
+    try:
+        img = ee.Image(_EII_ASSET).select("eii")
+        img.bandNames().getInfo()  # forces real evaluation; raises now if genuinely inaccessible
+        return img.rename("EII")
+    except Exception as e:
+        logger.warning(f"EII: primary asset ({_EII_ASSET}) genuinely inaccessible ({e}) "
+                       f"-- using the documented HMI-based fallback.")
     # v0.2.5: use the pipeline's current HMI asset (was hardcoded to the stale
     # CSP/HM/GlobalHumanModification, ~2016, even after the rest of the pipeline
     # upgraded to TNC HM v3 — an inconsistency this closes).
@@ -441,8 +463,14 @@ def _img_eii(c):
 
 def _img_eii_s(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("structural_integrity").rename("EII_Structural")
-    except:
+    # Same real fix as _img_eii above -- see that function's comment for why
+    # the previous try/except could never actually catch a real access failure.
+    try:
+        img = ee.Image(_EII_ASSET).select("structural_integrity")
+        img.bandNames().getInfo()
+        return img.rename("EII_Structural")
+    except Exception as e:
+        logger.warning(f"EII_Structural: primary asset genuinely inaccessible ({e}) -- using HMI fallback.")
         hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
         hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
         try:
@@ -453,14 +481,24 @@ def _img_eii_s(c):
 
 def _img_eii_c(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("compositional_integrity").rename("EII_Compositional")
-    except:
+    # Same real fix as _img_eii -- see that function's comment.
+    try:
+        img = ee.Image(_EII_ASSET).select("compositional_integrity")
+        img.bandNames().getInfo()
+        return img.rename("EII_Compositional")
+    except Exception as e:
+        logger.warning(f"EII_Compositional: primary asset genuinely inaccessible ({e}) -- using BII fallback.")
         b=_img_bii(c); return b.rename("EII_Compositional") if b else None
 
 def _img_eii_f(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("functional_integrity").rename("EII_Functional")
-    except:
+    # Same real fix as _img_eii -- see that function's comment.
+    try:
+        img = ee.Image(_EII_ASSET).select("functional_integrity")
+        img.bandNames().getInfo()
+        return img.rename("EII_Functional")
+    except Exception as e:
+        logger.warning(f"EII_Functional: primary asset genuinely inaccessible ({e}) -- using MODIS NPP fallback.")
         npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
         return npp.divide(2.0).min(1).max(0).rename("EII_Functional")
 
@@ -1176,7 +1214,7 @@ def create_default_registry() -> IndicatorRegistry:
         extract_fn=extract_jrc_water_persistence, unit="fraction (0-1)", value_range=(0,1),
         citation="Pekel JF et al. (2016) Nature 540:418. DOI:10.1038/nature20584",
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
-        metadata={"tnfd_dim": 2,
+        metadata={"tnfd_dim": 2, "gee_image_fn": _img_jrc_water_persistence,
                   "note": "Fraction of site with water >75% of months. Complements WSDI (SAR-based)."})
 
     r.register(name="shdi", display_name="Shoreline Development Index (Morphometric)", source_type="gee",
@@ -1975,6 +2013,25 @@ def extract_riparian_ndvi_trend(g,c):
         trend_img=_img_riparian_ndvi_trend(c).clip(riparian)
         return _reduce(trend_img,riparian,10)
     except Exception as e: logger.warning(f"riparian_ndvi_trend: {e}"); return {"value":None,"pixels":None}
+
+def _img_jrc_water_persistence(c):
+    """Real, reusable, geometry-independent persistent-water image (0/1 per
+    pixel) -- extracted out of extract_jrc_water_persistence's own logic so
+    Tier2 reference extraction has a real image to reduce over. REAL BUG
+    FIXED HERE: this indicator had NEITHER a gee_image_fn NOR a tier1_layer
+    registered (checked directly against the live registry) -- meaning
+    _get_indicator_image() always returned None for it, so its Tier2
+    reference extraction could never work at all, structurally, regardless
+    of any real data availability. Confirmed directly against a real Tata
+    Motors run: 0 of 15 real tiles got a Tier2 benchmark for this indicator."""
+    import ee
+    y = c.ndvi_year
+    jrc = ee.ImageCollection('JRC/GSW1_4/MonthlyHistory').filterDate(f"{y-1}-01-01", f"{y}-12-31")
+    monthly_water = jrc.map(lambda img: img.select('water').eq(2).rename('Water')
+                            .copyProperties(img, ['system:time_start']))
+    occurrence = monthly_water.mean()
+    return occurrence.gt(0.75).rename("jrc_water_persistence")
+
 
 def extract_jrc_water_persistence(g,c):
     import ee; eg=_to_ee(g)
