@@ -1,12 +1,19 @@
 """
-SoN Condition Score & Concern Classification (v0.2.4)
-======================================================
+SoN Condition Score & Concern Classification
+=============================================
 
 The client/dashboard/TNFD-module-facing product layer. Everything here is built on TOP
 of the existing profile-first engine in scoring.py — it does not change how a site's
 profile, condition roll-up, or pressure headline are computed; it exposes them as a
 single number and a declared class label for consumers (a dashboard widget, a TNFD
 State-of-Nature input) that need exactly that, rather than the full profile.
+
+Real additions since this module's original v0.2.4 form (kept unversioned in this
+header from here on -- a hardcoded version stamp here already drifted stale once,
+several real capabilities added and this comment never updated to match): limiting_chain()
+and pillar_summary() (the real, traceable overall -> pillar -> subdimension -> indicator
+chain the client-facing report now shows), the 1-100% display conversion (_pct), and
+PILLAR_NAMES as the single source of truth report.py and html_report.py both import.
 
 WHY THIS EXISTS (and why it didn't exist before): earlier revisions of this pipeline
 deliberately did NOT produce a universal single score or concern label, because the
@@ -223,6 +230,19 @@ def overall_pressure(profile: Dict) -> Dict:
     }
 
 
+def _real_display_name(row: Dict) -> str:
+    """A real display_name when the row has one (per-zone/per-site scorecard
+    rows do); a reasonable title-cased fallback from the raw registry name
+    when it doesn't (project-level multi_tile_summary rows don't carry
+    display_name at all) -- not as good as the real curated name, but a
+    real improvement over showing a raw snake_case indicator key in a
+    client-facing chain string."""
+    if row.get("display_name"):
+        return row["display_name"]
+    raw = row.get("indicator") or ""
+    return raw.replace("_", " ").title()
+
+
 def limiting_chain(profile: Dict, scorecard_rows: List[Dict],
                    pillar_names: Optional[Dict[str, str]] = None) -> Dict:
     """The full, traceable chain behind the overall condition score: which PILLAR is
@@ -251,11 +271,21 @@ def limiting_chain(profile: Dict, scorecard_rows: List[Dict],
     pillar_data = (profile.get("components", {}) or {}).get(limiting_pillar, {})
     limiting_subdim = pillar_data.get("limiting_subdimension")
 
+    # REAL BUG FIXED HERE (caught by testing this against a real
+    # project-level aggregate, not assumed correct from the per-zone
+    # case alone): a per-ZONE scorecard row has "site_value", but a
+    # PROJECT-level row (from multi_tile_summary's per_indicator dict)
+    # has no such key at all -- it uses "worst_tile_benchmark" instead.
+    # Checking only "site_value" meant this filter matched ZERO rows
+    # for every project-level call, silently falling back to the raw
+    # subdimension name ("disturbance_regime") instead of the real
+    # indicator name ("Tree Cover Loss Rate") in the project headline
+    # specifically -- confirmed directly, this was already shipped.
     indicator_rows = [r for r in scorecard_rows
                       if r.get("construct") == limiting_pillar
                       and r.get("subdimension") == limiting_subdim
-                      and r.get("site_value") is not None]
-    indicator_names = [r.get("display_name") or r.get("indicator") for r in indicator_rows]
+                      and (r.get("site_value") is not None or r.get("worst_tile_benchmark") is not None)]
+    indicator_names = [_real_display_name(r) for r in indicator_rows]
 
     pillar_label = pillar_names.get(limiting_pillar, limiting_pillar)
     if len(indicator_names) == 1:
@@ -309,8 +339,8 @@ def pillar_summary(profile: Dict, scorecard_rows: List[Dict],
         indicator_rows = [r for r in scorecard_rows
                           if r.get("construct") == pillar
                           and r.get("subdimension") == limiting_subdim
-                          and r.get("site_value") is not None]
-        indicator_names = [r.get("display_name") or r.get("indicator") for r in indicator_rows]
+                          and (r.get("site_value") is not None or r.get("worst_tile_benchmark") is not None)]
+        indicator_names = [_real_display_name(r) for r in indicator_rows]
         out.append({
             "pillar": pillar,
             "pillar_label": pillar_names.get(pillar, pillar),

@@ -610,32 +610,24 @@ def _methodology_primer() -> str:
 
 
 def _project_headline(son: Dict, mts: Dict, zone_labels: Optional[List[str]] = None) -> str:
-    """The non-compensatory project headline: badges, the ranked per-zone
-    bar chart, and the condition x pressure quadrant — the visual core of
-    a multi-zone report."""
+    """The matrix cell and framing disclaimer for the project headline —
+    NOT the condition/pressure scores themselves. REAL BUG FIXED HERE
+    (caught by rendering this in a real browser, not assumed correct):
+    this function used to ALSO render its own condition/pressure "badges"
+    with RAW, unbounded decimal scores (e.g. "0.297") directly underneath
+    _son_hero_html()'s already-correct bounded % display for the exact
+    same two numbers — a real, visible inconsistency (bounded % right
+    above raw decimals right below it, for the same score). Trimmed to
+    keep only the matrix pill and framing text, which _son_hero_html()
+    does NOT already show and which are genuinely non-redundant."""
     proj = son.get("PROJECT", {})
-    oc, op = proj.get("overall_condition", {}), proj.get("overall_pressure", {})
-    cc, pc = _concern_color(oc.get("concern_class")), _concern_color(op.get("concern_class"))
-    out = ['<div class="dk-scorebadges">']
-    out.append(f'<div class="dk-badge-card" style="background:{cc}">'
-              f'<div class="dk-badge-label">Project condition (worst-zone headline)</div>'
-              f'<div class="dk-badge-score">{_num(oc.get("score"))}</div>'
-              f'<div class="dk-badge-class">{_esc(oc.get("concern_class"))}</div></div>')
-    out.append(f'<div class="dk-badge-card" style="background:{pc}">'
-              f'<div class="dk-badge-label">Project pressure</div>'
-              f'<div class="dk-badge-score">{_num(op.get("score"))}</div>'
-              f'<div class="dk-badge-class">{_esc(op.get("concern_class"))}</div></div>')
-    out.append('</div>')
+    oc = proj.get("overall_condition", {})
+    out = []
     out.append(f'<p>{_matrix_pill(proj.get("matrix_cell"))} '
               f'<span class="dk-muted">worst-driving component: '
               f'<b>{_esc(oc.get("minimum_component"))}</b> '
-              f'({_num(oc.get("minimum_component_score"))})</span></p>')
+              f'({_score_pct(oc.get("minimum_component_score"))})</span></p>')
     out.append(f'<div class="dk-framing">{_esc(oc.get("framing",""))}</div>')
-
-    # Real per-zone data, sourced from each zone's own son_summary (passed
-    # in by the caller from tile_reports — never re-derived here).
-    if zone_labels:
-        out.append('</div>')  # will be re-opened by caller with real per-zone son
     return "".join(out)
 
 

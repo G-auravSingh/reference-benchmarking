@@ -5,7 +5,9 @@ Indicator Contracts & Dispositions (CS-1 / CS-2 / CS-4 / CS-7)
 Declarative table that populates the v0.2.0 indicator contract on every registered
 indicator and encodes its disposition from the Phase-2 register (retain / redefine /
 context / screening / remove). Applying this table is what makes ``registry.scored()``
-return the lean, defensible set instead of the full 44.
+return the lean, defensible set instead of the full registered count (45 as of
+v0.2.7 -- re-check via len(registry.all()) rather than trusting a hardcoded number
+here again; this docstring itself drifted stale once already).
 
 Why a table (not 44 inline edits): the disposition of the indicator set is a single
 scientific decision surface. Keeping it in one place makes it auditable, testable, and
