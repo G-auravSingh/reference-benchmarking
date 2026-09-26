@@ -13,7 +13,7 @@ project:
   reference_estimator_default: "auto"      # auto (by scale) | log_response_ratio | robust_z
 
 gee:
-  project: "darukaa-earth-product"         # Google Earth Engine project ID
+  project: " gaurav-singh-007" #"darukaa-earth-product"         # Google Earth Engine project ID
   service_account: null                    # Optional: for server-side auth
   key_path: null                           # Optional: path to SA key JSON
 
