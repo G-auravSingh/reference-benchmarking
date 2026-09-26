@@ -204,7 +204,11 @@ def _indicator_row_html(row: Dict, all_project_rows: Optional[List[Dict]] = None
         concern_cell = _badge(tier)
     elif row.get("tier2_benchmark") is None:
         intactness_cell = '<span class="dk-warn">reference comparison unavailable</span>'
-        concern_cell = "—"
+        # REAL FIX (finishing the "no bare dashes" sweep): this was a bare
+        # "—" with nothing explaining it, even though the cell right next
+        # to it already gives the real reason. Made explicit rather than
+        # relying on an adjacent cell's context to carry the meaning.
+        concern_cell = '<span class="dk-muted">not assessable without a reference</span>'
     else:
         # The bounded 0-1 score (already computed by scoring.normalize's
         # logistic — see son_score.py) is what belongs here, not the raw,
@@ -218,8 +222,11 @@ def _indicator_row_html(row: Dict, all_project_rows: Optional[List[Dict]] = None
         cls = (row.get("classification") or {}).get("reference_relative") or {}
         concern = cls.get("class")
         intactness_cell = pct
+        # REAL FIX (finishing the "no bare dashes" sweep): a benchmark
+        # exists but classification is somehow missing -- a rare, real
+        # edge case, not something to hide behind a silent dash.
         concern_cell = (f'<span style="color:{_concern_color(concern)};font-weight:600">{_esc(concern)}</span>'
-                       if concern else "—")
+                       if concern else '<span class="dk-warn">concern class unavailable despite a real benchmark</span>')
 
     return (f'<tr><td>{_esc(name)}</td><td>{raw}</td>'
            f'<td>{intactness_cell}</td><td>{concern_cell}</td></tr>')
@@ -229,7 +236,11 @@ def _pillar_card_html(pillar: Dict, all_rows_for_pillar: List[Dict],
                       all_project_rows: Optional[List[Dict]] = None) -> str:
     color = _concern_color(pillar.get("concern_class"))
     limiting = pillar.get("limiting_indicators") or []
-    limiting_str = " & ".join(limiting) if limiting else (pillar.get("limiting_subdimension") or "—")
+    # REAL FIX (finishing the "no bare dashes" sweep): the fallback here
+    # used to be a bare "—" for the genuine edge case where a pillar has
+    # no real scored data at all this run.
+    limiting_str = " & ".join(limiting) if limiting else (
+        pillar.get("limiting_subdimension") or "no real scored data this run")
     out = [f'<div class="dk-pillar-card">']
     out.append(f'<div class="dk-pillar-head" style="border-left-color:{color}">'
               f'<h3 class="dk-h3">{_esc(pillar.get("pillar_label"))}</h3>'
