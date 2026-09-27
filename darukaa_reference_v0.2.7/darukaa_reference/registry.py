@@ -85,6 +85,10 @@ class IndicatorSpec:
     input_layers: List[str] = field(default_factory=list)  # raw layers consumed
     measurement_scale: Optional[str] = None  # "ratio" | "interval" | "bounded"
     spatial_grain: str = ""               # e.g. "10 m", "1 km"
+    native_scale_m: Optional[float] = None  # real, numeric native pixel size in metres --
+    # used directly as the reduceRegion scale (independent audit item 4: every
+    # reference reduceRegion previously hardcoded scale=1000 regardless of the
+    # real underlying dataset resolution). None means "use the config default".
     temporal_period: str = ""             # e.g. "2024 annual composite"
     effort_basis: str = ""                # for in-situ: detections/recorder-day, etc.
 

@@ -210,6 +210,13 @@ class ReferenceSelector:
                 if tier2.get("suppressed_reason"):
                     result.stratification_diagnostics = {
                         **result.stratification_diagnostics, "suppressed_reason": tier2["suppressed_reason"]}
+                # Real, audit-requested technical metadata: the actual reduceRegion
+                # scale used for this indicator's reference, so a reviewer can see
+                # whether a coarse fallback scale was used rather than the real
+                # native resolution.
+                if tier2.get("effective_scale_m") is not None:
+                    result.stratification_diagnostics = {
+                        **result.stratification_diagnostics, "effective_scale_m": tier2["effective_scale_m"]}
 
                 if result.site_value is not None and result.tier2_median:
                     # Legacy capped ratio (deprecated) retained for back-compat/display.
@@ -307,7 +314,7 @@ class ReferenceSelector:
                 .combine(ee.Reducer.count(), sharedInputs=True)
             ),
             geometry=region,
-            scale=1000,
+            scale=self._effective_scale(spec),
             maxPixels=1e9,
             bestEffort=True,
         ).getInfo()
@@ -325,7 +332,9 @@ class ReferenceSelector:
         # reusing the same region/scale/mask this reduceRegion already used --
         # not a client-side approximation from percentiles or SD.
         if parsed.get("median") is not None:
-            parsed["mad"] = self._compute_true_mad(ee, image, region, parsed["median"], scale=1000)
+            parsed["mad"] = self._compute_true_mad(
+                ee, image, region, parsed["median"], scale=self._effective_scale(spec))
+        parsed["effective_scale_m"] = self._effective_scale(spec)
         return parsed
 
     def _tier1_from_local_raster(
@@ -702,7 +711,7 @@ class ReferenceSelector:
         hmi_threshold = self._dynamic_hmi_threshold(ghm_in_zone, reference_zone, hmi_ceiling)
         if hmi_threshold is not None:
             result = self._extract_tier2_stats(
-                ghm_in_zone, hmi_threshold, indicator_image, reference_zone)
+                ghm_in_zone, hmi_threshold, indicator_image, reference_zone, spec=spec)
             n_ref = result.get("n", 0)
             if self._reference_accepted(result):
                 # SEED transparency: report the realised HMI threshold actually used,
@@ -719,7 +728,7 @@ class ReferenceSelector:
             ghm_fb = ghm_fb.clip(reference_zone)
             t = self._dynamic_hmi_threshold(ghm_fb, reference_zone, hmi_ceiling)
             if t is not None:
-                result = self._extract_tier2_stats(ghm_fb, t, indicator_image, reference_zone)
+                result = self._extract_tier2_stats(ghm_fb, t, indicator_image, reference_zone, spec=spec)
                 if self._reference_accepted(result):
                     result["stratification_diagnostics"] = {**strat_diag, "fallback_level": "fallback_1_dropped_landcover"}
                     logger.info(f"  Tier 2 fallback 1: {result['n']} pixels (ecoregion only)")
@@ -741,7 +750,7 @@ class ReferenceSelector:
             t = self._dynamic_hmi_threshold(ghm_wider, wider_zone, hmi_ceiling)
             if t is not None:
                 result = self._extract_tier2_stats(
-                    ghm_wider, t, indicator_image, wider_zone)
+                    ghm_wider, t, indicator_image, wider_zone, spec=spec)
                 if self._reference_accepted(result):
                     result["stratification_diagnostics"] = {**strat_diag, "fallback_level": f"fallback_2_widened_{wider_km}km"}
                     logger.info(f"  Tier 2 fallback 2: {result['n']} pixels at {wider_km}km")
@@ -806,25 +815,67 @@ class ReferenceSelector:
             if v is not None: return min(v, ceiling)
         return None
 
-    def _extract_tier2_stats(self, ghm_zone, threshold, indicator_image, geometry):
+    def _extract_tier2_stats(self, ghm_zone, threshold, indicator_image, geometry, spec=None):
         """Extract indicator stats from reference pixels (HMI ≤ threshold)."""
         import ee
         ref_mask = ghm_zone.lte(ee.Number(threshold))
         ind_ref = indicator_image.updateMask(ref_mask).clip(geometry)
+        scale = self._effective_scale(spec)
         stats = ind_ref.reduceRegion(
             reducer=(ee.Reducer.mean()
                 .combine(ee.Reducer.median(), sharedInputs=True)
                 .combine(ee.Reducer.stdDev(), sharedInputs=True)
                 .combine(ee.Reducer.percentile([25, 75, 90]), sharedInputs=True)
                 .combine(ee.Reducer.count(), sharedInputs=True)),
-            geometry=geometry, scale=1000, maxPixels=1e8, bestEffort=True
+            geometry=geometry, scale=scale, maxPixels=1e8, bestEffort=True
         ).getInfo()
         parsed = self._parse_gee_stats(stats)
         # Same real MAD fix as _compute_tier1 -- see that method's comment for why.
         # Reuses the SAME reference mask + geometry this Tier2 pool was built from.
         if parsed.get("median") is not None:
-            parsed["mad"] = self._compute_true_mad(ee, ind_ref, geometry, parsed["median"], scale=1000)
+            parsed["mad"] = self._compute_true_mad(ee, ind_ref, geometry, parsed["median"], scale=scale)
+        parsed["effective_scale_m"] = scale
         return parsed
+
+    # Independent audit item 4, real known native resolutions confirmed
+    # directly this session (not guessed): every reference reduceRegion
+    # previously hardcoded scale=1000 regardless of the indicator's own real
+    # dataset resolution -- indefensible for 10-30m indicators, especially
+    # against Tata's real <1ha zones. Honest limitation: only the indicators
+    # actually investigated this session have a confirmed value below; the
+    # rest fall back to a documented, more conservative default (100m, not
+    # the old 1000m) rather than a guessed per-indicator number.
+    _KNOWN_NATIVE_SCALE_M = {
+        "natural_habitat": 10,      # Dynamic World
+        "hdi": 10,                  # Dynamic World built-up class
+        "forest_loss_rate": 30,     # Hansen GFC
+        "chm": 10,                  # ETH Global Canopy Height 2020 (confirmed this session)
+        "ghm": 90,                  # TNC HM v3 (confirmed this session)
+        "light_pollution": 500,     # VIIRS DNB (confirmed this session)
+        "jrc_water_persistence": 30,  # JRC GSW MonthlyHistory
+        "tspi": 10, "sabf": 10, "wcpi": 10, "edpp": 10, "mspl": 10,
+        "sdi": 10, "rci": 10, "iri": 10,  # Sentinel-2-based
+        "wsdi": 10,                 # Sentinel-1 GRD
+    }
+    _DEFAULT_FALLBACK_SCALE_M = 100  # was 1000 -- still a real placeholder for
+    # indicators not yet individually confirmed, but an order of magnitude
+    # closer to reality than the old blanket 1km for what are mostly 10-90m
+    # products; not a substitute for confirming the remaining indicators
+    # individually as real follow-up work.
+
+    def _effective_scale(self, spec) -> float:
+        """Real, indicator-aware reduceRegion scale in metres. Returns the
+        confirmed native resolution when known; otherwise a documented,
+        honest fallback -- never a silent, unconditional 1000m regardless of
+        what the indicator actually is."""
+        if spec is not None:
+            explicit = getattr(spec, "native_scale_m", None)
+            if explicit:
+                return explicit
+            known = self._KNOWN_NATIVE_SCALE_M.get(getattr(spec, "name", None))
+            if known:
+                return known
+        return self._DEFAULT_FALLBACK_SCALE_M
 
     @staticmethod
     def _compute_true_mad(ee, image, region, median_value, scale=1000):
