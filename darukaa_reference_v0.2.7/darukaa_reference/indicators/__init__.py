@@ -564,21 +564,48 @@ def _img_bii(c):
     its own, and (b) made the "redundancy" concern between EII and BII trivially true by
     construction, since they were the same data under two names.
 
-    FIXED: uses the Impact Observatory / Vizzuality Biodiversity Intactness dataset
-    (100 m, global, PREDICTS-database-derived; Newbold et al. 2016 methodology lineage;
-    Hudson et al. 2017 PREDICTS database) — genuinely independent underlying data (land
-    use + pressure model on species abundance/compositional similarity), not derived
-    from EII. This is a community-catalog GEE asset (gee-community-catalog.org), not the
-    official Google catalog — stable and widely used (Bloomberg, TNFD/CSRD reporting
-    tools) but worth knowing if the asset path ever needs re-verification.
+    FIXED (v0.2.4): uses the Impact Observatory / Vizzuality Biodiversity Intactness
+    dataset (100 m, global, PREDICTS-database-derived) as an independent source.
 
-    Honest caveats: (1) a 2017-2020 composite, not continuously updated — the best
-    currently-available GLOBAL option, not a "most recent" annual product; (2) a
-    MODELLED product (statistical response to land-use/pressure), not a direct
-    observation — same category as EII/MSA/PDF; land-use and pressure inputs are
-    contemporary, but individual species distributions are not directly observed here.
+    UPGRADED to v1.1 (independent audit item 16, 2026-09-27): the BIOINTACT asset this
+    was pinned to covers 2017-2020 only. A newer v1.1 release
+    (projects/ebx-data/assets/earthblox/IO/BII_V1_1) was VERIFIED LIVE before switching
+    (not assumed from the audit's claim) via the real GEE community-catalog listing --
+    Gassert, F., Mazzarello, J., & Hyde, S. (2026). "Global 100m projections of
+    biodiversity intactness for the years 2017-2025 (v1.1)" [Technical white paper].
+    Vizzuality and Impact Observatory -- same publisher/methodology lineage as the prior
+    asset, confirmed annual coverage through 2025. The verified real sample usage calls
+    .mean() with NO .select() call first (each image is single-band already) -- matched
+    exactly here rather than guessing a band name for a dataset without documented band
+    names in the listing.
+
+    Real improvement this unlocks: since the new asset is genuinely ANNUAL (not a fixed
+    2017-2020 composite), this now selects the specific year matching config.ndvi_year
+    (this pipeline's existing "currency standard" -- see forest_loss_rate/
+    net_forest_change_rate) when available, falling back to the full-collection mean only
+    if that year has no image (e.g. a future year not yet published) -- a real accuracy
+    improvement over always averaging 2017-2020 regardless of assessment date.
+
+    Honest caveats unchanged from the prior version: (1) a MODELLED product (statistical
+    response to land-use/pressure), not a direct observation — same category as EII/MSA/
+    PDF; (2) a community-catalog GEE asset (gee-community-catalog.org), not the official
+    Google catalog — stable and widely used (Bloomberg, TNFD/CSRD reporting tools) but
+    worth knowing if the asset path ever needs re-verification.
     """
     import ee
+    try:
+        ic = ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BII_V1_1")
+        year = getattr(c, "ndvi_year", None)
+        if year:
+            yearly = ic.filterDate(f"{year}-01-01", f"{year + 1}-01-01")
+            composite = ee.Image(ee.Algorithms.If(yearly.size().gt(0), yearly.mean(), ic.mean()))
+        else:
+            composite = ic.mean()
+        return composite.rename("BII")
+    except Exception:
+        pass
+    # Fallback 0 (the prior primary asset, still real and live -- just 2017-2020 only,
+    # not the annual v1.1 record): used only if v1.1 itself fails to load.
     try:
         ic = ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BIOINTACT")
         return ic.select("BioIntactness").mean().rename("BII")
@@ -592,7 +619,7 @@ def _img_bii(c):
         except Exception:
             pass
     # Fallback 2 (LAST RESORT, degraded): EII's compositional sub-layer. Not independent
-    # — only used if the real BII asset and any custom override both fail to load, so a
+    # — only used if the real BII assets and any custom override both fail to load, so a
     # run doesn't silently return nothing. If this fallback fires, BII should NOT be
     # treated as adding new information beyond what EII already reports.
     try:
@@ -1247,8 +1274,13 @@ def create_default_registry() -> IndicatorRegistry:
         extract_fn=extract_bii, unit="index", value_range=(0,1),
         citation=("Newbold et al. (2016). Science 353:288-291. DOI:10.1126/science.aaf2201 "
                  "(BII methodology); Hudson et al. (2017). Ecol. Evol. 7:145-188 (PREDICTS "
-                 "database). Dataset: Impact Observatory & Vizzuality Biodiversity Intactness, "
-                 "100m, 2017-2020 composite (GEE community catalog — v0.2.4 fix: was "
+                 "database). Dataset: UPGRADED (independent audit item 16, 2026-09-27, "
+                 "verified live before switching) to Gassert, F., Mazzarello, J., & Hyde, S. "
+                 "(2026). 'Global 100m projections of biodiversity intactness for the years "
+                 "2017-2025 (v1.1)' [Technical white paper]. Vizzuality and Impact Observatory "
+                 "-- projects/ebx-data/assets/earthblox/IO/BII_V1_1 (GEE community catalog), "
+                 "annual 2017-2025 (was a fixed 2017-2020 composite on the prior BIOINTACT "
+                 "asset, kept as a fallback -- v0.2.4 fix note: this indicator was originally "
                  "incorrectly derived from EII's own compositional_integrity band, not an "
                  "independent source; see ASSUMPTIONS §9)."),
         tier2_eligible=True, reference_radius_km=75.0, pillar=3,
@@ -1554,9 +1586,19 @@ def create_default_registry() -> IndicatorRegistry:
         # Landscape-wide human-pressure surface, genuinely valid for water too
         display_name="Global Human Modification", source_type="gee",
         extract_fn=extract_ghm, unit="index", value_range=(0,1),
-        citation="Kennedy et al. (2019). DOI:10.1111/gcb.14549",
+        citation=("Theobald, D.M., Oakleaf, J.R., Moncrieff, G., Voigt, M., Kiesecker, J. & "
+                 "Kennedy, C.M. (2025). Global extent and change in human modification of "
+                 "terrestrial ecosystems from 1990 to 2022. Scientific Data 12, 606. "
+                 "DOI:10.1038/s41597-025-04892-2 -- CORRECTED (independent audit item 17, "
+                 "verified live 2026-09-27 via PubMed/Nature directly before writing, not "
+                 "assumed from the audit's claim): was still citing Kennedy et al. (2019), "
+                 "the source for the PRIOR CSP/HM/GlobalHumanModification (~2016, 1km) asset "
+                 "this indicator no longer uses. The actual live asset (see _img_ghm) is "
+                 "TNC/HM/v3/90m_s, a 2022 static snapshot at 90m -- this is that dataset's "
+                 "real, current methodology paper."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=50.0, pillar=5,
-        metadata={"gee_image_fn": _img_ghm, "tnfd_dim": "threats"})
+        metadata={"gee_image_fn": _img_ghm, "tnfd_dim": "threats",
+                 "note": "TNC HM v3, 90m, 2022 static snapshot (All_threats_combined band)."})
 
     r.register(name="light_pollution", applicable_realms=("terrestrial", "aquatic", "mixed"), display_name="Light Pollution (VIIRS)", source_type="gee",
         extract_fn=extract_light_pollution, unit="nW/cm²/sr", value_range=(0,500),
