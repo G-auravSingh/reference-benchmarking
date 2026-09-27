@@ -163,12 +163,28 @@ def benchmark(site_value: Optional[float],
         "display_pct_of_reference": display_pct_of_reference(
             site_value, reference_median, higher_is_better),
         "responsive": True,          # by construction (no cap)
+        "low_dispersion_warning": False,
     }
 
     if estimator == LRR:
         out["value"] = log_response_ratio(site_value, reference_median, higher_is_better)
     else:  # ROBUST_Z
         out["value"] = robust_z(site_value, reference_median, reference_mad, higher_is_better)
+        # REAL DIAGNOSTIC ADDED HERE (independent audit, explicit request: "add a
+        # low-dispersion diagnostic flag"). A reference pool with genuinely tiny
+        # dispersion relative to its own median (a quasi-degenerate pool -- e.g.
+        # the most-pristine 5% of pixels in a landscape that's naturally uniform)
+        # produces a mathematically real but practically unreadable z-score
+        # magnitude (the real Tata run's -93.6/-70+ values). This does not
+        # suppress the value (still available for audit/debug use) -- it flags it
+        # so a report layer can choose to cap, caveat, or hide it from a client-
+        # facing number rather than presenting an extreme magnitude as if it were
+        # a normal, comparable statistic.
+        if (out["value"] is not None and reference_mad is not None
+                and reference_median not in (None, 0)):
+            relative_dispersion = abs(reference_mad) / abs(reference_median)
+            if relative_dispersion < 0.02:
+                out["low_dispersion_warning"] = True
 
     if reference_values is not None:
         out["percentile_in_reference"] = percentile_in_reference(

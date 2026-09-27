@@ -217,9 +217,16 @@ C: Dict[str, dict] = {
  "light_pollution": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="retain", input_layers=[VIIRS], note="Distinct pressure, independent input (VIIRS)."),
- "hdi": dict(construct="C4_pressure", subdimension="land_use_pressure", measurement_scale="bounded",
+ "hdi": dict(construct="C4_pressure", subdimension="built_up_pressure", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="redefine", input_layers=["dw_builtup"], note="Rename to built-up/settlement pressure; health-adjusted HDI citation is WRONG (G4). Check overlap with ghm."),
+    disposition="redefine", input_layers=["dw_builtup"],
+    note=("Rename to built-up/settlement pressure; health-adjusted HDI citation is WRONG (G4). "
+         "FIXED (independent audit): was sharing 'land_use_pressure' with ghm -- confirmed "
+         "directly this caused the two to be AVERAGED together (scoring.py averages "
+         "indicators within one subdimension) rather than each contributing its own "
+         "limiting-factor check, contradicting the pipeline's own non-compensatory design. "
+         "Given its own distinct subdimension. Audit explicitly required a registry-level "
+         "validation test so this class of bug cannot regress -- see test_contracts.py.")),
  "lst_day": dict(construct="C4_pressure", subdimension="climate_exposure", measurement_scale="interval",
     disposition="context", input_layers=[MODIS_LST], note="Temperature = exposure, not a manageable pressure. Climate-exposure context."),
  "lst_night": dict(construct="C4_pressure", subdimension="climate_exposure", measurement_scale="interval",

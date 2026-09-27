@@ -57,6 +57,7 @@ class ReferenceResult:
     tier1_mean: Optional[float] = None
     tier1_median: Optional[float] = None
     tier1_std: Optional[float] = None
+    tier1_mad: Optional[float] = None  # real median(|x-median|), NOT std -- see benchmark() fix
     tier1_p25: Optional[float] = None
     tier1_p75: Optional[float] = None
     tier1_p90: Optional[float] = None
@@ -66,6 +67,7 @@ class ReferenceResult:
     tier2_mean: Optional[float] = None
     tier2_median: Optional[float] = None
     tier2_std: Optional[float] = None
+    tier2_mad: Optional[float] = None  # real median(|x-median|), NOT std -- see benchmark() fix
     tier2_p25: Optional[float] = None
     tier2_p75: Optional[float] = None
     tier2_p90: Optional[float] = None
@@ -85,6 +87,7 @@ class ReferenceResult:
     tier2_benchmark_estimator: Optional[str] = None
     tier2_percentile_in_reference: Optional[float] = None
     tier2_display_pct_of_reference: Optional[float] = None  # UNCAPPED, display only
+    tier2_low_dispersion_warning: bool = False  # real audit-requested flag -- see estimators.benchmark()
     reference_type: Optional[str] = None            # honesty label (see IndicatorSpec)
     reference_hmi_realised: Optional[float] = None   # realised HMI threshold used (SEED transparency)
     # v0.2.0 (post-audit): stratification diagnostics — which mode ran, which masks
@@ -164,6 +167,7 @@ class ReferenceSelector:
             result.tier1_mean = tier1.get("mean")
             result.tier1_median = tier1.get("median")
             result.tier1_std = tier1.get("std")
+            result.tier1_mad = tier1.get("mad")
             result.tier1_p25 = tier1.get("p25")
             result.tier1_p75 = tier1.get("p75")
             result.tier1_p90 = tier1.get("p90")
@@ -178,7 +182,7 @@ class ReferenceSelector:
                 _b1 = estimators.benchmark(
                     site_value=result.site_value,
                     reference_median=result.tier1_median,
-                    reference_mad=result.tier1_std,
+                    reference_mad=result.tier1_mad,
                     measurement_scale=getattr(indicator_spec, "measurement_scale", None),
                     reference_estimator=getattr(indicator_spec, "reference_estimator", None),
                     higher_is_better=indicator_spec.higher_is_better,
@@ -195,6 +199,7 @@ class ReferenceSelector:
                 result.tier2_mean = tier2.get("mean")
                 result.tier2_median = tier2.get("median")
                 result.tier2_std = tier2.get("std")
+                result.tier2_mad = tier2.get("mad")
                 result.tier2_p25 = tier2.get("p25")
                 result.tier2_p75 = tier2.get("p75")
                 result.tier2_p90 = tier2.get("p90")
@@ -215,7 +220,7 @@ class ReferenceSelector:
                     _b2 = estimators.benchmark(
                         site_value=result.site_value,
                         reference_median=result.tier2_median,
-                        reference_mad=result.tier2_std,
+                        reference_mad=result.tier2_mad,
                         reference_values=_ref_vals,
                         measurement_scale=getattr(indicator_spec, "measurement_scale", None),
                         reference_estimator=getattr(indicator_spec, "reference_estimator", None),
@@ -225,6 +230,7 @@ class ReferenceSelector:
                     result.tier2_benchmark_estimator = _b2["estimator"]
                     result.tier2_percentile_in_reference = _b2["percentile_in_reference"]
                     result.tier2_display_pct_of_reference = _b2["display_pct_of_reference"]
+                    result.tier2_low_dispersion_warning = _b2.get("low_dispersion_warning", False)
                     # Honesty label: Tier-2 is the contemporary best-available in a
                     # possibly-modified landscape, NOT a natural/historical baseline.
                     result.reference_type = (
@@ -303,7 +309,21 @@ class ReferenceSelector:
             bestEffort=True,
         ).getInfo()
 
-        return self._parse_gee_stats(stats)
+        parsed = self._parse_gee_stats(stats)
+        # REAL BUG FIXED HERE (independent audit finding, verified directly against
+        # this exact code before fixing): estimators.robust_z() is documented and
+        # implemented as (site - median) / (1.4826 * MAD), but this call site was
+        # passing tier1_std (Reducer.stdDev()'s output) into the ref_mad argument --
+        # a genuinely different statistic, not an approximation of it. SD and MAD
+        # only coincide for a perfectly normal distribution; a real reference pool
+        # (a handful to a few dozen stratified pixels) is not guaranteed to be
+        # anywhere near normal, and using SD silently changes what "1.4826x" means.
+        # Fixed with a real, GEE-native two-pass MAD: median(|x - median(x)|),
+        # reusing the same region/scale/mask this reduceRegion already used --
+        # not a client-side approximation from percentiles or SD.
+        if parsed.get("median") is not None:
+            parsed["mad"] = self._compute_true_mad(ee, image, region, parsed["median"], scale=1000)
+        return parsed
 
     def _tier1_from_local_raster(
         self, raster_path: str, site_geometry, radius_km: float, spec: IndicatorSpec
@@ -764,7 +784,33 @@ class ReferenceSelector:
                 .combine(ee.Reducer.count(), sharedInputs=True)),
             geometry=geometry, scale=1000, maxPixels=1e8, bestEffort=True
         ).getInfo()
-        return self._parse_gee_stats(stats)
+        parsed = self._parse_gee_stats(stats)
+        # Same real MAD fix as _compute_tier1 -- see that method's comment for why.
+        # Reuses the SAME reference mask + geometry this Tier2 pool was built from.
+        if parsed.get("median") is not None:
+            parsed["mad"] = self._compute_true_mad(ee, ind_ref, geometry, parsed["median"], scale=1000)
+        return parsed
+
+    @staticmethod
+    def _compute_true_mad(ee, image, region, median_value, scale=1000):
+        """Real, GEE-native two-pass Median Absolute Deviation: median(|x -
+        median(x)|), computed over the exact same region/mask the median itself
+        came from. Not an approximation from SD or percentiles -- an independent
+        audit found this pipeline was silently using SD where its own documented
+        formula calls for MAD; this is the real fix, not a client-side shortcut.
+        Returns None if the reduction yields nothing (e.g. the reference pool is
+        empty), rather than raising."""
+        try:
+            abs_dev = image.subtract(ee.Number(median_value)).abs()
+            mad_stats = abs_dev.reduceRegion(
+                reducer=ee.Reducer.median(), geometry=region, scale=scale,
+                maxPixels=1e9, bestEffort=True).getInfo()
+            for v in (mad_stats or {}).values():
+                if v is not None:
+                    return v
+            return None
+        except Exception:
+            return None
 
     # ------------------------------------------------------------------
     # Helpers

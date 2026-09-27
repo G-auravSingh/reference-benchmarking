@@ -98,6 +98,7 @@ class ReportGenerator:
                 # Falls back to None (NOT the capped ratio) if not yet propagated upstream.
                 "tier2_benchmark": _safe_round(getattr(comp, "tier2_benchmark", None)),
                 "tier2_benchmark_estimator": getattr(comp, "tier2_benchmark_estimator", None),
+                "tier2_low_dispersion_warning": bool(getattr(comp, "tier2_low_dispersion_warning", False)),
                 "reference_type": getattr(comp, "reference_type", None),
                 # v0.2.0 (post-audit): full stratification diagnostics — mode, masks
                 # applied, land-cover class (+ PNV correction status), realised HMI

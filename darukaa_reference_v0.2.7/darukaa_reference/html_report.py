@@ -219,6 +219,13 @@ def _indicator_row_html(row: Dict, all_project_rows: Optional[List[Dict]] = None
         from darukaa_reference import scoring as _scoring
         bounded = _scoring.normalize(row.get("tier2_benchmark"), row.get("tier2_benchmark_estimator") or "")
         pct = _score_pct(bounded)
+        # REAL FLAG SURFACED HERE (independent audit, explicit request): a
+        # reference pool with genuinely tiny dispersion produces a
+        # mathematically real but practically extreme z-score that a bounded
+        # % can mask by simply looking like a normal, confident number. Add
+        # a visible caveat rather than presenting it as equally reliable.
+        if row.get("tier2_low_dispersion_warning"):
+            pct = f'{pct} <span class="dk-warn" title="Reference pool has unusually low dispersion -- this benchmark magnitude may be unstable">⚠</span>'
         cls = (row.get("classification") or {}).get("reference_relative") or {}
         concern = cls.get("class")
         intactness_cell = pct
