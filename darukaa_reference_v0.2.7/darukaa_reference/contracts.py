@@ -90,21 +90,30 @@ C: Dict[str, dict] = {
          "limiting, which the single blended parent number hides. Kept as context, not "
          "removed, so the pre-blended number is still shown for reference.")),
  "eii_structural": dict(construct="C2_vegetation", subdimension="eii_structure", measurement_scale="bounded",
-    reference_type="contemporary_best_on_offer", reference_estimator="robust_z",
-    disposition="retain", input_layers=[EII_LAYER],
-    note="PROMOTED (this audit, default-to-scored strategy): own distinct subdimension -- originally shared 'structure' with chm (already scored there), which would have averaged the two together; corrected."),
+    disposition="context",
+    note=("SUSPENDED FROM SCORING (independent audit item 5, confirmed real anomaly, NOT a "
+         "curation choice): a real Tata Motors run (generated_at 2026-09-26T17:28, confirmed "
+         "AFTER the eager-evaluation access-check fix was live) still shows this indicator's "
+         "site_value constant at exactly 0.0003 across all 9 ecologically distinct real "
+         "zones -- too exact to plausibly be a genuine HMI-fallback computation, which should "
+         "vary at least somewhat zone to zone. Real diagnostic added directly to the "
+         "extraction code (see extract_eii_s's real eii_path_used metadata field) so the next "
+         "live-GEE run will show definitively whether the primary asset or the fallback path "
+         "fired -- cannot conclusively confirm the root cause without that live access, same "
+         "honest limitation the audit itself reached. Per the audit's explicit instruction: "
+         "do not leave an unresolved anomaly driving a headline score. Re-promote only after "
+         "a real run's eii_path_used field and per-zone value variation are inspected.")),
  "eii_compositional": dict(construct="C2_vegetation", subdimension="composition", measurement_scale="bounded",
-    reference_type="contemporary_best_on_offer", reference_estimator="robust_z",
-    disposition="retain", input_layers=[EII_LAYER],
-    note=("PROMOTED (this audit): own real subdimension. Real, remaining overlap risk with "
-         "bii (both proxy species-compositional intactness) is now empirical, not "
-         "structural -- bii's data source was already fixed (v0.2.4) to be genuinely "
-         "independent of this asset, so this is a correlation question to check once "
-         "enough real runs exist, not a known double-count.")),
+    disposition="context",
+    note=("SUSPENDED FROM SCORING alongside eii_structural (independent audit item 5) -- same "
+         "unresolved primary-asset-vs-fallback ambiguity applies to this sub-component (shares "
+         "the same _EII_ASSET and the same real diagnostic, eii_path_used). Real, remaining "
+         "overlap risk with bii (both proxy species-compositional intactness) is now empirical, "
+         "not structural -- bii's data source was already fixed (v0.2.4) to be genuinely "
+         "independent of this asset. Re-promote only after the anomaly is resolved.")),
  "eii_functional": dict(construct="C2_vegetation", subdimension="function", measurement_scale="bounded",
-    reference_type="contemporary_best_on_offer", reference_estimator="robust_z",
-    disposition="retain", input_layers=[EII_LAYER],
-    note="PROMOTED (this audit): own real subdimension, no longer double-counted now that the parent is context-only."),
+    disposition="context",
+    note="SUSPENDED FROM SCORING alongside eii_structural (independent audit item 5) -- same unresolved primary-asset-vs-fallback ambiguity. Re-promote only after the anomaly is resolved."),
  "ndvi": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="interval",
     disposition="context", input_layers=[NDVI], note="Not ratio-scale; remove from intactness. Keep as trend/context (B1)."),
  "habitat_health": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="bounded",

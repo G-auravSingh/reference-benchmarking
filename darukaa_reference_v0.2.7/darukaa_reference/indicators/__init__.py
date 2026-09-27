@@ -420,6 +420,15 @@ def _img_flii(c):
             .rename("FLII"))
     return flii
 
+_EII_LAST_PATH_USED = {}  # real diagnostic capture (independent audit item 5):
+# records which real path (primary asset vs HMI fallback) each _img_eii* call
+# actually used, keyed by function name, so extract_eii*() can attach a real,
+# honest reason to its output instead of a silent, unexplained value -- this
+# is what the audit's own conclusion ("I cannot conclusively confirm the root
+# cause without executing against the live EII asset") needs to finally be
+# answered on the next real run with live GEE access.
+
+
 def _img_eii(c):
     import ee
     # REAL BUG FIXED HERE (found while investigating a real Tata Motors
@@ -439,13 +448,27 @@ def _img_eii(c):
     # force real, eager evaluation (a cheap bandNames().getInfo() call)
     # so a genuine access/band failure is caught HERE, not silently
     # deferred to wherever this image is used many steps later.
+    #
+    # STILL UNRESOLVED (independent audit item 5, confirmed real): even
+    # with this eager-evaluation fix live, a real Tata Motors run
+    # (generated_at 2026-09-26T17:28, confirmed AFTER this fix was
+    # pushed) still shows eii_structural constant at exactly 0.0003
+    # across every one of 9 ecologically distinct real zones -- too
+    # exact to be a genuine HMI-fallback computation (which should vary
+    # at least somewhat zone to zone). Cannot conclusively confirm the
+    # root cause without live GEE access to inspect the real asset
+    # directly, same honest limitation the audit itself reached.
+    # Recording which path fires below so the NEXT real run's output
+    # will finally show this directly.
     try:
         img = ee.Image(_EII_ASSET).select("eii")
         img.bandNames().getInfo()  # forces real evaluation; raises now if genuinely inaccessible
+        _EII_LAST_PATH_USED["eii"] = "primary_asset"
         return img.rename("EII")
     except Exception as e:
         logger.warning(f"EII: primary asset ({_EII_ASSET}) genuinely inaccessible ({e}) "
                        f"-- using the documented HMI-based fallback.")
+        _EII_LAST_PATH_USED["eii"] = f"hmi_fallback ({e})"
     # v0.2.5: use the pipeline's current HMI asset (was hardcoded to the stale
     # CSP/HM/GlobalHumanModification, ~2016, even after the rest of the pipeline
     # upgraded to TNC HM v3 — an inconsistency this closes).
@@ -468,9 +491,11 @@ def _img_eii_s(c):
     try:
         img = ee.Image(_EII_ASSET).select("structural_integrity")
         img.bandNames().getInfo()
+        _EII_LAST_PATH_USED["eii_structural"] = "primary_asset"
         return img.rename("EII_Structural")
     except Exception as e:
         logger.warning(f"EII_Structural: primary asset genuinely inaccessible ({e}) -- using HMI fallback.")
+        _EII_LAST_PATH_USED["eii_structural"] = f"hmi_fallback ({e})"
         hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
         hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
         try:
@@ -485,9 +510,11 @@ def _img_eii_c(c):
     try:
         img = ee.Image(_EII_ASSET).select("compositional_integrity")
         img.bandNames().getInfo()
+        _EII_LAST_PATH_USED["eii_compositional"] = "primary_asset"
         return img.rename("EII_Compositional")
     except Exception as e:
         logger.warning(f"EII_Compositional: primary asset genuinely inaccessible ({e}) -- using BII fallback.")
+        _EII_LAST_PATH_USED["eii_compositional"] = f"bii_fallback ({e})"
         b=_img_bii(c); return b.rename("EII_Compositional") if b else None
 
 def _img_eii_f(c):
@@ -496,9 +523,11 @@ def _img_eii_f(c):
     try:
         img = ee.Image(_EII_ASSET).select("functional_integrity")
         img.bandNames().getInfo()
+        _EII_LAST_PATH_USED["eii_functional"] = "primary_asset"
         return img.rename("EII_Functional")
     except Exception as e:
         logger.warning(f"EII_Functional: primary asset genuinely inaccessible ({e}) -- using MODIS NPP fallback.")
+        _EII_LAST_PATH_USED["eii_functional"] = f"modis_npp_fallback ({e})"
         npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
         return npp.divide(2.0).min(1).max(0).rename("EII_Functional")
 
@@ -1715,11 +1744,29 @@ def extract_flii(g,c):
 
 def extract_eii(g,c):
     img=_img_eii(c)
-    return _reduce(img,g,300) if img else {"value":None,"pixels":None}
+    result = _reduce(img,g,300) if img else {"value":None,"pixels":None}
+    # Real diagnostic (independent audit item 5): records which real path
+    # (primary EII asset vs HMI fallback) was actually used, so the constant
+    # eii_structural=0.0003 anomaly found on a real Tata Motors run finally
+    # gets a real, definitive answer on the next live-GEE run instead of
+    # remaining an unexplained value.
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii")
+    return result
 
-def extract_eii_s(g,c): return _reduce(_img_eii_s(c),g,300)
-def extract_eii_c(g,c): return _reduce(_img_eii_c(c),g,300)
-def extract_eii_f(g,c): return _reduce(_img_eii_f(c),g,300)
+def extract_eii_s(g,c):
+    result = _reduce(_img_eii_s(c),g,300)
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii_structural")
+    return result
+
+def extract_eii_c(g,c):
+    result = _reduce(_img_eii_c(c),g,300)
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii_compositional")
+    return result
+
+def extract_eii_f(g,c):
+    result = _reduce(_img_eii_f(c),g,300)
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii_functional")
+    return result
 
 def extract_bii(g,c):
     import ee; img=_img_bii(c)
