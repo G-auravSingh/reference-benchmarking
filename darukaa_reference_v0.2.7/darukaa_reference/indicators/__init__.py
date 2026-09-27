@@ -1322,13 +1322,19 @@ def create_default_registry() -> IndicatorRegistry:
                 "_img_wsdi's own real code, which uses Sentinel-1 VV, not Landsat optical).",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_wsdi, "tnfd_dim": 2,
-                  "note": "Peaks at 0.5 occurrence = most dynamic/unstable. Lower = more stable.",
+                  "note": ("Peaks at 0.5 occurrence = most dynamic/unstable. Lower = more stable. "
+                          "CONTEXT ONLY (independent audit item 15, resolved 2026-09-27): not "
+                          "scored -- see provenance.validation_status."),
                   "provenance": {
                       "literature_component": "SAR specular-return water detection (well-established generic SAR principle, no single canonical source).",
                       "darukaa_transformation": "Sentinel-1 VV occurrence-frequency thresholding into a 0-1 dynamism index, peaking at 0.5 occurrence.",
                       "darukaa_weights": None,
-                      "validation_status": ("not_externally_validated; ecological DIRECTION also unresolved -- see independent "
-                                            "audit item 15 (WSDI ecological direction), a real, still-open human decision"),
+                      "validation_status": ("not_externally_validated. RESOLVED (independent audit item 15, "
+                                            "2026-09-27, project owner decision): demoted to context-only, not "
+                                            "scored -- 'higher dynamism = worse' is not universally true (a "
+                                            "seasonal wetland's natural dynamism would be wrongly penalised); "
+                                            "shown as a real descriptive number, no longer part of the headline. "
+                                            "See contracts.py's wsdi entry for the full rationale."),
                   }})
 
     r.register(name="hsas", display_name="Habitat Suitability Alignment Score", source_type="gee",

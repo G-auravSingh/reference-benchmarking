@@ -186,9 +186,22 @@ C: Dict[str, dict] = {
     disposition="retain", input_layers=[S2], module="aquatic",
     note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why."),
  "wsdi": dict(construct="C2_vegetation", subdimension="water_surface_dynamics", measurement_scale="bounded",
-    reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[S2], module="aquatic",
-    note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why."),
+    disposition="context", input_layers=[S2], module="aquatic",
+    note=("DEMOTED from 'retain' to 'context' (independent audit item 15, decision made by "
+         "the project owner 2026-09-27, option 1 of the 3 presented: keep as pressure "
+         "context only, do not score). Real, open ecological problem the audit flagged: "
+         "'higher = worse' (more water-surface dynamism = more concerning) is not "
+         "universally true -- a seasonal wetland or floodplain is SUPPOSED to show high "
+         "surface dynamism as healthy, natural hydrology; only unnatural dynamism (e.g. "
+         "dam-operation releases, erratic dewatering) is a real concern, and this indicator "
+         "cannot currently tell the two apart. Rather than keep scoring a direction that is "
+         "ecologically wrong for a real, common site type (seasonal wetlands), or silently "
+         "redefine the ecological question without sign-off, wsdi is shown as a real, "
+         "honest descriptive number (still computed, still in the scorecard/report) but no "
+         "longer drives the headline score. Re-promote only alongside a genuine "
+         "site-type-aware redefinition (e.g. benchmarked against other seasonal-wetland "
+         "sites specifically, not a flat regional pool), not by silently flipping the "
+         "direction flag.")),
  "hsas": dict(construct="C2_vegetation", subdimension="habitat_suitability", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="retain", input_layers=["edna_points"], module="aquatic",
