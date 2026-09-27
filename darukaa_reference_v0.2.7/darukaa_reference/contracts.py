@@ -56,7 +56,28 @@ C: Dict[str, dict] = {
     disposition="redefine", input_layers=["india_pv_binary"], note="Connectivity; state ecological scale (D8). Fragmentation suite to be added."),
  "forest_loss_rate": dict(construct="C1_landscape", subdimension="disturbance_regime", measurement_scale="ratio",
     reference_type="regional_distribution", reference_estimator="log_response_ratio",
-    disposition="redefine", input_layers=[HANSEN], note="Change indicator; needs accuracy assessment (D4); low-baseline reliability flag; report with CI."),
+    disposition="retain", input_layers=[HANSEN],
+    note=("Change indicator; needs accuracy assessment (D4); low-baseline reliability flag; "
+         "report with CI. REDESIGNED (independent audit item 9): back to GROSS loss only "
+         "(always >=0), which is what this ratio/log_response_ratio contract actually "
+         "requires -- log_response_ratio is undefined for site_value<=0, and a real v0.2.5 "
+         "change had made site_value a signed gain-minus-loss NET rate, breaking that "
+         "contract for the common real-world case of net loss. Split into two indicators "
+         "instead of reverting the real gain-detection work: see net_forest_change_rate "
+         "for the signed picture, on its own robust_z-based contract.")),
+ "net_forest_change_rate": dict(construct="C1_landscape", subdimension="restoration_trajectory",
+    measurement_scale="interval", reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[HANSEN, DW],
+    note=("NEW (independent audit item 9, 2026-09-27): split out of forest_loss_rate. Signed "
+         "gain-minus-loss rate (interval-scale -- can be negative, zero, or positive; no true "
+         "zero the way a ratio-scale quantity has), so robust_z (not log_response_ratio, which "
+         "requires strictly positive values). Own distinct subdimension from forest_loss_rate's "
+         "'disturbance_regime' -- both are C1_landscape, and sharing a subdimension would "
+         "silently average them together (scoring.py averages within one subdimension), "
+         "undermining the point of separating a pure-loss signal from a net-change signal in "
+         "the first place. Real client need: restoration/agroforestry clients plant trees, and "
+         "that regrowth needs its own visible signal, not netted into (and breaking) the "
+         "gross-loss indicator.")),
  "kba_overlap": dict(construct="C1_landscape", subdimension="extent", measurement_scale="bounded",
     disposition="screening", input_layers=["kba"], note="Proximity/overlap = screening, not site condition (F-style)."),
  "flii": dict(construct="C1_landscape", subdimension="forest_integrity", measurement_scale="bounded",
