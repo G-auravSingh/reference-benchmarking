@@ -896,11 +896,34 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
                       f'<td>{_esc(r.get("n_tiles_with_data"))}/{_esc(r.get("n_tiles_total"))}</td></tr>')
         out.append('</table>')
     else:
+        # REAL FIX (independent audit item 20's report-exposes-raw-benchmark check,
+        # 2026-09-27): this branch's own header literally labelled its percentage
+        # column "(uncapped)" -- genuinely unbounded (reference.py's own field
+        # comment: "UNCAPPED, display only") -- with NO bounded/capped intactness
+        # reading anywhere in this specific table. The item 7 commit message that
+        # fixed the project-level table's equivalent gap explicitly assumed THIS
+        # branch "already shows a % + real classification" safely -- checked
+        # directly and that assumption was wrong: "% of ref (uncapped)" is not a
+        # safe bounded percentage, it's the same class of raw, unbounded number
+        # item 7 fixed elsewhere, just dressed as a "%" sign. Added a real bounded
+        # Intactness + Concern column pair, same recipe as the project-level fix
+        # (scoring.normalize + son_score.classify), alongside the existing raw
+        # columns (kept, not deleted -- genuinely useful for a technical reader).
+        from darukaa_reference import scoring as _scoring, son_score as _son_score
         out.append('<table class="dk-table"><tr><th>Indicator</th><th>Construct</th><th>Grade</th>'
-                  '<th>Site value</th><th>Benchmark (signed)</th><th>% of ref (uncapped)</th>'
+                  '<th>Intactness</th><th>Concern</th>'
+                  '<th>Site value</th><th>Benchmark (signed, technical)</th>'
+                  '<th>% of ref (uncapped, technical)</th>'
                   '<th>Reference type</th><th>Class</th></tr>')
         for r in rows:
             tier = r.get("evidence_tier") or "—"
+            raw_benchmark = r.get("tier2_benchmark")
+            estimator = r.get("tier2_benchmark_estimator") or "robust_z"
+            bounded = _scoring.normalize(raw_benchmark, estimator) if raw_benchmark is not None else None
+            intactness_cell = _score_pct(bounded) if bounded is not None else '<span class="dk-muted">N/A</span>'
+            concern = _son_score.classify(bounded, _son_score.DEFAULT_BANDS) if bounded is not None else None
+            concern_cell = (f'<span style="color:{_concern_color(concern)};font-weight:600">{_esc(concern)}</span>'
+                           if concern else '<span class="dk-muted">N/A</span>')
             # REAL REMOVAL (client-requested directly): the CLIENT-ACTIVATED
             # badge and its hover-text ("original disposition and caveat")
             # exposed internal decision history to the client-facing report
@@ -912,10 +935,11 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
             # not here.
             out.append(f'<tr><td>{_esc(r.get("display_name") or r.get("indicator"))}</td>'
                       f'<td>{_esc(r.get("construct"))}</td><td>{_badge(tier)}</td>'
-                      f'<td>{_num(r.get("site_value"))}</td>'
-                      f'<td>{_num(r.get("tier2_benchmark"))} '
+                      f'<td>{intactness_cell}</td><td>{concern_cell}</td>'
+                      f'<td class="dk-muted">{_num(r.get("site_value"))}</td>'
+                      f'<td class="dk-muted">{_num(raw_benchmark)} '
                       f'<span class="dk-muted">{_esc(r.get("tier2_benchmark_estimator") or "")}</span></td>'
-                      f'<td>{_pct(r.get("tier2_display_pct_of_reference"))}</td>'
+                      f'<td class="dk-muted">{_pct(r.get("tier2_display_pct_of_reference"))}</td>'
                       f'<td class="dk-muted">{_esc(r.get("reference_type"))}</td>'
                       f'<td>{_render_classification(r.get("classification"))}</td></tr>')
         out.append('</table>')
