@@ -49,7 +49,7 @@ darukaa_reference/
 ├── config.py            # Everything you configure lives here (see §5)
 ├── registry.py           # IndicatorSpec dataclass + the contract (construct,
 │                          #   evidence tier, reference type, active/eligible toggle)
-├── contracts.py           # The declarative table of all 44 indicators' dispositions
+├── contracts.py           # The declarative table of all 46 indicators' dispositions
 │                          #   (scored / contextual / screening / removed) — the
 │                          #   single source of truth for what gets scored
 ├── indicators/__init__.py  # Indicator extraction functions (GEE calls) + registration
@@ -212,7 +212,7 @@ config = Config(
 ```
 
 **`realm` — which indicators actually run in each realm, checked individually against
-real extraction logic for every one of the 45 registered indicators (not just the
+real extraction logic for every one of the 46 registered indicators (not just the
 scored subset), not guessed from a name or module tag** (client-caught directly: "we
 have many more indicators right which would go in the report even if they are not
 scored... so we need to check everything for them as well" — correct: the pipeline
@@ -400,7 +400,7 @@ tests on synthetic data** — none of the Earth Engine calls have been executed 
 ## 8. Citations
 
 - McElderry et al. (2024). SEED framework. DOI:10.32942/X2689N
-- Kennedy et al. (2019); Theobald et al. (2025). Global Human Modification.
+- Theobald, D.M., Oakleaf, J.R., Moncrieff, G., Voigt, M., Kiesecker, J. & Kennedy, C.M. (2025). Global Human Modification (TNC HM v3). Scientific Data 12, 606. DOI:10.1038/s41597-025-04892-2
 - Hengl et al. (2018). Global Potential Natural Vegetation. *PeerJ* 6:e5457.
 - Dinerstein et al. (2017). RESOLVE Ecoregions. *BioScience* 67:534-545.
 - Hedges, Gurevitch & Curtis (1999). Log response ratio. *Ecology* 80:1150-1156.

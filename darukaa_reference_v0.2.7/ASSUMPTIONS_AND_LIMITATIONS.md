@@ -68,8 +68,12 @@ needs to settle.
 
 ## 6. Indicator asset audit (v0.2.1) — scope and findings
 
-A full resolution/recency audit of all 44 registered indicators has NOT been done —
-this covers the 10 scored-by-default indicators, audited directly against their code.
+A full resolution/recency audit of all 46 registered indicators has NOT been done —
+this covers a subset of the 20 currently scored-by-default indicators, audited directly
+against their code (STALE COUNT CORRECTED, independent audit item 19, 2026-09-27 — was
+44/10, now 46/20 after the forest_loss_rate split, hsas/pdf/hdi/ivsi work, and the
+default-to-scored strategy; see CHANGELOG.md and INDICATOR_REGISTER.md for the real,
+current, machine-generated register).
 
 | Indicator | Finding | Status |
 |---|---|---|
@@ -79,18 +83,19 @@ this covers the 10 scored-by-default indicators, audited directly against their 
 | **flii** | **Was cited as the actual Grantham et al. (2020) Forest Landscape Integrity Index. It is NOT — the code computes a Darukaa proxy (VIIRS nightlight + Dynamic World forest fragmentation). Citation corrected; indicator renamed "Forest Fragmentation & Pressure Proxy (Darukaa)"; `reference_type` changed from `published_threshold` to `contemporary_best_on_offer`.** A live GEE asset for the real FLII product was searched for but not confirmed with confidence — if one is found, this proxy should be replaced with it. | **Fixed (citation); asset replacement still open** |
 | eii | Landbanking EII asset (external, not independently re-verified this pass) | Not re-audited |
 | jrc_water_persistence | SWITCHED (independent audit item 6, confirmed against Google's own real Earth Engine catalog): the underlying source is no longer JRC/GSW1_4/MonthlyHistory -- that dataset's real, documented coverage ends 2022-01-01, so the previous `y-1` to `y` query window was structurally, guaranteedly empty for any current year, not a probabilistic gap. Now uses Sentinel-1 VV backscatter thresholding (the same real, currently-working technique wsdi already uses), which is genuinely current. Display name and citation updated to match; internal registry key kept for now (a separate naming decision). | Fixed |
-| chm | GEDI L2A (current spaceborne LiDAR) | OK |
-| ghm | See §1 S-5 — upgraded to TNC HM v3 90m/2022 | Fixed (§1) |
+| chm | STALE ROW CORRECTED (item 19): no longer GEDI L2A — switched to ETH Global Canopy Height 2020 (10m wall-to-wall raster) at a prior fix; see §15 below. GEDI's sparse orbital-track sampling left most real zones with `site_value=None`. | Fixed (§15) |
+| bii | UPGRADED (independent audit item 16, 2026-09-27, verified live before switching): `BII_V1_1` (Vizzuality/Impact Observatory, annual 2017-2025), was a fixed 2017-2020 `BIOINTACT` composite (kept as fallback). | Fixed |
+| ghm | See §1 S-5 — upgraded to TNC HM v3 90m/2022; citation also corrected (item 17) to Theobald et al. (2025), which was still Kennedy et al. (2019) | Fixed (§1) |
 | light_pollution | VIIRS DNB monthly (current) | OK |
 
-**The other 34 registered (contextual/screening/removed) indicators have not been
+**The other registered (contextual/screening/removed) indicators have not been
 re-audited for asset currency in this pass** — they don't drive the scored output, so
 were lower priority, but should not be assumed current without checking.
 
 ## 7. Choosing what gets scored beyond the default (v0.2.1)
 
-44 indicators are registered; 10 are scored by default (see `INDICATOR_REGISTER.md` for
-why each of the other 34 isn't). `contracts.request_activation()` lets a client request
+46 indicators are registered; 20 are scored by default (see `INDICATOR_REGISTER.md` for
+why each of the others isn't). `contracts.request_activation()` lets a client request
 additional indicators be scored, tiered by how defensible that is:
 - `context` disposition — freely activatable (usually a parsimony/redundancy choice,
   not a construct flaw).
@@ -122,6 +127,11 @@ methodological question. Fixed: `bii` now uses the Impact Observatory / Vizzuali
 Biodiversity Intactness dataset (`projects/ebx-data/assets/earthblox/IO/BIOINTACT`,
 100 m, PREDICTS-database-derived), a genuinely separate source, moved to C3_fauna, and
 promoted to scored by default.
+
+**UPDATE (independent audit item 16, 2026-09-27):** `BIOINTACT` (2017-2020) is no longer
+the primary asset — superseded by `BII_V1_1` (annual 2017-2025), kept only as a real
+fallback. See §6's table above. This section's account of the v0.2.4 EII-independence
+fix otherwise still stands.
 
 Caveats, stated plainly:
 - This is a **GEE community-catalog asset** (gee-community-catalog.org), not the

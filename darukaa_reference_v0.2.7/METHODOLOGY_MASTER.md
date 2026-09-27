@@ -51,7 +51,7 @@ restoration sensitivity, reassessment frequency, management trigger, and the
 `registered`/`active`/computed-`eligible` toggle. **Eligibility is computed, never
 asserted:** an indicator scores only if registered, active, baseline/monitoring tier, with
 a reference + uncertainty and no unmet dependencies. `input_layers` powers automatic
-Gate-A redundancy screening. The full register (44 indicators; 10 scored) is
+Gate-A redundancy screening. The full register (46 indicators; 20 scored) is
 `INDICATOR_REGISTER.md`.
 
 ## 5. Reference benchmarking (SEED-aligned)
