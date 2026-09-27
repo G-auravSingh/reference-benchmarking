@@ -843,11 +843,33 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
         out.append('<p class="dk-muted">Project-level: worst-zone signed benchmark per indicator '
                   '(the real headline value), with area-weighted context alongside.</p>')
         out.append('<table class="dk-table"><tr><th>Indicator</th><th>Worst zone</th>'
-                  '<th>Worst-zone benchmark</th><th>Area-wtd geomean (context)</th>'
+                  '<th>Intactness</th><th>Concern</th>'
+                  '<th>Worst-zone benchmark (signed, technical)</th>'
+                  '<th>Area-wtd geomean (context)</th>'
                   '<th>Zones with data</th></tr>')
+        # REAL FIX (independent audit item 7): this table showed ONLY the raw,
+        # unbounded signed benchmark (e.g. -93.6023) as the sole number for
+        # every indicator, with no bounded, readable equivalent anywhere in
+        # this table -- exactly the "-93.6-style value as a main number"
+        # problem the audit found, even though the pillar cards/SoN hero
+        # elsewhere in this same report already show a proper bounded %.
+        # Brought this table up to the SAME standard as the single-site
+        # scorecard's equivalent branch (which already shows a % + real
+        # classification alongside its own raw value) rather than deleting
+        # the raw statistic -- it stays, genuinely useful for a technical/
+        # audit reader, just no longer the ONLY number presented.
+        from darukaa_reference import scoring as _scoring, son_score as _son_score
         for r in rows:
+            raw_benchmark = r.get("worst_tile_benchmark")
+            estimator = r.get("tier2_benchmark_estimator") or "robust_z"
+            bounded = _scoring.normalize(raw_benchmark, estimator) if raw_benchmark is not None else None
+            intactness_cell = _score_pct(bounded) if bounded is not None else '<span class="dk-muted">N/A</span>'
+            concern = _son_score.classify(bounded, _son_score.DEFAULT_BANDS) if bounded is not None else None
+            concern_cell = (f'<span style="color:{_concern_color(concern)};font-weight:600">{_esc(concern)}</span>'
+                           if concern else '<span class="dk-muted">N/A</span>')
             out.append(f'<tr><td>{_esc(r.get("indicator"))}</td><td><b>{_esc(r.get("worst_tile"))}</b></td>'
-                      f'<td>{_num(r.get("worst_tile_benchmark"))}</td>'
+                      f'<td>{intactness_cell}</td><td>{concern_cell}</td>'
+                      f'<td class="dk-muted">{_num(raw_benchmark)}</td>'
                       f'<td class="dk-muted">{_num(r.get("area_weighted_geomean_normalised"))}</td>'
                       f'<td>{_esc(r.get("n_tiles_with_data"))}/{_esc(r.get("n_tiles_total"))}</td></tr>')
         out.append('</table>')
