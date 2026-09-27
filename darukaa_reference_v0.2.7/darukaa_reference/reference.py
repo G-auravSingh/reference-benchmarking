@@ -207,6 +207,9 @@ class ReferenceSelector:
                 result.tier2_pixels = tier2.get("pixels")
                 result.reference_hmi_realised = tier2.get("hmi_realised")
                 result.stratification_diagnostics = tier2.get("stratification_diagnostics", {})
+                if tier2.get("suppressed_reason"):
+                    result.stratification_diagnostics = {
+                        **result.stratification_diagnostics, "suppressed_reason": tier2["suppressed_reason"]}
 
                 if result.site_value is not None and result.tier2_median:
                     # Legacy capped ratio (deprecated) retained for back-compat/display.
@@ -536,6 +539,38 @@ class ReferenceSelector:
         """
         self._ensure_gee()
         import ee
+
+        # HUMAN DECISION REQUIRED, NOT SILENTLY FIXED (independent audit, item 3):
+        # for the ghm indicator SPECIFICALLY, this method's own reference-selection
+        # step (rank pixels by HMI, keep the least-modified) uses ghm itself as the
+        # ranking criterion -- so benchmarking ghm's OWN Tier 2 value against that
+        # same HMI-selected pool is circular: the reference is selected FOR having
+        # low ghm, then ghm is compared to it. Confirmed directly by tracing this
+        # exact code path (ghm_raw builds the threshold AND is the indicator_image
+        # reduced over the resulting pixels when spec.name == "ghm"). This does
+        # NOT affect any other indicator (their Tier 2 reference pool is selected
+        # BY ghm/HMI but their OWN value is a genuinely independent measurement),
+        # and does NOT affect ghm's Tier 1 (ecoregion-wide, not HMI-filtered --
+        # not circular).
+        #
+        # Per the audit's explicit instruction, not inventing a fix silently.
+        # Two real options, needing a real decision:
+        #   A. (audit's recommendation) Keep ghm as the reference-selection
+        #      criterion, but report ghm itself as an absolute/percentile
+        #      pressure metric rather than a Tier 2 reference-relative score.
+        #   B. Benchmark ghm against an INDEPENDENTLY defined regional reference
+        #      distribution -- not one selected using ghm/HMI at all.
+        # Suppressed until decided, per the audit's explicit instruction that ghm
+        # should not generate a headline pressure score in the meantime.
+        if spec.name == "ghm":
+            logger.warning(
+                "Tier 2: ghm's own Tier 2 benchmark is suppressed -- its reference pool is "
+                "selected using ghm/HMI itself (circular for this one indicator specifically; "
+                "see reference.py's _compute_tier2 docstring for the two real options and why "
+                "a human decision is needed before either is implemented). ghm's Tier 1 "
+                "(ecoregion-wide) and raw site value remain unaffected -- only this indicator's "
+                "Tier 2 headline is suppressed.")
+            return {"suppressed_reason": "ghm_tier2_reference_circularity_pending_decision"}
 
         if not isinstance(site_geometry, ee.Geometry):
             site_geometry = self._shapely_to_ee(site_geometry)

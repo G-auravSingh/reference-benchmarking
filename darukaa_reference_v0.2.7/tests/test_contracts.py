@@ -88,6 +88,29 @@ def test_every_scored_indicator_has_at_least_one_applicable_realm():
     assert not missing, f"Scored indicators with no applicable_realms: {missing}"
 
 
+def test_ghm_tier2_benchmark_is_suppressed_pending_human_decision():
+    """Real regression test for independent audit item 3: ghm's Tier 2
+    reference pool is selected using ghm/HMI itself, so benchmarking ghm's own
+    value against that pool is circular. Confirmed directly by tracing
+    reference.py's _compute_tier2. Per the audit's explicit instruction not to
+    invent a fix silently, this is suppressed (not scored via Tier 2) until a
+    real decision is made between the two documented options. This test
+    confirms the suppression fires before any real GEE call is attempted."""
+    from darukaa_reference.config import Config
+    from darukaa_reference.reference import ReferenceSelector
+
+    registry = create_default_registry()
+    contracts.apply_contracts(registry)
+    config = Config.from_yaml(str(Path(__file__).resolve().parent.parent / "config.yaml"))
+    ghm_spec = registry.get("ghm")
+
+    engine = ReferenceSelector(config)
+    engine._ensure_gee = lambda: None  # bypass live GEE auth; guard fires before any real call
+
+    result = engine._compute_tier2(ghm_spec, site_geometry=None, eco_id=None)
+    assert result == {"suppressed_reason": "ghm_tier2_reference_circularity_pending_decision"}
+
+
 if __name__ == "__main__":
     import traceback
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
