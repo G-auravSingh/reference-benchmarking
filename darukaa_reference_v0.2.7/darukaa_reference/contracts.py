@@ -261,7 +261,19 @@ C: Dict[str, dict] = {
  # ---------------- C4 pressures & human interface (separate axis) ----------------
  "ghm": dict(construct="C4_pressure", subdimension="land_use_pressure", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[GHM], note="THE land-use pressure metric. Pressure axis, NOT condition. Circularity (Fault 2): if gHM selects the reference it must not also be benchmarked against it -> OD."),
+    disposition="retain", input_layers=[GHM],
+    note=("THE land-use pressure metric. Pressure axis, NOT condition. RESOLVED "
+         "(independent audit item 3, project owner decision, 2026-09-27): Tier2 "
+         "circularity (a self-selected low-HMI reference pool being benchmarked "
+         "against ghm itself) fixed via Option B -- ghm's Tier2 now uses the SAME "
+         "ecoregion+land-cover stratum as every other indicator but WITHOUT the "
+         "low-HMI narrowing step (threshold fixed at 1.0 = no filter), so its "
+         "reference is the full regional distribution in that stratum, not a pool "
+         "pre-selected for already resembling it. See reference.py's _compute_tier2 "
+         "docstring for the full mechanism; reference_type/estimator unchanged "
+         "(still regional_distribution/robust_z, now on a genuinely independent "
+         "pool)."),
+    ),
  "light_pollution": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="retain", input_layers=[VIIRS], note="Distinct pressure, independent input (VIIRS)."),

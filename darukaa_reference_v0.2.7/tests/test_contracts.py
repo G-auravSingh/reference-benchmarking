@@ -88,27 +88,35 @@ def test_every_scored_indicator_has_at_least_one_applicable_realm():
     assert not missing, f"Scored indicators with no applicable_realms: {missing}"
 
 
-def test_ghm_tier2_benchmark_is_suppressed_pending_human_decision():
-    """Real regression test for independent audit item 3: ghm's Tier 2
-    reference pool is selected using ghm/HMI itself, so benchmarking ghm's own
-    value against that pool is circular. Confirmed directly by tracing
-    reference.py's _compute_tier2. Per the audit's explicit instruction not to
-    invent a fix silently, this is suppressed (not scored via Tier 2) until a
-    real decision is made between the two documented options. This test
-    confirms the suppression fires before any real GEE call is attempted."""
-    from darukaa_reference.config import Config
-    from darukaa_reference.reference import ReferenceSelector
+def test_ghm_tier2_circularity_resolved_not_suppressed():
+    """RESOLVED (independent audit item 3, project owner decision, 2026-09-27,
+    replacing the earlier 'suppressed pending decision' behavior this test used
+    to check): ghm's Tier2 is no longer suppressed. Instead, reference.py's
+    _compute_tier2 uses a real, independently-selected reference pool for ghm
+    specifically -- the same ecoregion+land-cover stratum every other indicator
+    uses, but WITHOUT the low-HMI narrowing step that made the old pool
+    circular (self-selected for already having low ghm). Live GEE execution
+    of _compute_tier2 needs a real ee.Geometry and live credentials (not
+    available in this sandbox -- see test_estimators.py/test_ghm_and_hdi for
+    the same constraint elsewhere in this file); this test instead checks the
+    two things verifiable without live GEE: (1) the source no longer contains
+    the old unconditional suppression path, and (2) it does contain the real
+    ghm-specific independent-reference mechanism (the flag and the fixed
+    threshold=1.0 no-filter behavior), as a structural regression guard."""
+    import inspect
+    from darukaa_reference import reference as reference_module
 
-    registry = create_default_registry()
-    contracts.apply_contracts(registry)
-    config = Config.from_yaml(str(Path(__file__).resolve().parent.parent / "config.yaml"))
-    ghm_spec = registry.get("ghm")
+    source = inspect.getsource(reference_module.ReferenceSelector._compute_tier2)
+    assert '"suppressed_reason": "ghm_tier2_reference_circularity_pending_decision"' not in source, (
+        "ghm's Tier2 should no longer unconditionally suppress -- item 3 was resolved")
+    assert "_ghm_independent_reference" in source
+    assert "hmi_threshold = 1.0" in source or "t = 1.0" in source
 
-    engine = ReferenceSelector(config)
-    engine._ensure_gee = lambda: None  # bypass live GEE auth; guard fires before any real call
-
-    result = engine._compute_tier2(ghm_spec, site_geometry=None, eco_id=None)
-    assert result == {"suppressed_reason": "ghm_tier2_reference_circularity_pending_decision"}
+    # contracts.py's ghm note must reflect the real resolution, not still claim
+    # this is an open/pending decision.
+    ghm_note = contracts.C["ghm"]["note"].lower()
+    assert "resolved" in ghm_note
+    assert "pending" not in ghm_note
 
 
 if __name__ == "__main__":

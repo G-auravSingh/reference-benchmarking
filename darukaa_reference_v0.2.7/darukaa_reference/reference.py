@@ -549,37 +549,35 @@ class ReferenceSelector:
         self._ensure_gee()
         import ee
 
-        # HUMAN DECISION REQUIRED, NOT SILENTLY FIXED (independent audit, item 3):
-        # for the ghm indicator SPECIFICALLY, this method's own reference-selection
-        # step (rank pixels by HMI, keep the least-modified) uses ghm itself as the
-        # ranking criterion -- so benchmarking ghm's OWN Tier 2 value against that
-        # same HMI-selected pool is circular: the reference is selected FOR having
-        # low ghm, then ghm is compared to it. Confirmed directly by tracing this
-        # exact code path (ghm_raw builds the threshold AND is the indicator_image
-        # reduced over the resulting pixels when spec.name == "ghm"). This does
-        # NOT affect any other indicator (their Tier 2 reference pool is selected
-        # BY ghm/HMI but their OWN value is a genuinely independent measurement),
-        # and does NOT affect ghm's Tier 1 (ecoregion-wide, not HMI-filtered --
-        # not circular).
+        # RESOLVED (independent audit, item 3) — DECISION MADE by the project owner,
+        # 2026-09-27: Option B (benchmark ghm against an INDEPENDENTLY defined regional
+        # reference distribution — the ecoregion+land-cover-matched stratum used by
+        # every other indicator, but WITHOUT the low-HMI filtering step that made this
+        # circular for ghm specifically). Chosen over Option A (suppress ghm's Tier2
+        # entirely, report only absolute/percentile pressure) because ghm is THE
+        # headline land-use pressure metric (pillar 5) -- losing its benchmark
+        # entirely is a bigger real information loss than the extra branching Option B
+        # needs, and Option B keeps ghm's benchmark conceptually consistent with every
+        # other indicator's (a real reference-relative comparison), not a different
+        # kind of number.
         #
-        # Per the audit's explicit instruction, not inventing a fix silently.
-        # Two real options, needing a real decision:
-        #   A. (audit's recommendation) Keep ghm as the reference-selection
-        #      criterion, but report ghm itself as an absolute/percentile
-        #      pressure metric rather than a Tier 2 reference-relative score.
-        #   B. Benchmark ghm against an INDEPENDENTLY defined regional reference
-        #      distribution -- not one selected using ghm/HMI at all.
-        # Suppressed until decided, per the audit's explicit instruction that ghm
-        # should not generate a headline pressure score in the meantime.
-        if spec.name == "ghm":
-            logger.warning(
-                "Tier 2: ghm's own Tier 2 benchmark is suppressed -- its reference pool is "
-                "selected using ghm/HMI itself (circular for this one indicator specifically; "
-                "see reference.py's _compute_tier2 docstring for the two real options and why "
-                "a human decision is needed before either is implemented). ghm's Tier 1 "
-                "(ecoregion-wide) and raw site value remain unaffected -- only this indicator's "
-                "Tier 2 headline is suppressed.")
-            return {"suppressed_reason": "ghm_tier2_reference_circularity_pending_decision"}
+        # How this removes the circularity: normal Tier2 selects reference pixels BY
+        # ranking on HMI and keeping only the least-disturbed (P5/ceiling) -- for any
+        # OTHER indicator this is fine (the pool is selected by ghm, but the value
+        # being compared is a genuinely different measurement). For ghm itself, that
+        # selection step picks the pool FOR having low ghm, then compares ghm to it --
+        # circular by construction. Fixed by a dedicated ghm-only path (below, at the
+        # primary/fallback_1/fallback_2 stages) that uses the SAME ecoregion+land-cover
+        # stratification as every other indicator (a real, independent selection
+        # criterion -- not derived from ghm/HMI at all) but skips the low-HMI
+        # narrowing step entirely (threshold fixed at 1.0, HMI's real max, i.e. no
+        # filter): ghm's value is benchmarked against the FULL regional distribution
+        # of HMI in its own ecoregion+land-cover stratum, not a pool pre-selected for
+        # already resembling it.
+        #
+        # ghm's Tier 1 (ecoregion-wide) and raw site value were never affected by this
+        # (not circular there either); only the Tier 2 path changes.
+        _ghm_independent_reference = (spec.name == "ghm")
 
         if not isinstance(site_geometry, ee.Geometry):
             site_geometry = self._shapely_to_ee(site_geometry)
@@ -708,7 +706,15 @@ class ReferenceSelector:
             return {}
 
         # Try primary zone first
-        hmi_threshold = self._dynamic_hmi_threshold(ghm_in_zone, reference_zone, hmi_ceiling)
+        # ghm (independent audit item 3, resolved): skip the low-HMI percentile filter
+        # entirely -- threshold fixed at 1.0 (HMI's real max, i.e. no filter) so the
+        # reference pool is the FULL ecoregion+land-cover stratum, not one pre-selected
+        # for already having low ghm. Every other indicator keeps the normal dynamic
+        # P5/ceiling threshold.
+        if _ghm_independent_reference:
+            hmi_threshold = 1.0
+        else:
+            hmi_threshold = self._dynamic_hmi_threshold(ghm_in_zone, reference_zone, hmi_ceiling)
         if hmi_threshold is not None:
             result = self._extract_tier2_stats(
                 ghm_in_zone, hmi_threshold, indicator_image, reference_zone, spec=spec)
@@ -717,7 +723,15 @@ class ReferenceSelector:
                 # SEED transparency: report the realised HMI threshold actually used,
                 # so the reader can see how disturbed the "reference" really is.
                 result["hmi_realised"] = hmi_threshold
-                result["stratification_diagnostics"] = {**strat_diag, "fallback_level": "primary"}
+                result["stratification_diagnostics"] = {
+                    **strat_diag, "fallback_level": "primary",
+                    **({"ghm_independent_reference": True,
+                        "ghm_reference_note": ("Independently-selected regional distribution "
+                            "(ecoregion+land-cover stratum, NOT filtered by HMI itself) -- "
+                            "see independent audit item 3 resolution, reference.py's "
+                            "_compute_tier2 docstring.")}
+                       if _ghm_independent_reference else {}),
+                }
                 logger.info(f"  Tier 2: {n_ref} ref pixels, HMI ≤ {hmi_threshold:.4f}")
                 return result
 
@@ -726,11 +740,14 @@ class ReferenceSelector:
             logger.info("  Tier 2 fallback 1: dropping land-cover/elevation mask, keeping ecoregion...")
             ghm_fb = ghm_raw  # already ecoregion-masked above
             ghm_fb = ghm_fb.clip(reference_zone)
-            t = self._dynamic_hmi_threshold(ghm_fb, reference_zone, hmi_ceiling)
+            t = 1.0 if _ghm_independent_reference else self._dynamic_hmi_threshold(ghm_fb, reference_zone, hmi_ceiling)
             if t is not None:
                 result = self._extract_tier2_stats(ghm_fb, t, indicator_image, reference_zone, spec=spec)
                 if self._reference_accepted(result):
-                    result["stratification_diagnostics"] = {**strat_diag, "fallback_level": "fallback_1_dropped_landcover"}
+                    result["stratification_diagnostics"] = {
+                        **strat_diag, "fallback_level": "fallback_1_dropped_landcover",
+                        **({"ghm_independent_reference": True} if _ghm_independent_reference else {}),
+                    }
                     logger.info(f"  Tier 2 fallback 1: {result['n']} pixels (ecoregion only)")
                     return result
 
@@ -747,12 +764,15 @@ class ReferenceSelector:
             if elev_mask is not None:
                 ghm_wider = ghm_wider.updateMask(elev_mask)
             ghm_wider = ghm_wider.clip(wider_zone)
-            t = self._dynamic_hmi_threshold(ghm_wider, wider_zone, hmi_ceiling)
+            t = 1.0 if _ghm_independent_reference else self._dynamic_hmi_threshold(ghm_wider, wider_zone, hmi_ceiling)
             if t is not None:
                 result = self._extract_tier2_stats(
                     ghm_wider, t, indicator_image, wider_zone, spec=spec)
                 if self._reference_accepted(result):
-                    result["stratification_diagnostics"] = {**strat_diag, "fallback_level": f"fallback_2_widened_{wider_km}km"}
+                    result["stratification_diagnostics"] = {
+                        **strat_diag, "fallback_level": f"fallback_2_widened_{wider_km}km",
+                        **({"ghm_independent_reference": True} if _ghm_independent_reference else {}),
+                    }
                     logger.info(f"  Tier 2 fallback 2: {result['n']} pixels at {wider_km}km")
                     return result
 
