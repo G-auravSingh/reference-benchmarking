@@ -1303,9 +1303,22 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="jrc_water_persistence", applicable_realms=("terrestrial", "aquatic", "mixed"),
         # Water-specific by definition -- was mistagged module="core" instead of "aquatic"
-        display_name="JRC Water Persistence (Permanent Fraction)", source_type="gee",
+        display_name="Water Surface Persistence (Sentinel-1 SAR)", source_type="gee",
         extract_fn=extract_jrc_water_persistence, unit="fraction (0-1)", value_range=(0,1),
-        citation="Pekel JF et al. (2016) Nature 540:418. DOI:10.1038/nature20584",
+        citation=("Darukaa-implemented VV backscatter thresholding (Sentinel-1 GRD, IW mode) -- "
+                 "same real technique as wsdi (see that indicator's own citation for why no "
+                 "single canonical source paper applies to this generic method). SWITCHED "
+                 "(independent audit item 6, confirmed directly against Google's own Earth "
+                 "Engine catalog): previously used JRC/GSW1_4/MonthlyHistory (Pekel et al. "
+                 "2016), whose real, documented coverage ends 2022-01-01 -- structurally, "
+                 "guaranteedly empty for any current/recent year, not a probabilistic gap. A "
+                 "newer JRC v1.5 release does cover 2022-2024, but no confirmed exact GEE asset "
+                 "ID for its MONTHLY collection was found without guessing; used this "
+                 "already-confirmed-working, genuinely current alternative instead. Internal "
+                 "name kept as jrc_water_persistence for now (a bigger, separate naming "
+                 "decision, flagged not auto-renamed, matching flii/pdf/hdi elsewhere in this "
+                 "audit) -- but no longer literally JRC data; the display name and this "
+                 "citation are the parts that must stay accurate."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
         metadata={"tnfd_dim": 2, "gee_image_fn": _img_jrc_water_persistence,
                   "note": "Fraction of site with water >75% of months. Complements WSDI (SAR-based)."})
@@ -2145,17 +2158,45 @@ def _img_jrc_water_persistence(c):
     """Real, reusable, geometry-independent persistent-water image (0/1 per
     pixel) -- extracted out of extract_jrc_water_persistence's own logic so
     Tier2 reference extraction has a real image to reduce over. REAL BUG
-    FIXED HERE: this indicator had NEITHER a gee_image_fn NOR a tier1_layer
-    registered (checked directly against the live registry) -- meaning
-    _get_indicator_image() always returned None for it, so its Tier2
-    reference extraction could never work at all, structurally, regardless
-    of any real data availability. Confirmed directly against a real Tata
-    Motors run: 0 of 15 real tiles got a Tier2 benchmark for this indicator."""
+    FIXED HERE (v1): this indicator had NEITHER a gee_image_fn NOR a
+    tier1_layer registered (checked directly against the live registry) --
+    meaning _get_indicator_image() always returned None for it, so its
+    Tier2 reference extraction could never work at all, structurally,
+    regardless of any real data availability. Confirmed directly against a
+    real Tata Motors run: 0 of 15 real tiles got a Tier2 benchmark for
+    this indicator.
+
+    REAL BUG FIXED HERE (v2, independent audit item 6, confirmed directly
+    against Google's own Earth Engine catalog before fixing, not assumed):
+    JRC/GSW1_4/MonthlyHistory's real, documented coverage is 1984-03-16 to
+    2022-01-01 -- confirmed via the dataset's own official catalog page.
+    The previous f"{y-1}-01-01" to f"{y}-12-31" query window is therefore
+    STRUCTURALLY, GUARANTEED empty for any current/recent ndvi_year (2023
+    onward) -- not a probabilistic failure, an impossible one. A real,
+    newer JRC v1.5 release does cover 2022-2024, but I could not find a
+    confirmed exact GEE asset ID for its MONTHLY (not yearly) collection
+    without guessing -- guessing wrong would just trade one broken
+    indicator for another. Implemented the audit's own preferred
+    alternative instead: a genuinely current, contemporary water-detection
+    source already confirmed working elsewhere in this exact module
+    (Sentinel-1 VV backscatter thresholding -- the same real technique
+    _img_wsdi already uses), rather than gamble on an unconfirmed asset
+    string. Renamed and re-cited accordingly (see the registry entry) --
+    this is no longer literally "JRC" data, and calling it that would be
+    exactly the kind of citation-vs-code mismatch this whole audit has
+    been finding and fixing elsewhere.
+    """
     import ee
     y = c.ndvi_year
-    jrc = ee.ImageCollection('JRC/GSW1_4/MonthlyHistory').filterDate(f"{y-1}-01-01", f"{y}-12-31")
-    monthly_water = jrc.map(lambda img: img.select('water').eq(2).rename('Water')
-                            .copyProperties(img, ['system:time_start']))
+    s1 = (ee.ImageCollection('COPERNICUS/S1_GRD')
+          .filterDate(f"{y-1}-01-01", f"{y}-12-31")
+          .filter(ee.Filter.eq('instrumentMode', 'IW'))
+          .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+          .select('VV'))
+    def detect_water(img):
+        smooth = img.focal_mean(radius=30, units='meters')
+        return smooth.lt(-16).rename('Water').copyProperties(img, ['system:time_start'])
+    monthly_water = s1.map(detect_water)
     occurrence = monthly_water.mean()
     return occurrence.gt(0.75).rename("jrc_water_persistence")
 
@@ -2164,23 +2205,25 @@ def extract_jrc_water_persistence(g,c):
     import ee; eg=_to_ee(g)
     try:
         y=c.ndvi_year
-        jrc=(ee.ImageCollection('JRC/GSW1_4/MonthlyHistory')
-             .filterDate(f"{y-1}-01-01",f"{y}-12-31").filterBounds(eg))
-        # REAL BUG FIXED HERE (found directly from a real Tata Motors run
-        # log: "Image.gt: If one image has no bands, the other must also
-        # have no bands. Got 0 and 1."). When no real JRC monthly image
-        # matches this geometry/date-range filter (a genuine, real case —
-        # confirmed against small real water body polygons, not
-        # hypothetical), .mean() on the empty collection returns a
-        # genuinely zero-band image, and comparing that against a
-        # constant threshold (.gt(0.75)) crashes rather than returning a
-        # real "no data" result. Checked explicitly now.
-        if jrc.size().getInfo() == 0:
+        # See _img_jrc_water_persistence's docstring for the full real
+        # reasoning: switched from JRC/GSW1_4/MonthlyHistory (structurally,
+        # guaranteedly empty for any year after 2022, confirmed directly
+        # against the dataset's own real catalog coverage) to Sentinel-1
+        # VV backscatter -- the same real, currently-working technique
+        # _img_wsdi already uses in this same module.
+        s1=(ee.ImageCollection('COPERNICUS/S1_GRD')
+            .filterDate(f"{y-1}-01-01",f"{y}-12-31")
+            .filter(ee.Filter.eq('instrumentMode','IW'))
+            .filter(ee.Filter.listContains('transmitterReceiverPolarisation','VV'))
+            .select('VV').filterBounds(eg))
+        if s1.size().getInfo() == 0:
             return {"value": None, "pixels": None,
-                    "metadata": {"reason": "No real JRC monthly water history image matched this "
+                    "metadata": {"reason": "No real Sentinel-1 VV image matched this "
                                           "geometry/date range."}}
-        monthly_water=jrc.map(lambda img: img.select('water').eq(2).rename('Water')
-                              .copyProperties(img,['system:time_start']))
+        def detect_water(img):
+            smooth=img.focal_mean(radius=30,units='meters')
+            return smooth.lt(-16).rename('Water').copyProperties(img,['system:time_start'])
+        monthly_water=s1.map(detect_water)
         occurrence=monthly_water.mean().clip(eg)
         persistent=occurrence.gt(0.75)
         pa=ee.Image.pixelArea()
