@@ -1256,11 +1256,20 @@ def create_default_registry() -> IndicatorRegistry:
                  "display_name_report": "Biodiversity Intactness Index (fauna & flora abundance)"})
 
     r.register(name="pdf", applicable_realms=("terrestrial", "mixed"),  # GLOBIO-style biodiversity model, terrestrial-vegetation-oriented
-        display_name="Potentially Disappeared Fraction", source_type="gee",
+        display_name="Land-use Biodiversity Loss Proxy", source_type="gee",
         extract_fn=extract_pdf, unit="fraction", value_range=(0,1),
-        citation="Huijbregts et al. (2017). ReCiPe2016. DOI:10.1007/s11367-016-1246-y",
+        citation=("Land-cover characterization-factor proxy, weights informed by ReCiPe2016's "
+                 "SAR-derived CFs (Huijbregts et al. 2017, DOI:10.1007/s11367-016-1246-y) but "
+                 "NOT the formal PDF (Potentially Disappeared Fraction) calculation those "
+                 "factors are drawn from -- RENAMED (independent audit item 10): the prior "
+                 "display_name 'Potentially Disappeared Fraction' implied this reproduces that "
+                 "specific LCA metric, which it does not (no species-area curve is actually "
+                 "fitted here; a static per-land-cover-class coefficient is applied instead). "
+                 "Internal registry key kept as 'pdf' (not renamed) for downstream config/report "
+                 "continuity -- only the client-facing display name and this citation changed."),
         tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=2,
-        metadata={"gee_image_fn": _img_pdf, "tnfd_dim": 2})
+        metadata={"gee_image_fn": _img_pdf, "tnfd_dim": 2,
+                  "display_name_report": "Land-use Biodiversity Loss Proxy (Darukaa)"})
 
     r.register(name="aridity_index", display_name="Aridity Index", source_type="gee",
         extract_fn=extract_aridity, unit="P/PET", value_range=(0,5),
@@ -1499,16 +1508,24 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_viirs, "tnfd_dim": "threats"})
 
-    r.register(name="hdi", display_name="Human Disturbance Index", source_type="gee",
+    r.register(name="hdi", display_name="Built-up / Settlement Pressure Index", source_type="gee",
         applicable_realms=("terrestrial", "aquatic", "mixed"),
         extract_fn=extract_hdi, unit="index", value_range=(0,1),
         citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4 -- built-up "
                 "class proximity. NOTE: this citation was stale until this audit (previously "
                 "cited ESA WorldCover, a source deliberately retired in the v4.0 fix documented "
                 "in _img_hdi's own docstring -- HDI has used Dynamic World's built-up class for "
-                "several releases; only the citation string had never been updated to match).",
+                "several releases; only the citation string had never been updated to match). "
+                "RENAMED (independent audit item 11): the prior display_name 'Human Disturbance "
+                "Index' invited confusion with the unrelated, widely-known UNDP Human "
+                "Development Index acronym -- this indicator measures built-up/settlement "
+                "proximity pressure only, nothing socioeconomic. Internal registry key kept as "
+                "'hdi' (not renamed) for downstream config/report continuity -- only the "
+                "client-facing display name changed. contracts.py's disposition note for hdi "
+                "had already flagged this rename as pending; this is that rename executed.",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
-        metadata={"gee_image_fn": _img_hdi, "tnfd_dim": "threats"})
+        metadata={"gee_image_fn": _img_hdi, "tnfd_dim": "threats",
+                  "display_name_report": "Built-up / Settlement Pressure Index"})
 
     r.register(name="lst_day", display_name="Daytime Surface Temperature", source_type="gee",
         extract_fn=extract_lst_day, unit="°C", value_range=(-40,70),
@@ -1550,11 +1567,20 @@ def create_default_registry() -> IndicatorRegistry:
                   "note": "Road proxy = built-up edge (not true road dataset)."})
 
     r.register(name="ivsi", applicable_realms=("terrestrial", "mixed"),  # detects NDVI expansion (vegetation-based), not meaningful on open water
-        display_name="Invasive Vegetation Spread Index", source_type="gee",
+        display_name="Vegetation Expansion Pressure Proxy", source_type="gee",
         extract_fn=extract_ivsi, unit="fraction (0-1)", value_range=(0,1),
-        citation="Paz-Kagan T et al. (2019) RSE 233:111396. DOI:10.1016/j.rse.2019.111396",
+        citation=("Method (NDVI-expansion detection): Paz-Kagan T et al. (2019) RSE 233:111396. "
+                 "DOI:10.1016/j.rse.2019.111396. RENAMED (independent audit item 12): the prior "
+                 "display_name 'Invasive Vegetation Spread Index' claimed taxonomic invasive-"
+                 "species detection this indicator does not do -- it flags any NDVI expansion "
+                 ">0.2 vs a 5-year prior (a generic 'vegetation is spreading here' signal), with "
+                 "no species identification of any kind, so an expanding native population reads "
+                 "identically to a genuine invasive spread. Internal registry key kept as 'ivsi' "
+                 "(not renamed) for downstream config/report continuity -- only the client-facing "
+                 "display name changed."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_ivsi, "tnfd_dim": "threats",
+                  "display_name_report": "Vegetation Expansion Pressure Proxy",
                   "note": "NDVI expansion >0.2 vs 5-year prior. Detects expansion broadly, not taxonomic invasion."})
 
     # v0.2.0 (CS-1/CS-2/CS-4/CS-7): populate the indicator contract + dispositions so

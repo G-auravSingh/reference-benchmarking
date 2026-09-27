@@ -128,6 +128,17 @@ class ReportGenerator:
                 "permutation_p": _safe_round(comp.permutation_p_value, 6),
                 "interpretation": comp.interpretation,
                 "metadata": comp.metadata or {},   #added now
+                # independent audit item 13: hsas is a Darukaa-constructed composite that is
+                # only a real, eDNA-validated HSAS when real eDNA points were actually supplied
+                # THIS run (see extract_hsas's own real 'edna_points_used' flag) -- without them
+                # it silently degrades to habitat-suitability-only, real data but not what the
+                # name implies. Machine-readable per audit's explicit ask, computed fresh from
+                # this run's real comp.metadata (never a static registry assumption); None for
+                # every other indicator (the flag is meaningless outside hsas specifically).
+                "hsas_validated": (
+                    bool((comp.metadata or {}).get("edna_points_used", False))
+                    if comp.indicator_name == "hsas" else None
+                ),
                 "eco_id": meta.get("ECO_ID"),
                 "eco_name": meta.get("ECO_NAME"),
                 "biome": meta.get("BIOME_NAME"),
@@ -276,6 +287,14 @@ class ReportGenerator:
             if r["indicator"] not in scored_names:
                 continue
             if r.get("tier2_benchmark") is None or not r.get("construct"):
+                continue
+            # independent audit item 13: hsas is registry-scored (defensible IN PRINCIPLE)
+            # but must not drive the headline unless it was real, eDNA-validated THIS run --
+            # gate is per-run (eDNA availability is a project/config fact, not a registry
+            # fact), machine-readable via hsas_validated above. The row itself still carries
+            # its real tier2_benchmark/classification for the scorecard/report as honest
+            # context -- only exclusion from the SCORED profile happens here.
+            if r["indicator"] == "hsas" and not r.get("hsas_validated"):
                 continue
             by_site.setdefault(r["site_id"], []).append({
                 "name": r["indicator"],

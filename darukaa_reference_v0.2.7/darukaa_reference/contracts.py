@@ -196,7 +196,12 @@ C: Dict[str, dict] = {
          "Real, honest caveat retained: this is a Darukaa-constructed composite (see "
          "indicators/__init__.py citation), not yet eDNA-validated -- scored now under the "
          "'score by default, refine with real evidence later' strategy, not because "
-         "validation is complete.")),
+         "validation is complete. GATED (independent audit item 13): registered/scored here "
+         "means defensible IN PRINCIPLE, not validated THIS run -- report.py computes a "
+         "real, per-run hsas_validated flag from comp.metadata['edna_points_used'] "
+         "(set by extract_hsas itself) and excludes hsas from the headline profile whenever "
+         "no real eDNA points were supplied for this project, while still showing its real "
+         "habitat-suitability-only value as context.")),
  "edpp": dict(construct="C2_vegetation", subdimension="edna_persistence", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="retain", input_layers=[S2], module="aquatic",
@@ -250,7 +255,8 @@ C: Dict[str, dict] = {
  "hdi": dict(construct="C4_pressure", subdimension="built_up_pressure", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="redefine", input_layers=["dw_builtup"],
-    note=("Rename to built-up/settlement pressure; health-adjusted HDI citation is WRONG (G4). "
+    note=("RENAMED to built-up/settlement pressure (independent audit item 11 -- display_name "
+         "changed in indicators/__init__.py); health-adjusted HDI citation is WRONG (G4). "
          "FIXED (independent audit): was sharing 'land_use_pressure' with ghm -- confirmed "
          "directly this caused the two to be AVERAGED together (scoring.py averages "
          "indicators within one subdimension) rather than each contributing its own "
