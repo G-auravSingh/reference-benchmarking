@@ -1287,10 +1287,21 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="sabf", display_name="Surface Algal Bloom Frequency", source_type="gee",
         extract_fn=extract_sabf, unit="frequency (0-1)", value_range=(0,1),
-        citation="Hu C (2009) RSE 113:2118-2129. DOI:10.1016/j.rse.2009.05.012",
+        citation=("FAI formula itself: Hu C (2009) RSE 113:2118-2129. DOI:10.1016/j.rse.2009.05.012 "
+                 "-- genuinely used as published. CLARIFIED (independent audit item 14): the "
+                 "0.005 FAI 'bloom' binarization threshold and the time-averaging into a "
+                 "'frequency' statistic are Darukaa's own operational choices, not specified "
+                 "by Hu (2009) -- the prior bare citation implied the whole indicator, "
+                 "threshold included, was literature-derived."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_sabf, "tnfd_dim": 2,
-                  "note": "FAI bloom threshold=0.005 (S2 inland water). Higher = more bloom events."})
+                  "note": "FAI bloom threshold=0.005 (S2 inland water). Higher = more bloom events.",
+                  "provenance": {
+                      "literature_component": "Floating Algae Index (FAI) formula (Hu 2009), used as published.",
+                      "darukaa_transformation": "Binarize FAI>0.005 as 'bloom', average over the time series into a frequency (0-1).",
+                      "darukaa_weights": None,
+                      "validation_status": "partially_validated",
+                  }})
 
     r.register(name="wcpi", display_name="Water Clarity Proxy Index", source_type="gee",
         extract_fn=extract_wcpi, unit="index (0-1, site-relative)", value_range=(0,1),
@@ -1311,7 +1322,14 @@ def create_default_registry() -> IndicatorRegistry:
                 "_img_wsdi's own real code, which uses Sentinel-1 VV, not Landsat optical).",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_wsdi, "tnfd_dim": 2,
-                  "note": "Peaks at 0.5 occurrence = most dynamic/unstable. Lower = more stable."})
+                  "note": "Peaks at 0.5 occurrence = most dynamic/unstable. Lower = more stable.",
+                  "provenance": {
+                      "literature_component": "SAR specular-return water detection (well-established generic SAR principle, no single canonical source).",
+                      "darukaa_transformation": "Sentinel-1 VV occurrence-frequency thresholding into a 0-1 dynamism index, peaking at 0.5 occurrence.",
+                      "darukaa_weights": None,
+                      "validation_status": ("not_externally_validated; ecological DIRECTION also unresolved -- see independent "
+                                            "audit item 15 (WSDI ecological direction), a real, still-open human decision"),
+                  }})
 
     r.register(name="hsas", display_name="Habitat Suitability Alignment Score", source_type="gee",
         extract_fn=extract_hsas, unit="index (0-1)", value_range=(0,1),
@@ -1323,7 +1341,13 @@ def create_default_registry() -> IndicatorRegistry:
                  "prior citation implied a level of external validation this composite doesn't have."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_hsas, "tnfd_dim": 2,
-                  "note": "Requires config.raster_paths['edna_points_asset']. Without eDNA points returns habitat suitability only."})
+                  "note": "Requires config.raster_paths['edna_points_asset']. Without eDNA points returns habitat suitability only.",
+                  "provenance": {
+                      "literature_component": "General species distribution modelling principles (Elith & Leathwick 2009) motivate the input choice; no formula.",
+                      "darukaa_transformation": "NDVI + water-proximity + inverse-disturbance weighted composite as a habitat-suitability surface; alignment against real eDNA detections when supplied.",
+                      "darukaa_weights": {"ndvi": 0.5, "water_proximity": 0.3, "inverse_disturbance": 0.2},
+                      "validation_status": "not_externally_validated; see hsas_validated (report.py) for the real per-run eDNA-alignment gate",
+                  }})
 
     r.register(name="edpp", display_name="eDNA Persistence Potential", source_type="gee",
         extract_fn=extract_edpp, unit="index (0-1)", value_range=(0,1),
@@ -1335,7 +1359,13 @@ def create_default_registry() -> IndicatorRegistry:
                  "is Darukaa's own, not a formula published in either paper. Clarified during audit."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_edpp_bands, "tnfd_dim": 2,
-                  "note": "Higher = better eDNA preservation conditions."})
+                  "note": "Higher = better eDNA preservation conditions.",
+                  "provenance": {
+                      "literature_component": "Thermal stress, turbidity protection, moisture, and UV exposure are each independently supported as eDNA-persistence drivers (Strickler et al. 2015; Roussel et al. 2015).",
+                      "darukaa_transformation": "Multiplicative combination of the four factors into one 0-1 index.",
+                      "darukaa_weights": None,
+                      "validation_status": "not_externally_validated",
+                  }})
 
     r.register(name="mspl", display_name="Microbial Stress Probability Layer", source_type="gee",
         extract_fn=extract_mspl, unit="probability (0-1)", value_range=(0,1),
@@ -1347,14 +1377,34 @@ def create_default_registry() -> IndicatorRegistry:
                  "over-attribution found and fixed in hsas/iri."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_mspl_bands, "tnfd_dim": 2,
-                  "note": "Proxy for eutrophic/microbial imbalance. Complements 16S eDNA."})
+                  "note": "Proxy for eutrophic/microbial imbalance. Complements 16S eDNA.",
+                  "provenance": {
+                      "literature_component": "General microbial-disturbance principles (Shade et al. 2012) motivate the input choice; no formula.",
+                      "darukaa_transformation": "Nutrient-stress + thermal + turbidity + water-persistence weighted composite.",
+                      "darukaa_weights": {"nutrient_stress": 0.35, "thermal": 0.30, "turbidity": 0.20, "water_persistence": 0.15},
+                      "validation_status": "not_externally_validated",
+                  }})
 
     r.register(name="rci", display_name="Riparian Complexity Index", source_type="gee",
         extract_fn=extract_rci, unit="index (0-1)", value_range=(0,1),
-        citation="Naiman RJ & Decamps H (1997) Annu Rev Ecol Syst 28:621. DOI:10.1146/annurev.ecolsys.28.1.621",
+        citation=("Darukaa-constructed weighted composite (vegetation variability 0.30 + "
+                 "vegetation complexity/EVI 0.30 + vegetation productivity/NDVI 0.20 + edge "
+                 "complexity 0.20) -- CORRECTED (independent audit item 14, real gap found: "
+                 "this was bare-cited to Naiman & Decamps (1997) Annu Rev Ecol Syst 28:621, "
+                 "DOI:10.1146/annurev.ecolsys.28.1.621, with no clarification, the same "
+                 "over-attribution pattern already fixed for hsas/iri/mspl/edpp but missed "
+                 "here). That paper is a conceptual riparian-ecology review; it does not "
+                 "specify this composite's remote-sensing formula, sub-score weights, or "
+                 "unit-scaling thresholds, which are Darukaa's own."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=25.0, pillar=2,
         metadata={"gee_image_fn": _img_rci, "tnfd_dim": 2,
-                  "note": "100m riparian buffer. 2-year S2 window."})
+                  "note": "100m riparian buffer. 2-year S2 window.",
+                  "provenance": {
+                      "literature_component": "Riparian complexity as an ecological concept (Naiman & Decamps 1997) motivates measuring this at all; the paper supplies no formula.",
+                      "darukaa_transformation": "NDVI/EVI-derived vegetation variability, complexity, productivity, and edge-complexity sub-scores, each unit-scaled and clamped 0-1 by Darukaa-chosen thresholds.",
+                      "darukaa_weights": {"veg_variability": 0.30, "veg_complexity": 0.30, "veg_productivity": 0.20, "edge_complexity": 0.20},
+                      "validation_status": "not_externally_validated",
+                  }})
 
     # ── DIM 2: ECOSYSTEM CONDITION — Terrestrial vegetation  ───────────
     r.register(name="riparian_ndvi_trend", display_name="Riparian NDVI Temporal Trend", source_type="gee",
@@ -1564,7 +1614,13 @@ def create_default_registry() -> IndicatorRegistry:
                  "implied a level of external validation this composite doesn't have."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=5,
         metadata={"gee_image_fn": _img_iri, "tnfd_dim": "threats",
-                  "note": "Road proxy = built-up edge (not true road dataset)."})
+                  "note": "Road proxy = built-up edge (not true road dataset).",
+                  "provenance": {
+                      "literature_component": "General invasion-ecology principles (Bellard et al. 2016; Mandrak & Cudmore 2009) motivate the input choice; no formula.",
+                      "darukaa_transformation": "Connectivity + nutrient + human-pressure + disturbance + access weighted composite.",
+                      "darukaa_weights": {"connectivity": 0.30, "nutrient": 0.25, "human_pressure": 0.20, "disturbance": 0.15, "access": 0.10},
+                      "validation_status": "not_externally_validated",
+                  }})
 
     r.register(name="ivsi", applicable_realms=("terrestrial", "mixed"),  # detects NDVI expansion (vegetation-based), not meaningful on open water
         display_name="Vegetation Expansion Pressure Proxy", source_type="gee",
