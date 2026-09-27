@@ -809,6 +809,28 @@ def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
                   f'<div class="dk-muted">{", ".join(_esc(i) for i in items) or "—"}</div></div>')
     out.append('</div>')
 
+    # -- independent audit item 8: "scored" above answers "is this indicator
+    # DEFENSIBLE to score" (registry/contract-level, static across every run of this
+    # project). It does NOT answer "did this run actually produce a real benchmark
+    # for it" -- confirmed real gap against the real Tata Motors run, where several
+    # scored indicators returned zero benchmarked tiles/sites. Surfaced here as its
+    # own explicit check, computed fresh from THIS run's real rows every time.
+    summary_line = status.get("scored_this_run_summary")
+    unbenched = status.get("scored_but_unbenchmarked_this_run") or []
+    if summary_line:
+        cls = "dk-warn" if unbenched else "dk-muted"
+        out.append(f'<p class="{cls}"><b>{_esc(summary_line)}.</b></p>')
+    if unbenched:
+        out.append('<table class="dk-table"><tr><th>Scored, but no benchmark this run</th>'
+                  '<th>Why</th><th>Tiles with data</th></tr>')
+        for item in unbenched:
+            tiles = (f'{item["n_tiles_with_data"]}/{item["n_tiles_total"]}'
+                    if "n_tiles_with_data" in item else "—")
+            out.append(f'<tr><td>{_esc(item.get("name"))}</td>'
+                      f'<td class="dk-muted">{_esc(item.get("reason"))}</td>'
+                      f'<td class="dk-muted">{_esc(tiles)}</td></tr>')
+        out.append('</table>')
+
     # --- Single-site profiles (only when NOT project-level; project-level
     # already showed its per-zone breakdown above) ---
     if not is_project_level:

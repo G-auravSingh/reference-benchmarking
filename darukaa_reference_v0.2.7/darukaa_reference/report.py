@@ -135,6 +135,39 @@ class ReportGenerator:
             }
             rows.append(row)
 
+        # -- independent audit item 8: separate "eligible to score" from "actually
+        # benchmarked this run" -- CONFIRMED real gap. registry.scored() only says an
+        # indicator is DEFENSIBLE to score (active + a complete contract); it says
+        # nothing about whether THIS run actually produced a real reference benchmark
+        # for it. Verified directly against real Tata Motors output: several scored
+        # indicators returned tier2_benchmark=None (0 tiles with data, or aquatic
+        # indicators with a raw site value but no reference pool), yet the prior
+        # report's "What is scored" section listed them identically to indicators that
+        # DID produce a real benchmark. Computed fresh from this run's real rows below --
+        # never a static/cached count, so it can't drift stale the way the registry-only
+        # view could.
+        scored_names = {s.name for s in self.registry.scored()}
+        benchmarked_this_run = {
+            r["indicator"] for r in rows
+            if r["indicator"] in scored_names and r.get("tier2_benchmark") is not None
+        }
+        scored_but_unbenchmarked_this_run = []
+        for name in sorted(scored_names - benchmarked_this_run):
+            rep_rows = [r for r in rows if r["indicator"] == name]
+            reason = "no_row_this_run"
+            if rep_rows:
+                r0 = rep_rows[0]
+                diag = r0.get("stratification_diagnostics") or {}
+                if diag.get("suppressed_reason"):
+                    reason = diag["suppressed_reason"]
+                elif r0.get("site_value") is None:
+                    reason = "no_data"
+                elif r0.get("tier2_reference") is None:
+                    reason = "no_reference"
+                else:
+                    reason = "no_benchmark_computed"
+            scored_but_unbenchmarked_this_run.append({"name": name, "reason": reason})
+
         report = {
             "meta": {
                 "generated_at": datetime.utcnow().isoformat() + "Z",
@@ -174,6 +207,13 @@ class ReportGenerator:
                                    if getattr(s, "evidence_tier", None) == "screening"],
                 "pending_inputs": [s.name for s in self.registry.pending()],
                 "removed": [s.name for s in self.registry.all() if not s.registered],
+                # independent audit item 8 (see computation above): real, per-run status.
+                "scored_this_run": sorted(benchmarked_this_run),
+                "scored_but_unbenchmarked_this_run": scored_but_unbenchmarked_this_run,
+                "scored_this_run_summary": (
+                    f"{len(benchmarked_this_run)} of {len(scored_names)} scored indicators "
+                    f"actually produced a real reference benchmark this run"
+                ),
             },
             "scorecard": rows,
         }

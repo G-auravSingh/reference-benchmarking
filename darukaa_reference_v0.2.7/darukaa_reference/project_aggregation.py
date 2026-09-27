@@ -298,9 +298,39 @@ def run_multi_tile_project(config: Config,
         seed_kernel=getattr(config, "use_seed_kernel", False),
         seed_delta=getattr(config, "seed_kernel_delta", 0.5))
 
-    # Representative indicator_status: identical across tiles (same registry/config) —
-    # taken from any one successful tile's report, not recomputed.
+    # Representative indicator_status: the static categories (scored/contextual/
+    # screening_only/pending_inputs/removed) ARE identical across tiles (same
+    # registry/config), so those are still taken from any one successful tile's
+    # report. But independent audit item 8 flagged exactly this line as the real
+    # gap: scored_this_run / scored_but_unbenchmarked_this_run from that one tile
+    # describe only THAT tile, not the real project-wide picture -- a project can
+    # have e.g. eii benchmarked in one zone and "no_tile_had_data" project-wide.
+    # Overridden below with the REAL project-wide computation from agg's own
+    # per-indicator status (which already tracks n_tiles_with_data / n_tiles_total
+    # correctly) instead of silently reusing one tile's local view.
     any_report = next(iter(tile_reports.values()))
+    per_ind_status = agg["multi_tile_summary"]["per_indicator"]
+    project_benchmarked = {name for name, summary in per_ind_status.items()
+                           if summary.get("status") == "ok"}
+    project_scored_but_unbenchmarked = []
+    for name in sorted(set(per_ind_status.keys()) - project_benchmarked):
+        summary = per_ind_status.get(name, {})
+        project_scored_but_unbenchmarked.append({
+            "name": name,
+            "reason": summary.get("status", "no_data_this_project_run"),
+            "n_tiles_with_data": summary.get("n_tiles_with_data", 0),
+            "n_tiles_total": summary.get("n_tiles_total", len(tile_reports)),
+        })
+    n_scored_project = len(per_ind_status)
+    n_benchmarked_project = len(project_benchmarked)
+    project_indicator_status = dict(any_report.get("indicator_status", {}))
+    project_indicator_status["scored_this_run"] = sorted(project_benchmarked)
+    project_indicator_status["scored_but_unbenchmarked_this_run"] = project_scored_but_unbenchmarked
+    project_indicator_status["scored_this_run_summary"] = (
+        f"{n_benchmarked_project} of {n_scored_project} scored indicators actually "
+        f"produced a real reference benchmark somewhere in this project run "
+        f"(at least one tile)"
+    )
 
     from datetime import datetime
     project_report = {
@@ -319,7 +349,7 @@ def run_multi_tile_project(config: Config,
                           "(see multi_tile_summary.aggregation_rule); reuses the same "
                           "profile-first scoring engine as a single site.",
         },
-        "indicator_status": any_report.get("indicator_status", {}),
+        "indicator_status": project_indicator_status,
         "site_profiles": {"PROJECT": agg["project_profile"]},
         "multi_tile_summary": agg["multi_tile_summary"],
         "scorecard": [
