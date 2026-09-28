@@ -106,6 +106,7 @@ from typing import Any, Dict
 import numpy as np
 from darukaa_reference.config import Config
 from darukaa_reference.registry import IndicatorRegistry
+from darukaa_reference import constructs as _K
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +325,11 @@ def _img_natural_landcover(c):
     return weights.multiply(100)
 
 def _img_forest_loss(c):
-    """Hansen GFC v1.13 forest loss mask.
+    """LEGACY (v0.2.7) per-pixel lossyear-code image -- NOT a rate, so it is not comparable with the
+    site's %/yr value. v0.2.8 references come from _forest_loss_terms_image via
+    reference_builders_ee (site-sized window rate). Kept only so the v0.2.7 path still imports.
+
+    Hansen GFC v1.13 forest loss mask.
     Returns binary lossyear > 0, masked to treecover2000 >= 30%.
     Actual rate computation (with windowed periods) is done in extract_forest_loss_rate.
     """
@@ -333,29 +338,29 @@ def _img_forest_loss(c):
     f = gfc.select("treecover2000").gte(30)
     return gfc.select("lossyear").updateMask(f).rename("forest_loss_rate")
 
-def _img_net_forest_change(c):
-    """Per-pixel proxy for net_forest_change_rate's Tier2 reference pool: +1 on
-    newly-treed (gain) pixels outside the 2000 forest baseline, -1 on loss
-    pixels (Hansen lossyear>0) within the 2000 forest baseline, 0 elsewhere.
-    This is a per-pixel DIRECTIONAL proxy for the site-level signed rate
-    computed in extract_net_forest_change_rate (an area-normalised annual
-    rate) -- not literally the same statistic, but gives Tier2 a comparable
-    raster to build a reference pool from, the same pattern _img_forest_loss
-    already uses for forest_loss_rate. Documented, real limitation: gain here
-    uses the same fixed recent Dynamic World window (config.ndvi_year) as the
-    site-level extraction, consistent between the two, not independently
-    re-derived."""
+def _dw_tree_binary_period(start_year, end_year):
+    """1 where the Dynamic World annual-mode label over [start_year, end_year] is trees, else 0.
+    The SAME function builds both endpoints: identical compositing, seasonal handling, masking."""
     import ee
-    gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
-    f = gfc.select("treecover2000").gte(30)
-    loss = gfc.select("lossyear").gt(0).And(f)
-    ndvi_year = getattr(c, "ndvi_year", 2025)
-    dw_current = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
-                 .filterDate(f"{ndvi_year - 1}-01-01", f"{ndvi_year}-12-31")
-                 .select("label").mode())
-    gain = dw_current.eq(1).And(f.Not())
-    net = ee.Image(0).where(gain, 1).where(loss, -1)
-    return net.rename("net_forest_change_rate")
+    lab = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
+           .filterDate(f"{start_year}-01-01", f"{end_year}-12-31").select("label").mode())
+    return lab.eq(_K.DW_TREES).rename("trees")
+
+
+def _net_change_periods(c):
+    early = tuple(_K.NET_CHANGE_EARLY_YEARS)
+    recent = (c.ndvi_year - 1, c.ndvi_year)
+    dt = (sum(recent) / 2.0) - (sum(early) / 2.0)
+    return early, recent, dt
+
+
+def _img_net_forest_change(c):
+    """Per-pixel change in tree-cover share, percentage points per year (D5): recent - early,
+    both from Dynamic World annual-mode composites, divided by the years between the period
+    mid-points. Site mean and site-sized window mean are both the change in tree-cover share."""
+    early, recent, dt = _net_change_periods(c)
+    return (_dw_tree_binary_period(*recent).subtract(_dw_tree_binary_period(*early))
+            .multiply(100.0 / dt).rename("net_forest_change_rate"))
 
 def _img_ndvi(c):
     import ee; y=c.ndvi_year
@@ -806,14 +811,14 @@ def _img_sabf(c):
     return bloom_col.sum().divide(bloom_col.count()).rename('SABF')
 
 def _img_wcpi(c):
-    """Water Clarity Proxy Index via Nechad turbidity inversion. Site-normalized 0-1."""
+    """RAW water clarity 1/(TSM+1), TSM from Sentinel-2 red (Nechad-type). NOT normalised by the
+    site's own range (X3). Water restriction is applied per water-body unit (pure-water mask)."""
     import ee
-    composite=_s2_masked(c).median()
-    ndwi=composite.normalizedDifference(['B3','B8']); water_mask=ndwi.gt(0)
-    red=composite.select('B4').updateMask(water_mask)
-    tsm=red.expression('(A * r) / (1 - (r / C))',{'r':red,'A':228.1,'C':0.1641}).rename('TSM')
-    tsm=tsm.updateMask(tsm.gt(0)).updateMask(tsm.lt(1000))
-    return ee.Image(1).divide(tsm.add(1)).rename('WCPI')
+    composite = _s2_masked(c).median()
+    red = composite.select("B4")
+    tsm = red.expression("(A * r) / (1 - (r / C))", {"r": red, "A": _K.TSM_NECHAD_A, "C": _K.TSM_NECHAD_C}).rename("TSM")
+    tsm = tsm.updateMask(tsm.gt(0)).updateMask(tsm.lt(_K.TSM_MAX))
+    return ee.Image(1).divide(tsm.add(1)).rename("WCPI")
 
 def _img_wsdi(c):
     """Water Surface Dynamics Index via S1 SAR VV. Peaks at 0.5 occurrence (most dynamic)."""
@@ -837,13 +842,45 @@ def _img_stsi_raw(c):
     return composite.select('ST_B10').multiply(0.00341802).add(149.0).subtract(273.15).rename('STSI')
 
 def _img_sdi(c):
-    """Disturbed land cover mask (DW crops/built/bare) for SDI computation.
-    Uses canonical DW helper and named class constants.
-    """
+    """Disturbed (crops / built / bare / built-up edge) binary. Its unit value is the share over the
+    land RING of the water body (all water excluded)."""
     dw = _dw_mode(c)
-    disturbed = dw.eq(DW_CROPS).Or(dw.eq(DW_BUILT)).Or(dw.eq(DW_BARE))
-    roads_proxy = dw.eq(DW_BUILT).focalMax(1).subtract(dw.eq(DW_BUILT)).gt(0)
-    return disturbed.Or(roads_proxy).rename('Disturbed')
+    disturbed = dw.eq(_K.DW_CROPS).Or(dw.eq(_K.DW_BUILT)).Or(dw.eq(_K.DW_BARE))
+    roads_proxy = dw.eq(_K.DW_BUILT).focalMax(1).subtract(dw.eq(_K.DW_BUILT)).gt(0)
+    return disturbed.Or(roads_proxy).rename("Disturbed")
+
+
+def _img_natural_veg(c):
+    """Natural vegetation binary (Dynamic World trees / grass / flooded vegetation / shrub)."""
+    dw = _dw_mode(c)
+    m = dw.eq(_K.NATURAL_CLASSES[0])
+    for cls in _K.NATURAL_CLASSES[1:]:
+        m = m.Or(dw.eq(cls))
+    return m.rename("natural_vegetation")
+
+
+def _wb_unit_value(g, c, metric_img, kind, native_m, construct, unit, population):
+    """Target water-body unit value (site side). The reference builder uses the same shared
+    water mask, pure-water erosion, ring and metric (reference_builders_ee)."""
+    import ee
+    from darukaa_reference import reference_builders_ee as RB
+    eg = _to_ee(g)
+    try:
+        wm = RB.water_mask_s2(_s2_masked(c).median())
+        out = RB.water_body_reference_ee(
+            ee, site_geometry=eg, water_mask=wm, metric_image=metric_img, kind=kind, native_scale_m=native_m,
+            construct=construct, unit=unit, temporal=f"annual:{c.ndvi_year} S2 composite", population=population,
+            radii_km=(2.0,), want_reference=False)
+        if not out["valid"]:
+            return {"value": None, "pixels": None, "metadata": {"reason": out["invalid_reason"],
+                    "n_pure_water_px": out.get("n_pure_water_px")}}
+        t = out["target"]
+        return {"value": float(t["value"]), "pixels": None,
+                "metadata": {"target_area_m2": t["area_m2"], "n_pure_water_px": t["pure_px"], "kind": kind,
+                             "note": "value over pure-water pixels (or land ring) of ONE water body"}}
+    except Exception as e:
+        logger.warning(f"{construct}: {e}")
+        return {"value": None, "pixels": None}
 
 def _img_hsas(c):
     """Habitat suitability surface: NDVI*0.5 + water proximity*0.3 + (1-disturbance)*0.2.
@@ -907,6 +944,31 @@ def _img_iri(c):
             .add(human_pressure.multiply(0.20)).add(disturbance.multiply(0.15))
             .add(accessibility.multiply(0.10)).rename('IRI').clamp(0,1))
 
+def _thermal_absolute(lst):
+    """Thermal stress 0-1 from ABSOLUTE bounds (constructs.THERMAL_MIN_C..MAX_C). v0.2.7 scaled by
+    the SITE's own LST min/max, so a site's value depended on the site's own range (X3)."""
+    return lst.subtract(_K.THERMAL_MIN_C).divide(_K.THERMAL_MAX_C - _K.THERMAL_MIN_C).clamp(0, 1)
+
+
+def _img_edpp(c):
+    """SINGLE-BAND EDPP (site value and reference are the same image)."""
+    import ee
+    b = _img_edpp_bands(c)
+    return (ee.Image(1).subtract(_thermal_absolute(b.select("LST"))).multiply(b.select("TurbProt"))
+            .multiply(b.select("Moisture")).multiply(ee.Image(1).subtract(b.select("Exposure")))
+            .rename("EDPP").clamp(0, 1))
+
+
+def _img_mspl(c):
+    """SINGLE-BAND MSPL with absolute thermal scaling."""
+    b = _img_mspl_bands(c)
+    w = _K.MSPL_WEIGHTS
+    return (b.select("NutrientStress").multiply(w["nutrient"])
+            .add(_thermal_absolute(b.select("LST")).unmask(0).multiply(w["thermal"]))
+            .add(b.select("TurbidityStress").multiply(w["turbidity"]))
+            .add(b.select("WaterPersist").multiply(w["water_persistence"])).rename("MSPL").clamp(0, 1))
+
+
 def _img_mspl_bands(c):
     """Multi-band image for MSPL: nutrient, LST, turbidity, water persistence."""
     import ee; y=c.ndvi_year
@@ -919,36 +981,6 @@ def _img_mspl_bands(c):
     water_persist=ndwi.gt(0).focal_mean(radius=100,units='meters').clamp(0,1).unmask(0)
     return lst.addBands(nutrient.rename('NutrientStress')).addBands(
         turbidity.rename('TurbidityStress')).addBands(water_persist.rename('WaterPersist'))
-
-def _img_rci(c):
-    """Riparian Complexity Index from 2-year S2 window."""
-    import ee; y=c.ndvi_year
-    start=f"{y-1}-01-01"; end=f"{y}-12-31"
-    def msk(img):
-        qa=img.select('QA60'); mask=qa.bitwiseAnd(1<<10).eq(0).And(qa.bitwiseAnd(1<<11).eq(0))
-        return img.updateMask(mask).divide(10000).copyProperties(img,['system:time_start'])
-    s2=(ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
-        .filterDate(start,end).filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20)).map(msk))
-    composite=s2.median()
-    ndvi=composite.normalizedDifference(['B8','B4']).rename('NDVI')
-    evi=composite.expression('2.5*((NIR-RED)/(NIR+6*RED-7.5*BLUE+1))',
-        {'NIR':composite.select('B8'),'RED':composite.select('B4'),'BLUE':composite.select('B2')}).rename('EVI')
-    ndvi_std=s2.map(lambda img: img.normalizedDifference(['B8','B4']).rename('NDVI')
-                    ).reduce(ee.Reducer.stdDev()).rename('NDVI_std')
-    veg_var=ndvi_std.unitScale(0,0.2).clamp(0,1)
-    veg_complex=evi.unitScale(0,1).clamp(0,1)
-    veg_prod=ndvi.unitScale(0,1).clamp(0,1)
-    edge_complex=ndvi.reduceNeighborhood(
-        reducer=ee.Reducer.stdDev(),
-        kernel=ee.Kernel.circle(radius=30,units='meters')).unitScale(0,0.15).clamp(0,1)
-    return (veg_var.multiply(0.30).add(veg_complex.multiply(0.30))
-            .add(veg_prod.multiply(0.20)).add(edge_complex.multiply(0.20))
-            .rename('RCI').clamp(0,1))
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# IMAGE BUILDERS — TERRESTRIAL VEGETATION + PLANT SPECIES 
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def _img_riparian_ndvi_trend(c):
     """Linear NDVI slope (NDVI/year) from 2-year S2 time series."""
@@ -1171,32 +1203,20 @@ def create_default_registry() -> IndicatorRegistry:
         "min_reliable_baseline_ha": 5.0,})
 
     r.register(name="net_forest_change_rate", applicable_realms=("terrestrial", "mixed"),
-        # same rationale as forest_loss_rate: trivially ~0 on open water
-        display_name="Net Forest Change Rate (Gain − Loss)", source_type="gee",
-        extract_fn=extract_net_forest_change_rate, unit="% per year", value_range=(-100, 100),
-        citation="Loss: Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
-             "Gain: Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4 "
-             "-- current 'trees' class on pixels not forested in the Hansen 2000 baseline. "
-             "SPLIT from forest_loss_rate (independent audit item 9, 2026-09-27, real client-"
-             "facing need: restoration/agroforestry clients genuinely plant trees, and a real "
-             "gain signal netted into a ratio-scale, always-positive loss indicator either "
-             "broke that indicator's log_response_ratio estimator (undefined for <=0) or made "
-             "a real planting success silently invisible/suppressed -- neither is acceptable. "
-             "This indicator carries the SIGNED gain-minus-loss picture on its own scale "
-             "(robust_z, defined for negative/zero/positive values alike), leaving "
-             "forest_loss_rate as the original, historically-established gross-loss-only "
-             "metric its ratio/log_response_ratio contract actually requires.",
+        display_name="Net Tree-Cover Change (Dynamic World, pp/yr)", source_type="gee",
+        extract_fn=extract_net_forest_change_rate, unit="percentage points per year", value_range=(-100, 100),
+        citation=("Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4. REDEFINED (v0.2.8, decision D5): "
+                  "change in the Dynamic World tree-cover share between an early period (2017-2018) and a recent "
+                  "period (ndvi_year-1..ndvi_year), percentage points per year between period mid-points. ONE product, "
+                  "identical annual-mode compositing, seasonal handling and masking at both endpoints; Hansen is NOT "
+                  "combined with DW (v0.2.7 gain = DW trees now on pixels below 30 % canopy in Hansen 2000 compared "
+                  "two products' definitions). Absolute tree-area change (ha) is a separate diagnostic."),
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_net_forest_change, "tnfd_dim": 1,
-                  "display_name_report": "Net Forest Cover Change (Hansen loss + Dynamic World gain)",
-                  "scope_note": ("Signed rate: positive = net regrowth, negative = net loss. "
-                       "Gain is detected once (current tree cover on non-2000-forest "
-                       "pixels) and annualised as an approximation -- not annually-"
-                       "resolved the way Hansen's loss signal is. Sites with low "
-                       "baseline forest cover (<5 ha) will show arithmetically inflated "
-                       "percentage rates -- interpret absolute area change (ha/yr) "
-                       "alongside the percentage rate."),
-                  "min_reliable_baseline_ha": 5.0})
+                  "display_name_report": "Net Tree-Cover Change (pp/yr, Dynamic World)",
+                  "scope_note": ("Signed: positive = tree-cover share increased. Classifier noise between periods "
+                                 "produces spurious +/- change; the site is placed among site-sized windows by "
+                                 "percentile, which carry that noise.")})
 
     r.register(name="kba_overlap", display_name="KBA/IBA Overlap", source_type="gee",
         extract_fn=extract_kba_overlap, unit="%", value_range=(0,100),
@@ -1396,7 +1416,7 @@ def create_default_registry() -> IndicatorRegistry:
                  "DOI:10.1016/j.biocon.2014.11.038 -- but the specific multiplicative combination "
                  "is Darukaa's own, not a formula published in either paper. Clarified during audit."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
-        metadata={"gee_image_fn": _img_edpp_bands, "tnfd_dim": 2,
+        metadata={"gee_image_fn": _img_edpp, "tnfd_dim": 2,
                   "note": "Higher = better eDNA preservation conditions.",
                   "provenance": {
                       "literature_component": "Thermal stress, turbidity protection, moisture, and UV exposure are each independently supported as eDNA-persistence drivers (Strickler et al. 2015; Roussel et al. 2015).",
@@ -1414,7 +1434,7 @@ def create_default_registry() -> IndicatorRegistry:
                  "published in that paper. Corrected during this audit -- same class of "
                  "over-attribution found and fixed in hsas/iri."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
-        metadata={"gee_image_fn": _img_mspl_bands, "tnfd_dim": 2,
+        metadata={"gee_image_fn": _img_mspl, "tnfd_dim": 2,
                   "note": "Proxy for eutrophic/microbial imbalance. Complements 16S eDNA.",
                   "provenance": {
                       "literature_component": "General microbial-disturbance principles (Shade et al. 2012) motivate the input choice; no formula.",
@@ -1423,26 +1443,23 @@ def create_default_registry() -> IndicatorRegistry:
                       "validation_status": "not_externally_validated",
                   }})
 
-    r.register(name="rci", display_name="Riparian Complexity Index", source_type="gee",
-        extract_fn=extract_rci, unit="index (0-1)", value_range=(0,1),
-        citation=("Darukaa-constructed weighted composite (vegetation variability 0.30 + "
-                 "vegetation complexity/EVI 0.30 + vegetation productivity/NDVI 0.20 + edge "
-                 "complexity 0.20) -- CORRECTED (independent audit item 14, real gap found: "
-                 "this was bare-cited to Naiman & Decamps (1997) Annu Rev Ecol Syst 28:621, "
-                 "DOI:10.1146/annurev.ecolsys.28.1.621, with no clarification, the same "
-                 "over-attribution pattern already fixed for hsas/iri/mspl/edpp but missed "
-                 "here). That paper is a conceptual riparian-ecology review; it does not "
-                 "specify this composite's remote-sensing formula, sub-score weights, or "
-                 "unit-scaling thresholds, which are Darukaa's own."),
+    r.register(name="riparian_natural_veg_share", display_name="Riparian Natural Vegetation Share", source_type="gee",
+        extract_fn=extract_riparian_natural_veg_share, unit="fraction (0-1)", value_range=(0,1),
+        applicable_realms=("terrestrial", "aquatic", "mixed"),
+        citation=("Share of natural-vegetation pixels (Dynamic World trees / grass / flooded vegetation / shrub; "
+                  "Brown et al. 2022, DOI:10.1038/s41597-022-01307-4) in the 100 m riparian ring around a water body "
+                  "(land only; all water excluded). REPLACES the retired 'Riparian Complexity Index' (rci): that "
+                  "Darukaa composite (NDVI/EVI variability, complexity, productivity, edge complexity) measured no "
+                  "actual complexity and was bare-cited to Naiman & Decamps (1997), which specifies no formula. "
+                  "Ring width (100 m) is a Darukaa choice. Riparian buffers as a condition/pressure unit: Allan (2004)."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=25.0, pillar=2,
-        metadata={"gee_image_fn": _img_rci, "tnfd_dim": 2,
-                  "note": "100m riparian buffer. 2-year S2 window.",
+        metadata={"gee_image_fn": _img_natural_veg, "tnfd_dim": 2, "wb_kind": "ring",
+                  "note": "100 m riparian ring, water excluded. Same ring/vegetation/support for target and reference bodies.",
                   "provenance": {
-                      "literature_component": "Riparian complexity as an ecological concept (Naiman & Decamps 1997) motivates measuring this at all; the paper supplies no formula.",
-                      "darukaa_transformation": "NDVI/EVI-derived vegetation variability, complexity, productivity, and edge-complexity sub-scores, each unit-scaled and clamped 0-1 by Darukaa-chosen thresholds.",
-                      "darukaa_weights": {"veg_variability": 0.30, "veg_complexity": 0.30, "veg_productivity": 0.20, "edge_complexity": 0.20},
-                      "validation_status": "not_externally_validated",
-                  }})
+                      "literature_component": "Riparian natural cover as a condition/pressure descriptor of aquatic systems (Allan 2004).",
+                      "darukaa_transformation": "Dynamic World natural-class share over a fixed-width land ring.",
+                      "darukaa_weights": None,
+                      "validation_status": "not_externally_validated"}})
 
     # ── DIM 2: ECOSYSTEM CONDITION — Terrestrial vegetation  ───────────
     r.register(name="riparian_ndvi_trend", display_name="Riparian NDVI Temporal Trend", source_type="gee",
@@ -1733,6 +1750,22 @@ def _annualized_rate_pct(area_m2, baseline_m2, n_years):
     return (float(area_m2) / baseline) * 100.0 / max(float(n_years), 1e-9)
 
 
+def _forest_loss_terms_image(c):
+    """(numerator_binary, denominator_binary, years) of the PRIMARY loss window, as images -- the
+    exact terms the site rate uses, so the site-sized WINDOW reference is the same rate
+    (sum(loss area) / sum(baseline forest area) * 100 / years). Baseline = >=30 % canopy in 2000."""
+    import ee
+    gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
+    f = gfc.select("treecover2000").gte(_K.HANSEN_CANOPY_THRESHOLD_PCT)
+    windows = getattr(c, "forest_loss_windows", None) or [
+        (label, first, last, _K.years_in_window(first, last)) for label, first, last in _K.FOREST_LOSS_WINDOWS]
+    primary = getattr(c, "forest_loss_primary_window", _K.FOREST_LOSS_PRIMARY_WINDOW)
+    _key, first, last, years = next((w for w in windows if w[0] == primary), windows[0])
+    ly = gfc.select("lossyear")
+    num = ly.gte(first).And(ly.lte(last)).And(ly.gt(0)).And(f).rename("loss")
+    return num, f.rename("baseline"), years
+
+
 def _forest_baseline_and_loss(eg, c):
     """Shared real GEE computation used by BOTH forest_loss_rate (gross loss
     only) and net_forest_change_rate (gain - loss): the Hansen GFC image,
@@ -1744,7 +1777,7 @@ def _forest_baseline_and_loss(eg, c):
     primary_label, per-window loss_area_m2 as ee.Number dict)."""
     import ee
     gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13").clip(eg)
-    f = gfc.select("treecover2000").gte(30)
+    f = gfc.select("treecover2000").gte(_K.HANSEN_CANOPY_THRESHOLD_PCT)
     pa = ee.Image.pixelArea()
 
     a0 = pa.updateMask(f).reduceRegion(
@@ -1752,18 +1785,20 @@ def _forest_baseline_and_loss(eg, c):
     baseline_m2 = ee.Number(a0.get("area"))
 
     windows = getattr(c, "forest_loss_windows", None) or [
-        ("loss_longterm_2001_2025", 1, 25, 24),
-        ("loss_recent_2020_2025", 20, 25, 5),
-        ("loss_current_2023_2025", 23, 25, 2),
+        (label, first, last, _K.years_in_window(first, last)) for label, first, last in _K.FOREST_LOSS_WINDOWS
     ]
-    primary_label = getattr(c, "forest_loss_primary_window", "loss_longterm_2001_2025")
+    primary_label = getattr(c, "forest_loss_primary_window", _K.FOREST_LOSS_PRIMARY_WINDOW)
 
     loss_area_m2_by_window = {}
     for key, yr_start, yr_end, n_years in windows:
+        # v0.2.8: the numerator is loss INSIDE the >=30 % canopy baseline (.And(f)). v0.2.7 counted
+        # loss on any pixel with canopy > 0 % against a >=30 % baseline: numerator not a subset of
+        # the denominator, inflating the rate.
         l = (gfc.select("lossyear")
              .gte(yr_start)
              .And(gfc.select("lossyear").lte(yr_end))
-             .And(gfc.select("lossyear").gt(0)))
+             .And(gfc.select("lossyear").gt(0))
+             .And(f))
         al = pa.updateMask(l).reduceRegion(
             reducer=ee.Reducer.sum(), geometry=eg, scale=30, maxPixels=1e13)
         loss_area_m2_by_window[key] = ee.Number(al.get("area"))
@@ -1872,115 +1907,25 @@ def extract_forest_loss_rate(g, c):
 
 
 def extract_net_forest_change_rate(g, c):
-    """Signed NET forest-cover change rate (gain - loss, %/yr; positive =
-    net regrowth), split out of forest_loss_rate (independent audit item 9 --
-    see extract_forest_loss_rate's docstring for the full real rationale).
-    Uses robust_z (not log_response_ratio), which is defined for negative,
-    zero, and positive values alike -- see estimators.robust_z.
-
-    Loss reuses the exact same Hansen GFC windows/baseline as
-    forest_loss_rate (via _forest_baseline_and_loss, never independently
-    recomputed). Gain is detected via current Dynamic World "trees" (class 1)
-    on pixels that were NOT forest in the 2000 baseline -- i.e. tree cover
-    that has newly appeared since baseline. Hansen itself has no
-    continuously-updated gain layer usable for a specific recent window (its
-    own "gain" band is a one-time 2000-2012 cumulative product, too stale for
-    a current assessment).
-
-    This is the indicator a restoration/agroforestry/plantation client's real
-    regrowth shows up in -- keeping it separate from forest_loss_rate (rather
-    than netting gain into that indicator, as a prior v0.2.5 build did) means
-    a genuine planting success shows a real positive number here instead of
-    silently zeroing out or breaking forest_loss_rate's own loss-only,
-    ratio-scale estimator.
-    """
+    """Net tree-cover change, percentage points per year (D5), from ONE product (Dynamic World).
+    Does not combine DW with Hansen: v0.2.7's gain (DW trees now on pixels below 30 % canopy in
+    Hansen 2000) compared two products' definitions rather than measuring change."""
     import ee
     eg = _to_ee(g)
     try:
-        _gfc, f_mask, baseline_m2, windows, primary_label, loss_area_m2_by_window = \
-            _forest_baseline_and_loss(eg, c)
+        early, recent, dt = _net_change_periods(c)
+        r = _reduce(_img_net_forest_change(c), g, 10)
         pa = ee.Image.pixelArea()
-
-        # GAIN detection: current Dynamic World "trees" (class 1) on pixels NOT
-        # forested in the 2000 baseline. Uses a rolling recent window (this
-        # project's ndvi_year, consistent with the currency standard used
-        # elsewhere in this pipeline), not a fixed historical Hansen gain layer.
-        dw_current = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
-                     .filterBounds(eg)
-                     .filterDate(f"{c.ndvi_year - 1}-01-01", f"{c.ndvi_year}-12-31")
-                     .select("label").mode())
-        non_forest_2000 = f_mask.Not()
-        newly_treed = dw_current.eq(1).And(non_forest_2000)
-        gain_m2 = pa.updateMask(newly_treed).reduceRegion(
-            reducer=ee.Reducer.sum(), geometry=eg, scale=30, maxPixels=1e13)
-        gain_total_m2 = ee.Number(ee.Algorithms.If(gain_m2.get("area"), gain_m2.get("area"), 0))
-
-        baseline_m2_val = baseline_m2.getInfo()
-        gain_total_m2_val = gain_total_m2.getInfo()
-
-        loss_rates, gain_rates, net_rates, loss_ha_by_window = {}, {}, {}, {}
-        for key, _yr_start, _yr_end, n_years in windows:
-            loss_area_m2 = loss_area_m2_by_window[key].getInfo()
-            loss_ha_by_window[key] = round(loss_area_m2 / 10000, 4)
-            loss_rates[key] = round(_annualized_rate_pct(loss_area_m2, baseline_m2_val, n_years), 4)
-            # Gain is not naturally windowed the way loss is (Hansen gives no annual
-            # gain signal) — the SAME detected gain area is annualised over each
-            # window's length as an approximation, clearly labelled as such.
-            gain_rates[key] = round(_annualized_rate_pct(gain_total_m2_val, baseline_m2_val, n_years), 4)
-            net_rates[key] = round(gain_rates[key] - loss_rates[key], 4)
-
-        baseline_ha = round(baseline_m2_val / 10000, 2)
-        gain_ha = round(gain_total_m2_val / 10000, 2)
-        low_baseline = baseline_ha < 5.0
-
-        primary_value = net_rates.get(primary_label)
-        if primary_value is None:
-            logger.warning(f"forest_loss_primary_window='{primary_label}' not found in "
-                          f"configured windows {list(net_rates.keys())}; falling back to "
-                          f"the first configured window for scoring.")
-            primary_value = next(iter(net_rates.values()), None)
-
-        # Same real arithmetic-instability case as forest_loss_rate (Deccan forest:
-        # 0.01 ha baseline, 24.26 ha of real current tree cover -> a 10,851%/yr
-        # reading) applies identically to the NET rate, since it shares the same
-        # baseline denominator. Suppressed from scoring; absolute ha change stays
-        # in metadata so a real planting story is still visible in the report.
-        if low_baseline:
-            logger.warning(f"net_forest_change_rate: baseline_forest_ha={baseline_ha} is "
-                          f"below the 5ha stability floor — percentage rate "
-                          f"({primary_value}%/yr) is arithmetically unstable and has been "
-                          f"suppressed from scoring. See metadata for absolute area change.")
-            primary_value = None
-
-        return {
-            "value": primary_value,   # NET rate (gain - loss), %/yr; signed, can be negative
-            "pixels": None,
-            "metadata": {
-                "all_window_loss_rates_pct_yr": loss_rates,
-                "all_window_gain_rates_pct_yr": gain_rates,
-                "all_window_net_rates_pct_yr": net_rates,
-                "primary_window": primary_label,
-                "baseline_forest_ha": baseline_ha,
-                "gain_detected_ha": gain_ha,
-                "loss_ha_by_window": loss_ha_by_window,
-                "absolute_net_change_ha": round(gain_ha - loss_ha_by_window.get(primary_label, 0), 2),
-                "low_baseline_flag": low_baseline,
-                "note": (f"Signed NET rate (gain - loss) for '{primary_label}'; positive = "
-                        f"net regrowth. Loss uses Hansen GFC lossyear (annually resolved); "
-                        f"gain is detected once (current Dynamic World trees on "
-                        f"non-2000-forest pixels) and annualised per window as an "
-                        f"approximation, not an annually-resolved signal the way loss is — "
-                        f"flagged here, not disguised as equally precise. See "
-                        f"forest_loss_rate for the gross-loss-only, ratio-scale signal "
-                        f"this is split from."),
-                "low_baseline_note": (
-                        f"Baseline forest cover is only {baseline_ha:.1f} ha. "
-                        f"Percentage rates are arithmetically unstable at this scale. "
-                        f"Report absolute area change (ha/yr) rather than percentage rate "
-                        f"for this site."
-                ) if low_baseline else None,
-            }
-        }
+        def area_ha(period):
+            a = pa.updateMask(_dw_tree_binary_period(*period)).reduceRegion(
+                reducer=ee.Reducer.sum(), geometry=eg, scale=10, maxPixels=1e13).get("area")
+            return ee.Number(ee.Algorithms.If(a, a, 0)).divide(10000).getInfo()
+        a0, a1 = area_ha(early), area_ha(recent)
+        r["metadata"] = {"early_period": list(early), "recent_period": list(recent), "years_between_midpoints": dt,
+                         "tree_area_early_ha": round(a0, 3), "tree_area_recent_ha": round(a1, 3),
+                         "absolute_tree_area_change_ha": round(a1 - a0, 3),
+                         "note": "percentage points of tree-cover share per year; one product, identical compositing"}
+        return r
     except Exception as e:
         logger.warning(f"net_forest_change_rate: {e}")
         return {"value": None, "pixels": None}
@@ -2091,7 +2036,11 @@ def extract_aridity(g,c):
     img=_img_aridity(c)
     return _reduce(img,g,5000) if img else {"value":None,"pixels":None}
 
-def extract_ghm(g,c): return _reduce(_img_ghm(c),g,1000)
+def extract_ghm(g, c):
+    # v0.2.8: read at the product's NATIVE 90 m (v0.2.7 read it at 1,000 m, blending the site with
+    # ~120 native pixels of its surroundings).
+    return _reduce(_img_ghm(c), g, _K.GHM_NATIVE_M)
+
 def extract_light_pollution(g,c): return _reduce(_img_viirs(c),g,500)
 def extract_hdi(g,c): return _reduce(_img_hdi(c),g,10)
 def extract_lst_day(g,c): return _reduce(_img_lst_day(c),g,1000)
@@ -2263,30 +2212,11 @@ def extract_star_t(g,c):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def extract_tspi(g,c): return _reduce(_img_tspi(c),g,10)
-def extract_sabf(g,c): return _reduce(_img_sabf(c),g,10)
+def extract_sabf(g, c):
+    return _wb_unit_value(g, c, _img_sabf(c), "water", 20, "algal_bloom_frequency", "fraction_of_dates", "comparable_water_bodies")
 
-def extract_wcpi(g,c):
-    import ee
-    eg=_to_ee(g); wcpi_raw=_img_wcpi(c)
-    if wcpi_raw is None: return {"value":None,"pixels":None}
-    stats=wcpi_raw.reduceRegion(reducer=ee.Reducer.minMax(),geometry=eg,scale=10,maxPixels=1e13).getInfo()
-    # REAL BUG FIXED HERE (found directly from a real Tata Motors run:
-    # "Number.subtract: Parameter 'left' is required and may not be
-    # null" for small real pond polygons). reduceRegion returns no
-    # WCPI_min/WCPI_max keys at all when zero valid pixels fall inside
-    # the geometry at this scale (a genuine, real case for a very small
-    # pond) -- ee.Number(None) then crashed .subtract() rather than
-    # producing a real "no data" result. Checked explicitly now, the
-    # same way every other extract_* function in this module checks a
-    # reduceRegion result client-side after one real .getInfo() call.
-    min_val, max_val = stats.get('WCPI_min'), stats.get('WCPI_max')
-    if min_val is None or max_val is None:
-        return {"value": None, "pixels": None,
-                "metadata": {"reason": "No valid WCPI pixels found within this geometry at this scale."}}
-    mn=ee.Number(min_val); mx=ee.Number(max_val)
-    span=mx.subtract(mn).max(1e-6)
-    wcpi_norm=wcpi_raw.subtract(mn).divide(span).clamp(0,1)
-    return _reduce(wcpi_norm,g,10)
+def extract_wcpi(g, c):
+    return _wb_unit_value(g, c, _img_wcpi(c), "water", 10, "water_clarity", "index_0_1_raw", "comparable_water_bodies")
 
 def extract_wsdi(g,c):
     import ee; eg=_to_ee(g)
@@ -2294,43 +2224,8 @@ def extract_wsdi(g,c):
     if img is None: return {"value":None,"pixels":None}
     return _reduce(img.clip(eg),g,10)
 
-def extract_sdi(g,c):
-    import ee; eg=_to_ee(g)
-    try:
-        y=c.ndvi_year
-        def msk(img):
-            qa=img.select('QA60'); mask=qa.bitwiseAnd(1<<10).eq(0).And(qa.bitwiseAnd(1<<11).eq(0))
-            return img.updateMask(mask).divide(10000)
-        s2=(ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
-            .filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg)
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20)).map(msk))
-        composite=s2.median().clip(eg)
-        ndwi=composite.normalizedDifference(['B3','B8'])
-        # REAL BUG FIXED HERE (found directly from a real Tata Motors
-        # run: "Image.clip: The geometry for image clipping must not be
-        # empty"). This was a FOURTH place in this codebase with the
-        # same fragile water_vec.geometry(1) pattern the v0.2.5 fix
-        # already found and fixed in three others (extract_rci,
-        # extract_riparian_ndvi_trend, extract_shdi) — missed here.
-        # geometry(1) returns empty when fewer than 2 water polygons are
-        # vectorised (the normal case for a small real pond), and
-        # .buffer(100) on an empty geometry produces exactly this
-        # crash. Now uses the same shared, real, largest-polygon helper
-        # every other water-adjacent indicator uses.
-        water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)
-        if water_geom is None:
-            return {"value": None, "pixels": None,
-                    "metadata": {"reason": "No open water detected within this geometry — SDI is a "
-                                          "shoreline-disturbance metric and genuinely does not apply here."}}
-        shore_buf=water_geom.buffer(100)
-        disturbed=_img_sdi(c)
-        pa=ee.Image.pixelArea()
-        dist_area=pa.updateMask(disturbed.clip(shore_buf)).reduceRegion(
-            reducer=ee.Reducer.sum(),geometry=shore_buf,scale=10,maxPixels=1e13)
-        total_area=pa.reduceRegion(reducer=ee.Reducer.sum(),geometry=shore_buf,scale=10,maxPixels=1e13)
-        sdi_val=ee.Number(dist_area.get('area')).divide(ee.Number(total_area.get('area')).max(1)).getInfo()
-        return {"value":float(sdi_val),"pixels":None}
-    except Exception as e: logger.warning(f"SDI: {e}"); return {"value":None,"pixels":None}
+def extract_sdi(g, c):
+    return _wb_unit_value(g, c, _img_sdi(c), "ring", 10, "shoreline_disturbed_share", "fraction_0_1", "comparable_riparian_rings")
 
 def extract_stsi(g,c):
     import ee; eg=_to_ee(g)
@@ -2364,66 +2259,23 @@ def extract_hsas(g,c):
             return val
     except Exception as e: logger.warning(f"HSAS: {e}"); return {"value":None,"pixels":None}
 
-def extract_edpp(g,c):
-    import ee; eg=_to_ee(g)
+def extract_edpp(g, c):
     try:
-        bands=_img_edpp_bands(c).clip(eg)
-        lst=bands.select('LST'); tprot=bands.select('TurbProt')
-        moisture=bands.select('Moisture'); exposure=bands.select('Exposure')
-        stats=lst.reduceRegion(reducer=ee.Reducer.minMax(),geometry=eg,scale=30,maxPixels=1e13)
-        mn=ee.Number(ee.Algorithms.If(stats.get('LST_min'),stats.get('LST_min'),0))
-        mx=ee.Number(ee.Algorithms.If(stats.get('LST_max'),stats.get('LST_max'),1))
-        thermal_stress=lst.subtract(mn).divide(mx.subtract(mn).max(1e-6)).clamp(0,1)
-        edpp=(ee.Image(1).subtract(thermal_stress)
-              .multiply(tprot).multiply(moisture)
-              .multiply(ee.Image(1).subtract(exposure))
-              .rename('EDPP').clamp(0,1))
-        return _reduce(edpp,g,30)
-    except Exception as e: logger.warning(f"EDPP: {e}"); return {"value":None,"pixels":None}
+        return _reduce(_img_edpp(c), g, 30)
+    except Exception as e:
+        logger.warning(f"EDPP: {e}"); return {"value": None, "pixels": None}
 
 def extract_iri(g,c): return _reduce(_img_iri(c),g,10)
 
-def extract_mspl(g,c):
-    import ee; eg=_to_ee(g)
+def extract_mspl(g, c):
     try:
-        bands=_img_mspl_bands(c).clip(eg)
-        lst=bands.select('LST'); nutrient=bands.select('NutrientStress')
-        turbidity=bands.select('TurbidityStress'); water_persist=bands.select('WaterPersist')
-        stats=lst.reduceRegion(reducer=ee.Reducer.minMax(),geometry=eg,scale=30,maxPixels=1e13)
-        mn=ee.Number(ee.Algorithms.If(stats.get('LST_min'),stats.get('LST_min'),0))
-        mx=ee.Number(ee.Algorithms.If(stats.get('LST_max'),stats.get('LST_max'),1))
-        thermal=lst.subtract(mn).divide(mx.subtract(mn).max(1e-6)).clamp(0,1).unmask(0)
-        mspl=(nutrient.multiply(0.35).add(thermal.multiply(0.30))
-              .add(turbidity.multiply(0.20)).add(water_persist.multiply(0.15))
-              .rename('MSPL').clamp(0,1))
-        return _reduce(mspl,g,20)
-    except Exception as e: logger.warning(f"MSPL: {e}"); return {"value":None,"pixels":None}
+        return _reduce(_img_mspl(c), g, 20)
+    except Exception as e:
+        logger.warning(f"MSPL: {e}"); return {"value": None, "pixels": None}
 
-def extract_rci(g,c):
-    import ee; eg=_to_ee(g)
-    try:
-        y=c.ndvi_year; start=f"{y-1}-01-01"; end=f"{y}-12-31"
-        def msk(img):
-            qa=img.select('QA60'); mask=qa.bitwiseAnd(1<<10).eq(0).And(qa.bitwiseAnd(1<<11).eq(0))
-            return img.updateMask(mask).divide(10000)
-        s2=(ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
-            .filterDate(start,end).filterBounds(eg).filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20)).map(msk))
-        composite=s2.median().clip(eg)
-        ndwi=composite.normalizedDifference(['B3','B8'])
-        water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)  # v0.2.5 fix (was .geometry(1))
-        if water_geom is None:
-            return {"value": None, "pixels": None,
-                    "metadata": {"reason": "No open water detected within this geometry — RCI is a "
-                                          "riparian-zone metric and genuinely does not apply here."}}
-        outer=water_geom.buffer(100,1); riparian=outer.difference(water_geom.buffer(0,1),1)
-        rci=_img_rci(c).clip(riparian)
-        return _reduce(rci,riparian,10)
-    except Exception as e: logger.warning(f"RCI: {e}"); return {"value":None,"pixels":None}
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# EXTRACTION FUNCTIONS — TERRESTRIAL VEGETATION + PLANT SPECIES 
-# ═══════════════════════════════════════════════════════════════════════════════
+def extract_riparian_natural_veg_share(g, c):
+    return _wb_unit_value(g, c, _img_natural_veg(c), "ring", 10, "riparian_natural_vegetation_share", "fraction_0_1",
+                          "comparable_riparian_rings")
 
 def extract_riparian_ndvi_trend(g,c):
     import ee; eg=_to_ee(g)

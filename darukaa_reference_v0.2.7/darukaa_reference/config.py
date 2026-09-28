@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from darukaa_reference import constructs as _K
 import yaml
 
 
@@ -100,10 +101,10 @@ class Config:
     # cherry-picking problem this whole methodology redesign removes elsewhere. Changing
     # which window is primary is a methodology decision, not a per-run config tweak;
     # do it deliberately and document why if you do.
+    # v0.2.8: years = last - first + 1 (inclusive). v0.2.7 divided by 24 / 5 / 2 for windows that
+    # contain 25 / 6 / 3 annual loss codes: an off-by-one in every window. Single source: constructs.py.
     forest_loss_windows: List[Tuple[str, int, int, int]] = field(default_factory=lambda: [
-        ("loss_longterm_2001_2025", 1, 25, 24),   # full Hansen record
-        ("loss_recent_2020_2025",  20, 25,  5),   # last 5 years
-        ("loss_current_2023_2025", 23, 25,  2),   # last 2 years
+        (label, first, last, _K.years_in_window(first, last)) for label, first, last in _K.FOREST_LOSS_WINDOWS
     ])
     forest_loss_primary_window: str = "loss_longterm_2001_2025"
 

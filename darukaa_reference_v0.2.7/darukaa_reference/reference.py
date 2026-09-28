@@ -903,7 +903,7 @@ class ReferenceSelector:
         "light_pollution": 500,     # VIIRS DNB (confirmed this session)
         "jrc_water_persistence": 30,  # JRC GSW MonthlyHistory
         "tspi": 10, "sabf": 10, "wcpi": 10, "edpp": 10, "mspl": 10,
-        "sdi": 10, "rci": 10, "iri": 10,  # Sentinel-2-based
+        "sdi": 10, "riparian_natural_veg_share": 10, "iri": 10,  # Sentinel-2-based
         "wsdi": 10,                 # Sentinel-1 GRD
         "net_forest_change_rate": 30,  # Hansen GFC + DW proxy; declared 30 m reference scale
     }

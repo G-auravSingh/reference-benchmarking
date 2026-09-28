@@ -31,6 +31,8 @@ PRESSURE_CONSTRUCTS = ("C4_pressure",)
 
 REFERENCE_POPULATIONS = (
     "regional_all",                 # all valid units in the reference zone (tier1)
+    "regional_ecoregion",           # all valid site-sized windows in the ecoregion within the reference radius;
+                                    #   NO land-cover stratification and NO pressure filter (tier1)
     "least_disturbed_stratum",      # ecoregion + ecosystem stratum + low-HMI selection (tier2)
     "regional_stratum_unfiltered",  # ecoregion + ecosystem stratum, NO pressure filter (ghm, item 3)
     "absolute_level",               # a fixed reference level (e.g. 100 % natural)
@@ -64,10 +66,21 @@ NOT_APPLICABLE_REASONS = (
     "insufficient_pure_water",      # fewer pure-water pixels than required
 )
 
+# ---- Explicit, documented thresholds (v0.2.8 decisions D3, E2; the values are configurable per contract)
+GENERIC_MIN_NATIVE_PIXELS = 10        # hard applicability floor (D3). NOT a statistical-sufficiency claim.
+MIN_PURE_WATER_PIXELS = 10            # aquatic: >= 10 pure-water pixels AND a valid water-body geometry (D3)
+FOREST_BASELINE_MIN_M2 = 50_000.0     # 5 ha of >=30 % canopy baseline forest (forest_loss_rate applicability)
+MIN_REFERENCE_WINDOWS = 30            # documented minimum reference windows (proposal; configurable)
+MIN_COMPARABLE_WATER_BODIES = 10      # documented minimum comparable reference water bodies (E2; proposal)
+WATER_BODY_AREA_RATIO = 3.0           # comparable if area within [1/3, 3] x target (E2)
+WATER_BODY_PERMANENCE_TOL = 0.25      # comparable if |permanence difference| <= 0.25 (E2)
+FLOOR_BASES = ("polygon_native_pixels", "pure_water_pixels", "exempt_landscape_pressure")
+IMPLEMENTATION_STATUSES = ("v0.2.7_legacy", "v0.2.8_synthetic_tested", "blocked", "v0.2.8_live_validated")
+
 # Reference populations appropriate to each construct type (audit X8).
-CONDITION_POPULATIONS = {"least_disturbed_stratum", "absolute_level",
+CONDITION_POPULATIONS = {"least_disturbed_stratum", "absolute_level", "regional_ecoregion",
                          "comparable_water_bodies", "comparable_riparian_rings"}
-PRESSURE_POPULATIONS = {"regional_all", "regional_stratum_unfiltered",
+PRESSURE_POPULATIONS = {"regional_all", "regional_ecoregion", "regional_stratum_unfiltered",
                         "comparable_water_bodies", "comparable_riparian_rings"}
 # Variables used to SELECT each reference population (audit X2: an indicator may not use them
 # as inputs when benchmarked against that population).
@@ -85,11 +98,34 @@ REDUNDANCY_GROUPS = {   # Phase 7: aggregation rules still to be defined
 
 @dataclass(frozen=True)
 class Applicability:
+    """Applicability rules, all explicit.
+
+    min_native_pixels          generic HARD floor (D3): the site must contain at least this many
+                               native pixels. It is an applicability floor, not a claim that 10
+                               pixels are statistically sufficient.
+    indicator_min_native_pixels  stricter, indicator-specific floor where scientifically justified
+                               (must be >= the generic floor; rationale in min_support_rationale).
+    floor_basis                'polygon_native_pixels' (default), 'pure_water_pixels' (aquatic:
+                               >= min_pure_water_pixels pure-water pixels + valid water-body
+                               geometry) or 'exempt_landscape_pressure' (a landscape-level pressure
+                               whose value describes the surrounding landscape at the product's
+                               resolution; exempt from the polygon floor, flagged in the report).
+    """
     domains: Tuple[str, ...]
     ecosystem: str = "any"
     requires_feature: Optional[str] = None      # "water_body" | "forest_baseline_5ha" | None
-    min_native_pixels: Optional[int] = None     # site support rule; None = not applied (pressures)
+    min_native_pixels: Optional[int] = GENERIC_MIN_NATIVE_PIXELS
     min_pure_water_pixels: Optional[int] = None
+    indicator_min_native_pixels: Optional[int] = None
+    floor_basis: str = "polygon_native_pixels"
+
+
+def effective_min_native_pixels(c: "IndicatorContract") -> Optional[int]:
+    """The polygon-pixel floor that actually applies (None when the basis is not the polygon)."""
+    ap = c.applicability
+    if ap.floor_basis != "polygon_native_pixels":
+        return None
+    return max(ap.min_native_pixels or 0, ap.indicator_min_native_pixels or 0)
 
 
 @dataclass(frozen=True)
@@ -119,6 +155,13 @@ class IndicatorContract:
     current_defects: Tuple[str, ...] = ()        # gap between v0.2.7 code and this contract
     validated: bool = False
     validation_evidence: Tuple[str, ...] = ()
+    # ---- v0.2.8 Phase 3 additions
+    min_reference_n: Optional[int] = None        # documented minimum reference units (windows / water bodies)
+    min_support_rationale: str = ""              # why an indicator-specific floor / exemption applies
+    expects_tied_reference: bool = False         # zero-inflated or tie-heavy reference: percentile estimator only
+    diagnostics: Tuple[str, ...] = ()            # contextual diagnostics reported beside (never inside) the score
+    implementation_status: str = "v0.2.7_legacy"
+    synthetic_tests: Tuple[str, ...] = ()        # names of the synthetic fixtures with known answers
 
 
 # ------------------------------------------------------------------------------ validator
@@ -146,6 +189,19 @@ def validate_contract(c: IndicatorContract) -> List[str]:
     for g in c.redundancy_groups:
         if g not in REDUNDANCY_GROUPS:
             v.append(f"unknown redundancy group {g!r}")
+    if c.implementation_status not in IMPLEMENTATION_STATUSES:
+        v.append(f"unknown implementation_status {c.implementation_status!r}")
+    ap = c.applicability
+    if ap.floor_basis not in FLOOR_BASES:
+        v.append(f"unknown floor_basis {ap.floor_basis!r}")
+    if ap.indicator_min_native_pixels is not None:
+        if ap.indicator_min_native_pixels < GENERIC_MIN_NATIVE_PIXELS:
+            v.append("indicator_min_native_pixels must not be below the generic floor")
+        if not c.min_support_rationale:
+            v.append("an indicator-specific support floor needs a min_support_rationale")
+    if c.estimator in ("robust_z", "log_response_ratio") and c.expects_tied_reference:
+        v.append("a zero-inflated / tied reference must use the reference_percentile estimator, "
+                 "never robust_z / log_response_ratio")
 
     # Support: the reference unit must be the site unit's matched counterpart
     expected = "absolute_level" if c.reference_population == "absolute_level" \
@@ -177,8 +233,23 @@ def validate_contract(c: IndicatorContract) -> List[str]:
         clash = POPULATION_SELECTORS.get(c.reference_population, set()) & set(c.inputs)
         if clash:
             v.append(f"circular reference: inputs {sorted(clash)} also select the population (X2)")
-        if not pressure and c.applicability.min_native_pixels is None:
-            v.append("condition indicator needs a site-support rule (min_native_pixels) (X6)")
+        if c.min_reference_n is None or c.min_reference_n < 2:
+            v.append("scoreable indicator needs a documented minimum reference n (min_reference_n)")
+        if ap.floor_basis == "polygon_native_pixels":
+            if (ap.min_native_pixels or 0) < GENERIC_MIN_NATIVE_PIXELS:
+                v.append("polygon-based indicator needs the hard floor min_native_pixels >= 10 (D3)")
+        elif ap.floor_basis == "pure_water_pixels":
+            if ap.requires_feature != "water_body" or (ap.min_pure_water_pixels or 0) < MIN_PURE_WATER_PIXELS:
+                v.append("pure-water floor needs requires_feature='water_body' and >= 10 pure-water pixels (D3)")
+        elif ap.floor_basis == "exempt_landscape_pressure":
+            if not pressure or not c.min_support_rationale:
+                v.append("only a pressure indicator with a rationale may be exempt from the polygon floor")
+        if ap.requires_feature == "water_body":
+            if (ap.min_pure_water_pixels or 0) < MIN_PURE_WATER_PIXELS:
+                v.append("water-body indicator needs the minimum pure-water pixel rule (>= 10)")
+            if c.reference_population in ("comparable_water_bodies", "comparable_riparian_rings") \
+                    and (c.min_reference_n or 0) < 5:
+                v.append("comparable-water-body reference needs a documented minimum number of comparable bodies")
         if "water_body" == c.applicability.requires_feature and c.applicability.min_pure_water_pixels is None:
             v.append("water-body indicator needs a minimum pure-water pixel rule")
 
@@ -227,14 +298,23 @@ def _ctx(name, definition, construct, subdim, site_support, reason, native, veri
 
 CONTRACTS: Dict[str, IndicatorContract] = {c.name: c for c in [
     # ---------------------------------------------------------------- C1 landscape
-    IndicatorContract(
+IndicatorContract(
         "natural_habitat", "Share of the site in natural Dynamic World classes (trees, grass, flooded veg, shrub).",
-        "C1_landscape", "extent", "polygon_proportion", "absolute_level", "absolute_level", "absolute",
-        "scoreable", "Extent vs the natural reference state (SEEA-style); no class-selected pool.",
-        "log_response_ratio", "higher_is_better", "annual:ndvi_year (DW mode)", 10.0, False,
-        Applicability(TM, "any", None, 10), inputs=("dw_label",),
-        limitations=("D2 open: absolute level (100 %) vs support-matched ecoregion distribution.",),
-        current_defects=("X1 binary-pixel reference", "X2a Tier 2 stratified on DW class: 97 % of pool = 100 (live)")),
+        "C1_landscape", "extent", "polygon_proportion", "site_window_proportion", "regional_ecoregion", "tier1",
+        "scoreable", "D2: departure from REGIONAL condition = percentile of the site among site-sized windows "
+        "of the ecoregion. Departure from an ideal (100 % natural) is reported separately as a diagnostic.",
+        "reference_percentile", "higher_is_better", "annual:ndvi_year (DW mode)", 10.0, False,
+        Applicability(TM, "any", None, 10, None, 100, "polygon_native_pixels"), inputs=("dw_label",),
+        min_reference_n=MIN_REFERENCE_WINDOWS, expects_tied_reference=True,
+        diagnostics=("absolute_natural_reference",),
+        min_support_rationale="A share computed from n pixels has resolution 1/n; below ~100 native pixels "
+                              "(1 ha at 10 m) it is too coarse to place a site inside the window distribution.",
+        limitations=("Windows are centred on ecoregion pixels of any land cover (no class stratification) so the "
+                     "reference is the regional condition, not a like-for-like habitat comparison.",
+                     "Reference is tie-heavy where much of the ecoregion is 100 % natural: percentile, not z-score."),
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_natural_habitat_regional_window_reference_and_absolute_diagnostic",
+                         "test_binary_proportion_reference_recovers_regional_proportion_and_has_spread")),
     _ctx("natural_landcover", "Naturalness-weighted DW cover (1 / 0.5 mixed / 0).", "C1_landscape", "extent",
          "polygon_proportion", "Redundant with natural_habitat (same DW input and subdimension).", 10.0, False, TM,
          inputs=("dw_label",), defects=("X1", "X2a")),
@@ -247,31 +327,52 @@ CONTRACTS: Dict[str, IndicatorContract] = {c.name: c for c in [
         Applicability(TM, "any", None, 10), inputs=("pv_binary",),
         current_defects=("reference is the raw binary, site is eroded core area (live T1 ref = 0)",
                          "PV binary provenance undocumented")),
-    IndicatorContract(
+IndicatorContract(
         "forest_loss_rate", "Gross tree-cover loss rate: Hansen loss area in window / 2000 forest (>=30 % canopy) area / years.",
         "C1_landscape", "disturbance_regime", "polygon_rate", "site_window_rate", "least_disturbed_stratum",
-        "tier2", "scoreable", "Same rate for site and site-sized reference windows.",
-        "reference_percentile", "lower_is_better", "window:Hansen v1.13 lossyear 1-25 (2001-2025)", 30.0, True,
+        "tier2", "scoreable", "E1: same rate for site and site-sized reference windows; empirical percentile "
+        "because the reference is strongly zero-inflated.",
+        "reference_percentile", "lower_is_better", "window:Hansen v1.13 lossyear 1-25 (2001-2025), 25 years", 30.0, True,
         Applicability(TM, "woody", "forest_baseline_5ha", 10), inputs=("hansen_gfc",),
-        limitations=("Zero-inflated: many windows have 0 %/yr, so LRR is undefined and MAD is 0; "
-                     "reference_percentile proposed (decision).",
-                     "Reference windows also need >= 5 ha baseline forest."),
-        current_defects=("reference image is lossyear codes, not a rate (live ref 16/17)", "X1")),
-    _ctx("net_forest_change_rate", "Net tree-cover change rate (gain - loss) %/yr.", "C1_landscape",
-         "restoration_trajectory", "polygon_rate",
-         "Gain must be measured within ONE product over time; current gain compares two products.",
-         30.0, True, TM, status="pending_methodology", population="least_disturbed_stratum", tier="tier2",
-         inputs=("hansen_gfc", "dw_label"),
-         defects=("gain = DW trees now vs Hansen 2000 (cross-product)", "reference +/-1 proxy, median 1 (live)", "X1")),
+        min_reference_n=MIN_REFERENCE_WINDOWS, expects_tied_reference=True,
+        limitations=("Zero-loss reference windows are common: ties get mid-rank, tie fraction is reported.",
+                     "Reference windows need >= 5 ha baseline forest, like the site.",
+                     "Windows are centred on pixels satisfying the stratum / HMI criteria."),
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_forest_loss_site_and_reference_are_the_same_rate",
+                         "test_forest_loss_windows_use_correct_year_counts",
+                         "test_percentile_lower_is_better_with_zero_inflated_reference")),
+IndicatorContract(
+        "net_forest_change_rate", "D5: change in Dynamic World tree-cover share between an early and a recent period, "
+        "percentage points per year (one product, identical compositing at both endpoints).",
+        "C1_landscape", "restoration_trajectory", "polygon_mean", "site_window_mean", "regional_ecoregion",
+        "tier1", "scoreable", "Single-product change; site and reference windows use the same difference image. "
+        "Population is NOT land-cover stratified (the stratum is chosen from the same DW classes the change is "
+        "measured on: selection on the outcome, X2).",
+        "reference_percentile", "higher_is_better",
+        "early:2017-2018 vs recent:(ndvi_year-1)-ndvi_year, DW annual-mode composites, full calendar years", 10.0, False,
+        Applicability(TM, "any", None, 10, None, 100, "polygon_native_pixels"), inputs=("dw_label",),
+        min_reference_n=MIN_REFERENCE_WINDOWS, expects_tied_reference=True,
+        min_support_rationale="Class-share change from a per-pixel classifier only averages out classification "
+                              "noise with >= ~100 native pixels.",
+        limitations=("DW classifier noise between periods produces spurious +/- change; the reference distribution "
+                     "of windows carries that noise, which is why the site is placed by percentile.",
+                     "Does not use Hansen: no cross-product comparison. Absolute area change is a separate diagnostic.",
+                     "Early period start is limited by DW availability (2015-06 onward)."),
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_net_change_identical_endpoints_gives_zero",
+                         "test_net_change_planting_gives_positive_pp_per_year",
+                         "test_net_change_reference_is_not_fixed_by_the_stratum")),
     _ctx("kba_overlap", "Share of the site inside a Key Biodiversity Area.", "C1_landscape", "extent",
          "polygon_scalar", "Designation, not condition.", None, False, TAM, status="screening"),
     # ---------------------------------------------------------------- C2 vegetation / water
-    IndicatorContract(
+IndicatorContract(
         "ndvi", "Annual median Sentinel-2 NDVI over the site.", "C2_vegetation", "greenness",
         "polygon_mean", "site_window_mean", "least_disturbed_stratum", "tier2", "scoreable",
         "Observed vegetation condition vs least-disturbed windows of the same ecosystem.",
         "robust_z", "higher_is_better", "annual:ndvi_year", 10.0, False,
         Applicability(TM, "any", None, 10), inputs=("s2",), redundancy_groups=("R1_vegetation_signal",),
+        min_reference_n=MIN_REFERENCE_WINDOWS,
         current_defects=("X1 polygon mean vs pixel reference", "subdimension 'structure' shared with chm/lai/habitat_health")),
     _ctx("habitat_health", "p5(NDVI) / SD(NDVI) over the year (Darukaa index).", "C2_vegetation", "stability",
          "polygon_mean", "Unvalidated; penalises natural seasonality of deciduous systems.", 10.0, False, TM,
@@ -292,15 +393,18 @@ CONTRACTS: Dict[str, IndicatorContract] = {c.name: c for c in [
     _ctx("eii_functional", "Landler EII functional integrity (NPP-based).", "C2_vegetation", "function",
          "polygon_mean", "Too coarse for zone-level condition unless the site support rule is met.", None, False, TM,
          defects=("X6", "X7")),
-    IndicatorContract(
+IndicatorContract(
         "bii", "Biodiversity Intactness Index (modelled mean species abundance vs intact).", "C3_fauna",
         "abundance_intactness", "polygon_mean", "site_window_mean", "least_disturbed_stratum", "tier2",
         "scoreable", "Only fauna-pillar evidence; modelled product with disclosed caveat.",
         "robust_z", "higher_is_better", "annual:ndvi_year (BII v1.1, 2017-2025)", 100.0, True,
         Applicability(TM, "any", None, 10), inputs=("bii_v1_1",),
         redundancy_groups=("R3_compositional_intactness",), requires_sensitivity_check=True,
+        min_reference_n=MIN_REFERENCE_WINDOWS,
         limitations=("Modelled from land use and pressure: a low-HMI pool partly restates pressure (X2c); "
-                     "report a sensitivity benchmark using an ecoregion + PNV pool.",),
+                     "report a sensitivity benchmark using an ecoregion + PNV pool.",
+                     "100 m product: at the generic 10-pixel floor only sites >= 10 ha are applicable "
+                     "(Tata: only Deccan forest). Decision pending on a landscape-product exemption."),
         current_defects=("X1 polygon mean vs pixel reference",)),
     _ctx("pdf", "Land-use biodiversity loss proxy (DW class coefficient).", "C2_vegetation", "composition",
          "polygon_mean", "DW-label lookup; degenerate under DW stratification (live: 96 % of pool = 0.1).",
@@ -308,50 +412,76 @@ CONTRACTS: Dict[str, IndicatorContract] = {c.name: c for c in [
     _ctx("aridity_index", "Annual P / PET (CHIRPS / TerraClimate).", "C4_pressure", "climate_exposure",
          "polygon_mean", "Climate exposure, not site condition or a manageable pressure.", 4638.3, True, TAM,
          defects=("X7 sampled at 100 m",)),
-    IndicatorContract(
+IndicatorContract(
         "tspi", "Trophic state (Carlson TSI) from Sentinel-2 NDCI-derived chlorophyll-a, pure-water pixels.",
         "C2_vegetation", "water_quality", "water_body_unit", "water_body_unit", "comparable_water_bodies",
         "tier2", "scoreable", "Water quality vs comparable water bodies (size / permanence / basin).",
         "robust_z", "lower_is_better", "annual:ndvi_year (S2 median composite)", 20.0, False,
-        Applicability(AM, "open_water", "water_body", 10, 10), inputs=("s2",),
-        redundancy_groups=("R4_trophic_signal",),
+        Applicability(AM, "open_water", "water_body", None, MIN_PURE_WATER_PIXELS, None, "pure_water_pixels"),
+        inputs=("s2",), redundancy_groups=("R4_trophic_signal",), min_reference_n=MIN_COMPARABLE_WATER_BODIES,
         limitations=("Empirical NDCI -> chl-a coefficients not validated for Indian water bodies.",
                      "NDCI uses B5 (20 m): effective native resolution 20 m.",
                      "Naturally eutrophic shallow ponds: direction needs ecological review."),
-        current_defects=("reference = all regional water pixels, not comparable water bodies",
-                         "no pure-water / minimum-pixel guard")),
-    IndicatorContract(
-        "sabf", "Share of dates with a floating-algae bloom (FAI > 0.005) on pure-water pixels.",
+        current_defects=("reference = all regional water pixels, not comparable water bodies (Phase 4)",
+                         "no pure-water / minimum-pixel guard (Phase 4)")),
+IndicatorContract(
+        "sabf", "Share of dates with a floating-algae bloom (FAI > 0.005), averaged over the pure-water pixels of one water body.",
         "C2_vegetation", "algal_bloom_frequency", "water_body_unit", "water_body_unit", "comparable_water_bodies",
-        "tier2", "scoreable", "Bloom frequency vs comparable water bodies.", "robust_z", "lower_is_better",
-        "annual:ndvi_year (all S2 dates)", 20.0, False, Applicability(AM, "open_water", "water_body", 10, 10),
-        inputs=("s2",), limitations=("FAI threshold 0.005 is a Darukaa choice (item 14).",),
-        current_defects=("no water mask: land vegetation counted as bloom (X5)",)),
-    IndicatorContract(
-        "wcpi", "Water clarity 1/(TSM+1), TSM from Sentinel-2 red (Nechad-type), pure-water pixels.",
+        "tier2", "scoreable", "Bloom frequency vs comparable water bodies (E2 matching, documented minimum n).",
+        "reference_percentile", "lower_is_better", "annual:ndvi_year (all S2 dates, QA60-masked)", 20.0, False,
+        Applicability(AM, "open_water", "water_body", None, MIN_PURE_WATER_PIXELS, None, "pure_water_pixels"),
+        inputs=("s2",), min_reference_n=MIN_COMPARABLE_WATER_BODIES, expects_tied_reference=True,
+        limitations=("FAI threshold 0.005 is a Darukaa choice (item 14).",
+                     "Most clear water bodies have zero blooms: the reference is zero-inflated, so percentile.",
+                     "Unit value is the mean of per-pixel bloom frequencies over pure water only (no land, no mixed shore pixels)."),
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_sabf_uses_pure_water_only_and_land_never_counts_as_bloom",
+                         "test_water_body_reference_matches_e2_and_requires_min_n")),
+IndicatorContract(
+        "wcpi", "Water clarity 1/(TSM+1), TSM from Sentinel-2 red (Nechad-type), mean over pure-water pixels of one water body.",
         "C2_vegetation", "water_clarity", "water_body_unit", "water_body_unit", "comparable_water_bodies",
-        "tier2", "scoreable", "Clarity vs comparable water bodies.", "robust_z", "higher_is_better",
-        "annual:ndvi_year (S2 median composite)", 10.0, False,
-        Applicability(AM, "open_water", "water_body", 10, 10), inputs=("s2",),
+        "tier2", "scoreable", "Clarity vs comparable water bodies; RAW physical quantity for site and reference.",
+        "robust_z", "higher_is_better", "annual:ndvi_year (S2 median composite)", 10.0, False,
+        Applicability(AM, "open_water", "water_body", None, MIN_PURE_WATER_PIXELS, None, "pure_water_pixels"),
+        inputs=("s2",), min_reference_n=MIN_COMPARABLE_WATER_BODIES,
         limitations=("TSM coefficients not locally validated.",),
-        current_defects=("site value min-max normalised within the site (X3)",)),
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_wcpi_is_raw_and_independent_of_site_relative_range",
+                         "test_water_body_reference_matches_e2_and_requires_min_n")),
     _ctx("wsdi", "Sentinel-1 water-surface dynamism.", "C2_vegetation", "water_surface_dynamics",
          "water_body_unit", "Seasonal dynamism is natural for many wetlands (item 15 decision).", 10.0, False, AM),
     _ctx("hsas", "Habitat suitability aligned with eDNA detections.", "C2_vegetation", "habitat_suitability",
          "polygon_mean", "Needs eDNA; suitability layer is land-weighted (50 % NDVI).", 10.0, False, AM,
          status="pending_methodology", defects=("reference is suitability, site may be eDNA alignment",)),
-    _ctx("edpp", "eDNA preservation potential (survey design aid).", "C2_vegetation", "edna_persistence",
-         "polygon_mean", "Operational survey-design aid, not biodiversity condition.", 30.0, False, AM,
-         status="screening", image_is_single_band=False, site_relative_normalisation=True,
-         defects=("X3 site-relative thermal term", "X4 reference = LST degC")),
-    _ctx("mspl", "Microbial stress proxy (Darukaa composite).", "C2_vegetation", "microbial_stress",
-         "polygon_mean", "Unvalidated composite; overlaps tspi and wcpi.", 20.0, False, AM,
-         groups=("R4_trophic_signal",), image_is_single_band=False, site_relative_normalisation=True,
-         defects=("X3", "X4 reference = LST degC")),
-    _ctx("rci", "Riparian vegetation complexity in a 100 m ring around the water body.", "C1_landscape",
-         "riparian_complexity", "riparian_ring_unit", "Rebuild as ring vegetation cover vs comparable rings.",
-         10.0, False, TAM, status="pending_methodology", population="comparable_riparian_rings", tier="tier2",
-         defects=("reference = all pixels, not riparian rings (X5)", "Darukaa-weighted composite")),
+_ctx("edpp", "eDNA preservation potential (survey design aid): single-band index, ABSOLUTE thermal scaling.",
+         "C2_vegetation", "edna_persistence", "polygon_mean",
+         "Operational survey-design aid, not biodiversity condition.", 30.0, False, AM,
+         status="screening", image_is_single_band=True, site_relative_normalisation=False,
+         implementation_status="v0.2.8_synthetic_tested",
+         synthetic_tests=("test_edpp_mspl_use_absolute_thermal_scaling_and_a_single_band",)),
+_ctx("mspl", "Microbial stress proxy (Darukaa composite): single-band, ABSOLUTE thermal scaling.",
+         "C2_vegetation", "microbial_stress", "polygon_mean",
+         "Unvalidated composite; overlaps tspi and wcpi.", 20.0, False, AM,
+         groups=("R4_trophic_signal",), image_is_single_band=True, site_relative_normalisation=False,
+         implementation_status="v0.2.8_synthetic_tested",
+         synthetic_tests=("test_edpp_mspl_use_absolute_thermal_scaling_and_a_single_band",)),
+IndicatorContract(
+        "riparian_natural_veg_share", "E3: share of natural-vegetation pixels (Dynamic World trees, grass, flooded "
+        "vegetation, shrub) in the 100 m riparian ring around the water body; land only, all water excluded. "
+        "Replaces the retired 'Riparian Complexity Index' (rci), which measured no actual complexity.",
+        "C1_landscape", "riparian_condition", "riparian_ring_unit", "riparian_ring_unit",
+        "comparable_riparian_rings", "tier2", "scoreable",
+        "Riparian natural cover vs rings of comparable water bodies; same ring, vegetation definition and support "
+        "for target and reference.", "reference_percentile", "higher_is_better",
+        "annual:ndvi_year (DW mode)", 10.0, False,
+        Applicability(TAM, "any", "water_body", None, MIN_PURE_WATER_PIXELS, None, "pure_water_pixels"),
+        inputs=("dw_label",), min_reference_n=MIN_COMPARABLE_WATER_BODIES, expects_tied_reference=True,
+        limitations=("Natural = DW trees / grass / flooded vegetation / shrub (same class set as natural_habitat).",
+                     "Ring width 100 m is a Darukaa choice.",
+                     "Fully vegetated rings give ties at 1.0: percentile, not z-score."),
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_ring_metric_uses_the_same_ring_for_target_and_reference",
+                         "test_water_body_reference_matches_e2_and_requires_min_n")),
     _ctx("riparian_ndvi_trend", "NDVI trend in the riparian ring.", "C1_landscape", "hydrology",
          "riparian_ring_unit", "Context; needs the ring-unit reference if ever scored.", 10.0, False, TAM,
          population="comparable_riparian_rings", tier="tier2", defects=("X5",)),
@@ -364,13 +494,13 @@ CONTRACTS: Dict[str, IndicatorContract] = {c.name: c for c in [
     _ctx("lai", "MODIS leaf area index.", "C2_vegetation", "structure", "polygon_mean",
          "500 m pixels: landscape context for these zones; overlaps chm / ndvi.", 500.0, False, TM,
          groups=("R1_vegetation_signal",), defects=("X6", "X7")),
-    IndicatorContract(
+IndicatorContract(
         "chm", "Canopy height (ETH Global Canopy Height 2020).", "C2_vegetation", "structure",
         "polygon_mean", "site_window_mean", "least_disturbed_stratum", "tier2", "scoreable",
         "Vegetation structure vs least-disturbed windows of woody ecosystems.",
         "log_response_ratio", "higher_is_better", "static:2020", 10.0, False,
         Applicability(TM, "woody", None, 10), inputs=("eth_chm_2020",),
-        redundancy_groups=("R1_vegetation_signal",),
+        redundancy_groups=("R1_vegetation_signal",), min_reference_n=MIN_REFERENCE_WINDOWS,
         limitations=("Static 2020 snapshot: baseline only, not a monitoring signal.",),
         current_defects=("site read at 25 m, reference at 10 m", "X1", "no woody-ecosystem applicability check")),
     # ---------------------------------------------------------------- C3 representation (screening)
@@ -391,36 +521,53 @@ CONTRACTS: Dict[str, IndicatorContract] = {c.name: c for c in [
     _ctx("threatened_plant_richness", "Threatened plant richness.", "C3_fauna", "representation",
          "polygon_scalar", "Representation, not condition.", None, False, TAM, status="screening"),
     # ---------------------------------------------------------------- C4 pressure
-    IndicatorContract(
+IndicatorContract(
         "ghm", "Human modification (TNC HM v3, all threats combined, 2022).", "C4_pressure", "land_use_pressure",
         "polygon_mean", "site_window_mean", "regional_stratum_unfiltered", "tier2", "scoreable",
         "Pressure relative to the regional stratum, no pressure filter (item 3, option B).",
-        "robust_z", "lower_is_better", "static:2022", 90.0, True, Applicability(TAM, "any", None, None),
-        inputs=("hmi",), redundancy_groups=("R2_human_modification",),
-        current_defects=("site value read at 1,000 m (X6)", "X1")),
-    IndicatorContract(
+        "robust_z", "lower_is_better", "static:2022", 90.0, True,
+        Applicability(TAM, "any", None, None, None, None, "exempt_landscape_pressure"),
+        inputs=("hmi",), redundancy_groups=("R2_human_modification",), min_reference_n=MIN_REFERENCE_WINDOWS,
+        min_support_rationale="Landscape-level pressure: the 90 m value describes the surrounding landscape; a site "
+                              "below the product's resolution reports the covering pixel(s). Flagged in the report; "
+                              "to be confirmed against the D3 hard floor.",
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_ghm_site_is_read_at_native_90m",)),
+IndicatorContract(
         "light_pollution", "Mean VIIRS night-time radiance.", "C4_pressure", "direct_pressure",
         "polygon_mean", "site_window_mean", "regional_all", "tier1", "scoreable",
         "Pressure relative to the regional distribution (X8: Tier 1 is correct for pressures).",
-        "robust_z", "lower_is_better", "annual:ndvi_year", 463.83, False, Applicability(TAM, "any", None, None),
-        inputs=("viirs",), current_defects=("X1",)),
-    IndicatorContract(
+        "robust_z", "lower_is_better", "annual:ndvi_year", 463.83, False,
+        Applicability(TAM, "any", None, None, None, None, "exempt_landscape_pressure"),
+        inputs=("viirs",), min_reference_n=MIN_REFERENCE_WINDOWS,
+        min_support_rationale="Landscape-level pressure at ~463 m: reports the covering pixel(s) for small sites.",
+        current_defects=("X1",)),
+IndicatorContract(
         "hdi", "Built-up / settlement proximity pressure (Dynamic World built-up distance).", "C4_pressure",
         "built_up_pressure", "polygon_mean", "site_window_mean", "regional_all", "tier1", "scoreable",
         "Pressure relative to the regional distribution.", "robust_z", "lower_is_better",
-        "annual:ndvi_year (DW mode)", 10.0, False, Applicability(TAM, "any", None, None),
-        inputs=("dw_label",), redundancy_groups=("R5_built_up",), current_defects=("X1",)),
+        "annual:ndvi_year (DW mode)", 10.0, False,
+        Applicability(TAM, "any", None, None, None, None, "exempt_landscape_pressure"),
+        inputs=("dw_label",), redundancy_groups=("R5_built_up",), min_reference_n=MIN_REFERENCE_WINDOWS,
+        min_support_rationale="Proximity to built-up land is a landscape-level pressure: it is defined for sites "
+                              "of any size (a distance surface), so no polygon floor applies.",
+        current_defects=("X1",)),
     _ctx("lst_day", "MODIS day land-surface temperature.", "C4_pressure", "climate_exposure", "polygon_mean",
          "Climate exposure, not condition.", 1000.0, False, TAM, defects=("X7",)),
     _ctx("lst_night", "MODIS night land-surface temperature.", "C4_pressure", "climate_exposure", "polygon_mean",
          "Climate exposure, not condition.", 1000.0, False, TAM, defects=("X7",)),
-    IndicatorContract(
-        "sdi", "Share of the shoreline ring that is disturbed (crops, built, bare, road proxy).", "C4_pressure",
+IndicatorContract(
+        "sdi", "Share of the 100 m riparian ring (land only) that is disturbed (crops, built, bare, road proxy).", "C4_pressure",
         "shoreline_disturbance", "riparian_ring_unit", "riparian_ring_unit", "comparable_riparian_rings",
-        "tier2", "scoreable", "Shoreline pressure vs rings of comparable water bodies.", "robust_z",
-        "lower_is_better", "annual:ndvi_year (DW mode)", 10.0, False,
-        Applicability(AM, "open_water", "water_body", None, 10), inputs=("dw_label",),
-        current_defects=("reference = binary pixels over all land (X1, X5)",)),
+        "tier2", "scoreable", "Shoreline pressure vs rings of comparable water bodies; same ring and disturbance definition.",
+        "reference_percentile", "lower_is_better", "annual:ndvi_year (DW mode)", 10.0, False,
+        Applicability(AM, "open_water", "water_body", None, MIN_PURE_WATER_PIXELS, None, "pure_water_pixels"),
+        inputs=("dw_label",), min_reference_n=MIN_COMPARABLE_WATER_BODIES, expects_tied_reference=True,
+        limitations=("Road proxy = built-up edge, not a road dataset.",
+                     "Undisturbed shorelines give many zero shares: percentile, not z-score."),
+        implementation_status="v0.2.8_synthetic_tested",
+        synthetic_tests=("test_ring_metric_uses_the_same_ring_for_target_and_reference",
+                         "test_water_body_reference_matches_e2_and_requires_min_n")),
     _ctx("stsi", "Surface thermal stress (Landsat LST).", "C4_pressure", "direct_pressure", "polygon_mean",
          "Site-relative normalisation; context.", 30.0, False, TAM, site_relative_normalisation=True,
          defects=("X3",)),

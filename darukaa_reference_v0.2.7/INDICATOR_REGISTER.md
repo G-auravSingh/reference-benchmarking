@@ -20,7 +20,7 @@ Scored = active AND computed-eligible (has reference + uncertainty + baseline ti
 | `jrc_water_persistence` | hydrology | retain | ✅ | baseline | ratio | log_response_ratio | regional_distribution | terr/aqua/mixe | jrc_water | Hydrology/surface-water permanence. |
 | `riparian_ndvi_trend` | hydrology | context | — | contextual | interval | — | — | terr/aqua/mixe | sentinel2_ndvi | Trend-based (correct NDVI use); contextual at cycle-1. |
 | `net_forest_change_rate` | restoration_trajectory | retain | ✅ | baseline | interval | robust_z | regional_distribution | terr/mixe | hansen_gfc, dynamic_world |  |
-| `rci` | riparian_complexity | retain | ✅ | baseline | bounded | robust_z | regional_distribution | terr/aqua/mixe | sentinel2_ndvi | Riparian complexity; riparian strata only. Citation corrected (Naiman & Decamps 1997). |
+| `riparian_natural_veg_share` | riparian_condition | retain | ✅ | baseline | bounded | robust_z | regional_distribution | aqua/mixe | dynamic_world |  |
 
 ## C2 · Vegetation condition
 

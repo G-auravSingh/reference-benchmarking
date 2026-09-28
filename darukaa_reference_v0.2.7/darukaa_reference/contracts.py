@@ -90,13 +90,13 @@ C: Dict[str, dict] = {
  "jrc_water_persistence": dict(construct="C1_landscape", subdimension="hydrology", measurement_scale="ratio",
     reference_type="regional_distribution", reference_estimator="log_response_ratio",
     disposition="retain", input_layers=[JRC], note="Hydrology/surface-water permanence."),
- "rci": dict(construct="C1_landscape", subdimension="riparian_complexity", measurement_scale="bounded",
+ "riparian_natural_veg_share": dict(construct="C1_landscape", subdimension="riparian_condition", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[NDVI], module="conservation",
-    note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension -- "
-         "originally shared 'hydrology' with jrc_water_persistence (already scored there), "
-         "which would have averaged the two together; corrected. Citation corrected "
-         "(Naiman & Decamps 1997).")),
+    disposition="retain", input_layers=[DW], module="aquatic",
+    note=("v0.2.8 (decision E3): REDEFINED and RENAMED from rci ('Riparian Complexity Index', a Darukaa composite that "
+         "measured no actual complexity). Now the natural-vegetation share of the 100 m riparian ring around a water "
+         "body; benchmarked by percentile against the rings of comparable water bodies (see indicator_contract.py). "
+         "Registry-level v0.2.7 scoring is retained for parity until the v0.2.8 engine is wired (Phase 8).")),
  "riparian_ndvi_trend": dict(construct="C1_landscape", subdimension="hydrology", measurement_scale="interval",
     disposition="context", input_layers=[NDVI], note="Trend-based (correct NDVI use); contextual at cycle-1."),
 

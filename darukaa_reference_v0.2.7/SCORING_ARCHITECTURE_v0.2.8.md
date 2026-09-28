@@ -1,6 +1,6 @@
 # Scoring Architecture and Indicator Contract — v0.2.8
 
-**Status: Phases 1–2 delivered on branch `v0.2.8-contract`. Nothing here is active in the production pipeline yet.**
+**Status: Phases 1–3 delivered on branch `v0.2.8-contract`. The v0.2.8 engine is NOT wired into the production pipeline; `main` (and Colab) stay on v0.2.7.**
 
 | Item | Where it is |
 |---|---|
@@ -193,14 +193,38 @@ The run also checks the Earth Engine assumptions A1 and A2 and the cost of the w
 
 ### Phase 8: reporting (§5), across JSON, CSV and HTML
 
-## 8. Decisions still needed from you
+## 8. Decisions taken (Phase 3 brief) and how they are implemented
 
-| # | Decision | Proposal |
+| # | Decision | Implementation |
 |---|---|---|
-| D2 | natural_habitat reference | Absolute level (100 % natural), reporting the regional window distribution alongside |
-| D3 | Site-support rule N; minimum pure-water pixels | N = 10 native pixels; 10 pure-water pixels |
-| D5 | net_forest_change_rate definition | DW tree-cover share, early vs recent window, percentage points per year |
-| E1 | Estimator for zero-inflated rates | `reference_percentile` for forest_loss_rate |
-| E2 | Water-body matching | Area within ×3; permanence within ±0.25; same ecoregion (basin optional) |
-| E3 | rci definition | Natural-vegetation share of a 100 m riparian ring |
-| E4 | forest_loss_rate live validation site | Tata may have no zone with ≥ 5 ha forest baseline. If so, use a forested non-Tata test polygon |
+| D2 | natural_habitat: benchmark = site-sized windows in the regional/ecoregional population; keep 100 % natural as a separate diagnostic | population `regional_ecoregion` (no land-cover stratum, no pressure filter); percentile estimator; `absolute_natural_reference` diagnostic reported beside, never inside, the score |
+| D3 | Generic hard floor 10 native pixels; indicator-specific floors where justified; aquatic ≥ 10 pure-water px + valid water-body geometry; explicit in contract | `Applicability.min_native_pixels=10`, `indicator_min_native_pixels` (natural_habitat, net_forest_change_rate: 100 px, rationale recorded), `floor_basis` (`polygon_native_pixels` / `pure_water_pixels` / `exempt_landscape_pressure`). **Landscape pressures (ghm, hdi, light_pollution) are exempt from the polygon floor: my assumption, needs your confirmation.** |
+| D5 | net_forest_change_rate rebuilt on one product/time series | Dynamic World tree-cover share, early (2017–18) vs recent (ndvi_year−1..ndvi_year), pp/yr between period mid-points; one function builds both endpoints; no Hansen. Percentile estimator (tie-heavy reference). |
+| E1 | forest loss: empirical percentile/CDF; explicit direction, ties, zero windows; keep distribution and n | `reference_percentile`, `lower_is_better`, mid-rank ties, `fraction_reference_zero`, `p_reference_tied/worse/better`, `reference_n`, DKW 95 % half-width |
+| E2 | Comparable water bodies: area ratio in [1/3, 3], \|permanence difference\| ≤ 0.25; documented minimum n; `reference_n` exposed; otherwise `reference_available_but_not_scoreable` | `MIN_COMPARABLE_WATER_BODIES = 10` (my proposal), radius ladder 10/25/50 km, funnel counts (`n_rejected_size`, `n_rejected_permanence`, …) in the audit trail |
+| E3 | RCI → 100 m riparian-ring natural-vegetation proportion, honestly named | `rci` retired; `riparian_natural_veg_share` (same ring, DW natural classes, land only, all water excluded, for target and every reference ring) |
+| E4 | External forested validation polygon, labelled, never in Tata scoring | `SiteEvidence.validation_dataset_label`; `project_assessments()` drops validation-only results. **The polygon itself is not chosen yet.** |
+
+## 9. Phase 3 delivered
+
+New modules: `constructs.py` (shared constants), `benchmarking.py` (engine), `reference_builders.py` (numpy definitions),
+`reference_builders_ee.py` (Earth Engine builders + shared water-body selection rule). Tests: 175 passing (112 before Phase 3).
+
+**Engine guarantees (each has a test):** every site/reference pair passes construct, unit, temporal, spatial-support and
+population checks or the indicator is `reference_available_but_not_scoreable` with the violations listed; a zero-inflated
+or tie-heavy reference can never reach robust-z / log-response-ratio (explicit `suppressed_for_stability`, never a silent
+fall-through); nine explicit statuses, each with a reason; `no_reference` cannot be produced; Tier-1 and Tier-2
+references are both kept visible; minimum reference n is enforced from the contract.
+
+### Defects found while implementing (not in the earlier audit)
+1. **forest_loss_rate year counts (a numbers change).** Windows were divided by 24 / 5 / 2 for windows that contain
+   25 / 6 / 3 annual loss codes. v0.2.7 rates were therefore too high by 4 % (long-term), 20 % (2020–25) and 50 % (2023–25).
+2. **forest_loss_rate numerator (a numbers change).** Loss was counted on any pixel with canopy > 0 % but divided by a
+   ≥ 30 % canopy baseline, so the numerator was not a subset of the denominator.
+
+## 10. Still to do (Phase 5 first task: wiring)
+
+The v0.2.8 engine and builders are not called by `ReferenceSelector.compute()` yet. The Phase 5 work is to:
+1. orchestrate per-tile evidence (domain, ecosystem tags, forest baseline, water body), site values and references, and call
+   `evaluate_indicator`; 2. write both reference tiers and the nine statuses to JSON / CSV / HTML (Phase 8 wording);
+3. verify the Earth Engine assumptions A1 / A2 and the cost of window and water-body builders on EMU_Deccan_forest.

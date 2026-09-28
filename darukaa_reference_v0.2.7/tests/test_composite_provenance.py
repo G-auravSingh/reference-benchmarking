@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from darukaa_reference.indicators import create_default_registry
 
-_COMPOSITES = ["mspl", "edpp", "rci", "sabf", "iri", "hsas", "wsdi"]
+_COMPOSITES = ["mspl", "edpp", "sabf", "iri", "hsas", "wsdi", "riparian_natural_veg_share"]  # rci retired in v0.2.8 (E3)
 _REQUIRED_KEYS = {"literature_component", "darukaa_transformation", "darukaa_weights", "validation_status"}
 
 
@@ -45,25 +45,23 @@ def test_every_aquatic_pressure_composite_has_structured_provenance():
         assert provenance["validation_status"], f"{name}: validation_status must not be empty"
 
 
-def test_rci_and_sabf_no_longer_silently_over_attributed():
-    """The two real gaps this item found: rci's weighted composite formula was
-    bare-cited with no Darukaa-origin disclosure; sabf's bloom threshold was
-    undisclosed. Both citations must now name Darukaa explicitly."""
+def test_sabf_disclosed_and_rci_replaced_by_an_honestly_named_indicator():
+    """sabf's threshold is disclosed as Darukaa's; the retired 'Riparian Complexity Index' (rci) measured no
+    actual complexity, so v0.2.8 (decision E3) replaced it with riparian_natural_veg_share."""
     reg = create_default_registry()
-    rci_citation = reg.get("rci").citation.lower()
-    assert "darukaa" in rci_citation
-    assert "naiman" in rci_citation  # the real literature motivation stays, just not overstated
-
+    assert "rci" not in reg
     sabf_citation = reg.get("sabf").citation.lower()
-    assert "darukaa" in sabf_citation
-    assert "hu c (2009)" in sabf_citation or "hu (2009)" in sabf_citation
+    assert "darukaa" in sabf_citation and ("hu c (2009)" in sabf_citation or "hu (2009)" in sabf_citation)
+    new = reg.get("riparian_natural_veg_share")
+    assert "complexity" not in new.display_name.lower()
+    assert "retired" in new.citation.lower() and "riparian complexity index" in new.citation.lower()
 
 
 def test_composites_with_real_weighted_formulas_report_their_weights():
     """rci, mspl, iri, hsas are genuine Darukaa weighted composites -- their
     provenance must carry the real weights, not None."""
     reg = create_default_registry()
-    for name in ("rci", "mspl", "iri", "hsas"):
+    for name in ("mspl", "iri", "hsas"):
         weights = reg.get(name).metadata["provenance"]["darukaa_weights"]
         assert weights is not None, f"{name} is a weighted composite; darukaa_weights must be populated"
         assert abs(sum(weights.values()) - 1.0) < 1e-6, f"{name}'s weights must sum to 1.0"
