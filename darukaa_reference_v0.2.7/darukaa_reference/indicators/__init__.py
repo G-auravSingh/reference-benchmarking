@@ -1596,7 +1596,11 @@ def create_default_registry() -> IndicatorRegistry:
                  "this indicator no longer uses. The actual live asset (see _img_ghm) is "
                  "TNC/HM/v3/90m_s, a 2022 static snapshot at 90m -- this is that dataset's "
                  "real, current methodology paper."),
-        tier2_eligible=False, higher_is_better=False, reference_radius_km=50.0, pillar=5,
+        # tier2_eligible=True (2026-09-28): reference.py already contains a dedicated
+        # independent-reference Tier-2 path for ghm (audit item 3, Option B); with
+        # tier2_eligible=False that path was UNREACHABLE in a real run (compute() skips
+        # Tier 2 entirely). Only ghm changes -- hdi/light_pollution/iri/cpland stay Tier-1-only.
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=5,
         metadata={"gee_image_fn": _img_ghm, "tnfd_dim": "threats",
                  "note": "TNC HM v3, 90m, 2022 static snapshot (All_threats_combined band)."})
 
