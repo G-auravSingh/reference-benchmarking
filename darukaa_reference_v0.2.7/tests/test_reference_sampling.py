@@ -193,24 +193,42 @@ def test_sparse_mask_triggers_bounded_oversampling_never_coarsening():
     assert d["reference_sample_n"] == 15000
 
 
-def test_oversampling_is_capped_and_accepts_a_genuinely_small_population():
+def test_stop_rule_ends_retries_when_a_larger_request_returns_no_more_pixels():
     calls = []
     img = _FakeImage(calls, valid_by_request={5000: 40, 20000: 40, 40000: 40})
     out = _selector()._sample_reference_stats(None, img, "R", 10, label="tier2")
     sizes = [kw["numPixels"] for name, kw in calls if name == "sample"]
-    assert sizes == [5000, 20000, 40000] and max(sizes) <= 40000
-    assert out["sampling_diagnostics"]["reference_sample_n"] == 40   # recorded, not hidden
+    assert sizes == [5000, 20000]                       # third, identical, expensive request is NOT made
+    d = out["sampling_diagnostics"]
+    assert d["reference_sample_stop_reason"] == "indicator_valid_population_below_requested_sample"
+    assert d["reference_sample_counts_by_attempt"] == [{"requested": 5000, "valid": 40},
+                                                        {"requested": 20000, "valid": 40}]
+    assert d["reference_sample_n"] == 40                 # actual valid count recorded, not hidden
 
 
-def test_tier2_sample_is_taken_after_the_reference_masks(monkeypatch):
-    if not _try_ee():
-        pytest.skip("ee not importable")
-    import ee
-    monkeypatch.setattr(ee, "Number", lambda x: x)   # avoid needing an initialised EE session
+def test_stop_rule_on_an_empty_population_stops_after_two_attempts():
     calls = []
-    _selector()._extract_tier2_stats(_FakeGhm(), 0.05, _FakeImage(calls), "GEOM", spec=None)
-    names = [c[0] for c in calls]
-    assert names.index("updateMask") < names.index("clip") < names.index("sample")
+    img = _FakeImage(calls, valid_by_request={5000: 0, 20000: 0, 40000: 0})
+    out = _selector()._sample_reference_stats(None, img, "R", 30, label="tier2")
+    assert [kw["numPixels"] for n, kw in calls if n == "sample"] == [5000, 20000]
+    assert out == {**out} and out["sampling_diagnostics"]["reference_sample_n"] == 0
+    assert out["sampling_diagnostics"]["reference_sample_stop_reason"] == \
+        "indicator_valid_population_below_requested_sample"
+
+
+def test_growing_counts_keep_retrying_until_cap_and_report_the_cap():
+    calls = []
+    img = _FakeImage(calls, valid_by_request={5000: 300, 20000: 1200, 40000: 2400})
+    out = _selector()._sample_reference_stats(None, img, "R", 10, label="tier2")
+    assert [kw["numPixels"] for n, kw in calls if n == "sample"] == [5000, 20000, 40000]
+    assert out["sampling_diagnostics"]["reference_sample_stop_reason"] == "max_sample_cap_reached"
+    assert out["sampling_diagnostics"]["reference_sample_n"] == 2400
+
+
+def test_met_request_reports_requested_sample_met():
+    out = _selector()._sample_reference_stats(None, _FakeImage([]), "R", 10, label="t")
+    assert out["sampling_diagnostics"]["reference_sample_stop_reason"] == "requested_sample_met"
+    assert len(out["sampling_diagnostics"]["reference_sample_counts_by_attempt"]) == 1
 
 
 def _try_ee():
@@ -326,3 +344,146 @@ def test_compute_carries_required_diagnostics_timing_and_percentile_end_to_end()
         assert ("siteA", "chm", stage) in stages, stage
     assert all({"site_id", "indicator", "stage", "elapsed_seconds", "n_reference_pixels"} <= set(t)
                for t in sel.timing_log)
+
+
+# =====================================================================================
+# Population-restricted Tier-2 sampling (2026-09-28)
+# A semantic fake of ee.Image.stratifiedSample / ee.Image.sample that follows Google's documented
+# behaviour: stratifiedSample's numPoints is the DEFAULT for every class and classValues/classPoints
+# only override the listed classes; sample() draws numPixels points from the WHOLE region and only
+# then drops masked ones (dropNulls is a post-filter).
+# =====================================================================================
+import types
+
+
+class _FC:
+    def __init__(self, feats): self.feats = feats
+    def filter(self, pred): return _FC([f for f in self.feats if pred(f)])
+    def aggregate_array(self, name): return _FC([f[name] for f in self.feats])
+    def getInfo(self): return self.feats
+
+
+class _SemImage:
+    """zone = n_valid valid pixels (values ~ N(50,5)) + n_invalid masked pixels (unmasked -> 0)."""
+    def __init__(self, n_valid=20000, n_invalid=180000, rec=None, dist=(50.0, 5.0)):
+        rng = np.random.default_rng(0)
+        self.valid_vals = rng.normal(dist[0], dist[1], n_valid)
+        self.n_invalid = n_invalid
+        self.rec = rec if rec is not None else {}
+    # chain methods used by production code
+    def select(self, b): return self
+    def rename(self, n): return self
+    def unmask(self, x): return self
+    def addBands(self, o): return self
+    def mask(self): return self
+    def toInt(self): return self
+    def updateMask(self, m): self.rec.setdefault("order", []).append("updateMask"); return self
+    def clip(self, g): self.rec.setdefault("order", []).append("clip"); return self
+
+    def stratifiedSample(self, numPoints, classBand, region, scale, seed, classValues, classPoints,
+                         dropNulls, tileScale, geometries):
+        self.rec.setdefault("order", []).append("stratifiedSample")
+        self.rec["strat"] = dict(numPoints=numPoints, classBand=classBand, scale=scale, seed=seed,
+                                 classValues=classValues, classPoints=classPoints, tileScale=tileScale)
+        rng = np.random.default_rng(seed)
+        feats = []
+        for cls, pool in ((0, np.zeros(self.n_invalid)), (1, self.valid_vals)):
+            n_c = classPoints[classValues.index(cls)] if cls in classValues else numPoints
+            k = int(min(n_c, pool.size))
+            idx = rng.choice(pool.size, k, replace=False) if k else []
+            feats += [{"v": float(pool[i]), "valid": cls} for i in idx]
+        return _FC(feats)
+
+    def sample(self, region, scale, numPixels, seed, dropNulls, geometries, tileScale):
+        self.rec.setdefault("order", []).append("sample")
+        rng = np.random.default_rng(seed)
+        pool = np.concatenate([self.valid_vals, np.full(self.n_invalid, np.nan)])
+        k = int(min(numPixels, pool.size))
+        drawn = pool[rng.choice(pool.size, k, replace=False)]
+        return _FC([{"v": (None if np.isnan(x) else float(x))} for x in drawn if not (dropNulls and np.isnan(x))])
+
+
+def _patch_ee_filter(monkeypatch):
+    import ee
+    monkeypatch.setattr(ee, "Filter", types.SimpleNamespace(eq=lambda k, v: (lambda f: f[k] == v)), raising=False)
+    return ee
+
+
+def test_the_v2_diagnostic_bug_is_reproduced_by_numPoints_default_and_fixed_by_zero():
+    """v2 Part 4 called stratifiedSample(numPoints=N, classValues=[1], classPoints=[N]): numPoints applies to
+    the UNLISTED class 0 too, so half the sample was masked pixels unmasked to 0 (n=10000, KS~0.5,
+    MAD==median, p25==0 in every row). numPoints=0 returns only the valid class."""
+    img = _SemImage()
+    bad = img.stratifiedSample(5000, "valid", "Z", 10, 1, [1], [5000], True, 4, False).feats
+    assert len(bad) == 10000 and sum(1 for f in bad if f["valid"] == 0) == 5000
+    good = img.stratifiedSample(0, "valid", "Z", 10, 1, [1], [5000], True, 4, False).feats
+    assert len(good) == 5000 and all(f["valid"] == 1 for f in good)
+
+
+def test_restricted_sampler_returns_only_valid_points_with_the_intended_call(monkeypatch):
+    _patch_ee_filter(monkeypatch)
+    rec = {}
+    sel = _selector()
+    import ee
+    vals = sel._population_restricted_values(ee, _SemImage(rec=rec), "ZONE", 10, 5000, 12345, 4)
+    assert len(vals) == 5000 and min(vals) > 20.0                 # no masked-pixel zeros
+    assert rec["strat"] == dict(numPoints=0, classBand="valid", scale=10, seed=12345,
+                                classValues=[1], classPoints=[5000], tileScale=4)
+
+
+def test_restricted_stats_diagnostics_and_gate_input(monkeypatch):
+    _patch_ee_filter(monkeypatch)
+    import ee
+    sel = _selector()
+    out = sel._sample_reference_stats(ee, _SemImage(), "ZONE", 10, label="tier2",
+                                      population="pop", restricted=True)
+    d = out["sampling_diagnostics"]
+    assert d["reference_sampling_method"] == "population_restricted_stratified_sample"
+    assert d["reference_sample_requested"] == 5000 and d["reference_sample_n"] == 5000
+    assert d["reference_sample_stop_reason"] == "requested_sample_met"
+    assert d["reference_sample_tilescale"] == 4 and d["effective_scale_m"] == 10
+    assert len(out["pixels"]) == 5000 and out["n"] == 5000       # real values reach the stability gate
+    assert abs(out["median"] - 50.0) < 0.5 and abs(1.4826 * out["mad"] - 5.0) < 0.3
+    assert sel._reference_accepted(dict(out)) is True
+
+
+def test_restricted_sampler_reports_when_the_valid_population_is_smaller_than_requested(monkeypatch):
+    _patch_ee_filter(monkeypatch)
+    import ee
+    out = _selector()._sample_reference_stats(ee, _SemImage(n_valid=300), "ZONE", 10, label="tier2", restricted=True)
+    d = out["sampling_diagnostics"]
+    assert d["reference_sample_n"] == 300
+    assert d["reference_sample_stop_reason"] == "valid_population_smaller_than_requested_sample"
+
+
+def test_equivalence_check_agrees_when_both_samplers_draw_the_same_population(monkeypatch):
+    _patch_ee_filter(monkeypatch)
+    import ee
+    sel = _selector(reference_sampling_equivalence_check=True, reference_sampling_check_draw_pixels=100000)
+    out = sel._sample_reference_stats(ee, _SemImage(), "ZONE", 10, label="tier2", restricted=True)
+    ec = out["sampling_diagnostics"]["equivalence_check"]
+    assert ec["legacy_n"] > 1000 and ec["restricted_n"] == 5000
+    assert ec["ks_p"] > 0.01 and abs(ec["median_diff_in_legacy_se"]) < 4
+    assert set(ec["quantiles_legacy"]) == {"p10", "p25", "p50", "p75", "p90"}
+    assert len(ec["hist_legacy"]) == 10 and len(ec["hist_restricted"]) == 10
+
+
+def test_equivalence_summary_flags_a_real_difference():
+    rng = np.random.default_rng(1)
+    same = ReferenceSelector._equivalence_summary(rng.normal(0, 1, 500), rng.normal(0, 1, 5000))
+    diff = ReferenceSelector._equivalence_summary(rng.normal(0, 1, 500), np.r_[np.zeros(5000), rng.normal(0, 1, 5000)])
+    assert same["ks_p"] > 0.01 and diff["ks_p"] < 1e-6
+    assert ReferenceSelector._equivalence_summary([1.0], [2.0, 3.0]).get("note")
+
+
+def test_tier2_extraction_uses_restricted_by_default_after_all_masks_and_legacy_when_configured(monkeypatch):
+    _patch_ee_filter(monkeypatch)
+    import ee
+    monkeypatch.setattr(ee, "Number", lambda x: x)
+    rec = {}
+    _selector()._extract_tier2_stats(_FakeGhm(), 0.05, _SemImage(rec=rec), "GEOM", spec=None)
+    assert rec["order"] == ["updateMask", "clip", "stratifiedSample"]      # sampling AFTER every mask
+    rec2 = {}
+    _selector(reference_sampling_method="whole_zone_draw")._extract_tier2_stats(
+        _FakeGhm(), 0.05, _SemImage(rec=rec2), "GEOM", spec=None)
+    assert "stratifiedSample" not in rec2["order"] and rec2["order"][-1] == "sample"

@@ -882,7 +882,9 @@ class ReferenceSelector:
         ref_mask = ghm_zone.lte(ee.Number(threshold))
         ind_ref = indicator_image.updateMask(ref_mask).clip(geometry)
         scale = self._effective_scale(spec)
-        return self._sample_reference_stats(ee, ind_ref, geometry, scale, label="tier2")
+        method = getattr(self.config, "reference_sampling_method", "population_restricted")
+        return self._sample_reference_stats(ee, ind_ref, geometry, scale, label="tier2",
+                                            restricted=(method != "whole_zone_draw"))
 
     # Independent audit item 4, real known native resolutions confirmed
     # directly this session (not guessed): every reference reduceRegion
@@ -948,8 +950,49 @@ class ReferenceSelector:
         finally:
             self._log_timing(stage, time.perf_counter() - t0, info.get("n"))
 
+    def _population_restricted_values(self, ee, image, region, scale, n, seed, tile_scale):
+        """Draw up to `n` values DIRECTLY from the valid (unmasked) pixels of `image`.
+
+        stratifiedSample on a 0/1 validity band. IMPORTANT (a bug in the first diagnostic):
+        `numPoints` is the default for EVERY class and `classValues/classPoints` only override
+        the listed ones, so numPoints must be 0 or the masked class (0) is sampled too. As a
+        second guard only points whose validity band == 1 are kept."""
+        v = image.select(0).rename("v")
+        img = v.unmask(0).addBands(v.mask().rename("valid").toInt())
+        fc = img.stratifiedSample(numPoints=0, classBand="valid", region=region, scale=scale,
+                                  seed=seed, classValues=[1], classPoints=[n], dropNulls=True,
+                                  tileScale=tile_scale, geometries=False)
+        vals = fc.filter(ee.Filter.eq("valid", 1)).aggregate_array("v").getInfo() or []
+        return [v_ for v_ in vals if v_ is not None]
+
+    @staticmethod
+    def _equivalence_summary(legacy, restricted) -> Dict[str, Any]:
+        """Compare a whole-zone draw with the population-restricted sample (same population)."""
+        from scipy import stats as _st
+        a = np.asarray(legacy, dtype=float); b = np.asarray(restricted, dtype=float)
+        out: Dict[str, Any] = {"legacy_n": int(a.size), "restricted_n": int(b.size)}
+        if a.size < 2 or b.size < 2:
+            out["note"] = "too few points for a comparison"
+            return out
+        qs = (10, 25, 50, 75, 90)
+        out["quantiles_legacy"] = {f"p{q}": float(np.percentile(a, q)) for q in qs}
+        out["quantiles_restricted"] = {f"p{q}": float(np.percentile(b, q)) for q in qs}
+        ks = _st.ks_2samp(a, b)
+        out["ks_stat"], out["ks_p"] = float(ks.statistic), float(ks.pvalue)
+        lo, hi = float(min(a.min(), b.min())), float(max(a.max(), b.max()))
+        if hi > lo:
+            edges = np.linspace(lo, hi, 11)
+            out["hist_edges"] = [float(e) for e in edges]
+            out["hist_legacy"] = [round(float(x), 4) for x in np.histogram(a, edges)[0] / a.size]
+            out["hist_restricted"] = [round(float(x), 4) for x in np.histogram(b, edges)[0] / b.size]
+        mad_l = float(np.median(np.abs(a - np.median(a))))
+        se = 1.2533 * 1.4826 * mad_l / np.sqrt(a.size) if mad_l > 0 else 0.0
+        out["median_diff_in_legacy_se"] = (round(float((np.median(b) - np.median(a)) / se), 3) if se else None)
+        return out
+
     def _sample_reference_stats(self, ee, image, region, scale, label: str,
-                                population: str | None = None) -> Dict[str, Any]:
+                                population: str | None = None,
+                                restricted: bool = False) -> Dict[str, Any]:
         """Deterministic native-resolution reference sample -> statistics.
 
         image  : ALREADY-MASKED reference image (sampling happens after every mask).
@@ -966,7 +1009,45 @@ class ReferenceSelector:
         factor = max(2, int(getattr(cfg, "reference_sample_oversample_factor", 4)))
         min_frac = float(getattr(cfg, "reference_sample_min_fraction", 0.5))
 
+        if restricted:
+            # Sample DIRECTLY from the valid population (one call, no oversampling ladder).
+            t0 = time.perf_counter()
+            values = self._population_restricted_values(ee, image, region, scale, n_cfg, seed, tile_scale)
+            self._log_timing(f"reference_sampling_{label}", time.perf_counter() - t0, len(values))
+            parsed = reference_stats_from_values(values)
+            parsed["effective_scale_m"] = scale
+            diag = {
+                "reference_sampling_method": "population_restricted_stratified_sample",
+                "reference_sample_requested": n_cfg,
+                "reference_sample_n": len(values),
+                "reference_sample_seed": seed,
+                "reference_sample_tilescale": tile_scale,
+                "effective_scale_m": scale,
+                "reference_population_definition": population,
+                "reference_stat_source": "values sampled directly from the valid reference pixels at native scale",
+                "reference_sample_stop_reason": ("requested_sample_met" if len(values) >= n_cfg
+                                                 else "valid_population_smaller_than_requested_sample"),
+            }
+            if getattr(cfg, "reference_sampling_equivalence_check", False) and len(values) > 1:
+                n_chk = int(getattr(cfg, "reference_sampling_check_draw_pixels", 40000))
+                try:
+                    fc = (image.select(0).rename("v").sample(region=region, scale=scale, numPixels=n_chk,
+                          seed=seed, dropNulls=True, geometries=False, tileScale=tile_scale))
+                    legacy = [x for x in (fc.aggregate_array("v").getInfo() or []) if x is not None]
+                    diag["equivalence_check"] = self._equivalence_summary(legacy, values)
+                    ec = diag["equivalence_check"]
+                    if ec.get("ks_p") is not None and ec["ks_p"] < 1e-3:
+                        logger.warning(f"SAMPLER EQUIVALENCE CHECK ({label}): population-restricted and whole-zone "
+                                       f"samples differ (KS={ec['ks_stat']:.3f}, p={ec['ks_p']:.2g}).")
+                except Exception as e:
+                    diag["equivalence_check"] = {"error": str(e)[:120]}
+            parsed["sampling_diagnostics"] = diag
+            return parsed
+
+        growth_tol = float(getattr(cfg, "reference_sample_growth_tolerance", 0.10))
         n_req, attempts, values = n_cfg, 0, []
+        history: list = []          # [{"requested": N, "valid": n}, ...] one entry per attempt
+        stop_reason = None
         t0 = time.perf_counter()
         while True:
             attempts += 1
@@ -974,7 +1055,18 @@ class ReferenceSelector:
                   .sample(region=region, scale=scale, numPixels=n_req, seed=seed,
                           dropNulls=True, geometries=False, tileScale=tile_scale))
             values = [v for v in (fc.aggregate_array("v").getInfo() or []) if v is not None]
-            if len(values) >= min_frac * n_req or n_req >= max_px:
+            history.append({"requested": n_req, "valid": len(values)})
+            if len(values) >= min_frac * n_req:
+                stop_reason = "requested_sample_met"
+                break
+            if n_req >= max_px:
+                stop_reason = "max_sample_cap_reached"
+                break
+            # STOP RULE (2026-09-28): a larger request that does not return (about) more valid
+            # pixels than the previous one cannot recover pixels that are not there -- stop
+            # instead of paying for further identical, expensive requests.
+            if attempts >= 2 and len(values) <= history[-2]["valid"] * (1.0 + growth_tol):
+                stop_reason = "indicator_valid_population_below_requested_sample"
                 break
             n_req = min(n_req * factor, max_px)
         self._log_timing(f"reference_sampling_{label}", time.perf_counter() - t0, len(values))
@@ -986,6 +1078,8 @@ class ReferenceSelector:
             "reference_sample_requested": n_req,
             "reference_sample_requested_initial": n_cfg,
             "reference_sample_attempts": attempts,
+            "reference_sample_counts_by_attempt": history,
+            "reference_sample_stop_reason": stop_reason,
             "reference_sample_n": len(values),
             "reference_sample_seed": seed,
             "reference_sample_tilescale": tile_scale,

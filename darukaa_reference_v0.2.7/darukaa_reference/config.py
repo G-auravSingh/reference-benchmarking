@@ -152,6 +152,17 @@ class Config:
     reference_sample_max_pixels: int = 40000   # hard ceiling when oversampling a sparse mask
     reference_sample_oversample_factor: int = 4  # request multiplier on each retry
     reference_sample_min_fraction: float = 0.5   # retry if valid n < this * requested
+    reference_sample_growth_tolerance: float = 0.10  # stop retrying if valid n grows <10% between attempts
+    # Tier-2 sampling method. "population_restricted" (default) draws the sample DIRECTLY from the
+    # valid reference pixels (ee.Image.stratifiedSample on a validity band); "whole_zone_draw" is the
+    # previous behaviour (sample() over the whole zone, then dropNulls), which wastes ~99% of draws on
+    # masked pixels (live single-tile run: 40,000 draws -> ~350 valid points).
+    reference_sampling_method: str = "population_restricted"
+    # When True, every population-restricted Tier-2 sample is ALSO compared with a whole-zone draw of
+    # reference_sampling_check_draw_pixels points (KS test, quantiles, histogram) and the result is
+    # recorded in the diagnostics. Costs extra time -- meant for the single-tile acceptance run.
+    reference_sampling_equivalence_check: bool = False
+    reference_sampling_check_draw_pixels: int = 40000
 
     # OD-4 — SEED similarity-to-reference kernel (Eq. 1 in McElderry et al. 2024):
     # K = exp[-delta (x-x_r)^T C_r^-1 (x-x_r)] — a genuine Mahalanobis-distance kernel
