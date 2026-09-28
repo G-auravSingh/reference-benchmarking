@@ -28,6 +28,9 @@ Human Modification Index
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
+
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
@@ -95,12 +98,41 @@ class ReferenceResult:
     # This is what makes a live run's JSON report self-sufficient for validation: no
     # separate diagnostic export is needed, everything is in the standard report.
     stratification_diagnostics: Dict[str, Any] = field(default_factory=dict)
+    # Tier 1 reference-sampling diagnostics (Tier 2's live in stratification_diagnostics).
+    tier1_sampling_diagnostics: Dict[str, Any] = field(default_factory=dict)
 
     metadata: Dict[str, Any] = field(default_factory=dict)
     extraction_metadata: Dict[str, Any] = field(default_factory=dict)
     # extraction_metadata: populated from extract_fn return dict["metadata"]
     # Contains species lists for biodiversity indicators (threatened_richness,
     # ceri, endemic_richness). Not all indicators populate this field.
+
+
+# Process-wide timing log (every ReferenceSelector appends here) so a notebook can summarise
+# a whole run without needing a handle on each per-tile selector.
+TIMING_LOG: list = []
+
+
+def reference_stats_from_values(values) -> Dict[str, Any]:
+    """Reference statistics computed from SAMPLED native-resolution values (pure numpy --
+    no GEE, directly unit-testable). MAD is the true median(|x - median|) of the sampled
+    values (NOT SD, NOT a coarsened image). Returns {} when there are no finite values."""
+    x = np.asarray([v for v in np.atleast_1d(values).ravel() if v is not None], dtype=float)
+    x = x[np.isfinite(x)]
+    if x.size == 0:
+        return {}
+    med = float(np.median(x))
+    return {
+        "mean": float(np.mean(x)),
+        "median": med,
+        "std": float(np.std(x, ddof=1)) if x.size > 1 else 0.0,
+        "mad": float(np.median(np.abs(x - med))),
+        "p25": float(np.percentile(x, 25)),
+        "p75": float(np.percentile(x, 75)),
+        "p90": float(np.percentile(x, 90)),
+        "n": int(x.size),
+        "pixels": x,
+    }
 
 
 class ReferenceSelector:
@@ -117,6 +149,8 @@ class ReferenceSelector:
     def __init__(self, config: Config):
         self.config = config
         self._gee_initialised = False
+        self.timing_log: list = []          # one dict per timed stage (see _log_timing)
+        self._timing_ctx = ("?", "?")       # (site_id, indicator) for the current compute()
 
     def _ensure_gee(self):
         """Lazy-init GEE only when needed."""
@@ -146,9 +180,11 @@ class ReferenceSelector:
             eco_id=eco_id,
         )
 
+        self._timing_ctx = (site_id, indicator_spec.name)
         # --- Step 1: Extract site value ---
         try:
-            extraction = indicator_spec.extract_fn(site_geometry, self.config)
+            with self._timed("site_extraction"):
+                extraction = indicator_spec.extract_fn(site_geometry, self.config)
             if isinstance(extraction, dict):
                 result.site_value = extraction.get("value")
                 result.site_pixels = extraction.get("pixels")
@@ -163,7 +199,10 @@ class ReferenceSelector:
 
         # --- Step 2: Tier 1 — Regional reference (buffer around site) ---
         try:
-            tier1 = self._compute_tier1(indicator_spec, site_geometry)
+            with self._timed("tier1_reference") as _t1:
+                tier1 = self._compute_tier1(indicator_spec, site_geometry)
+                _t1["n"] = tier1.get("n")
+            result.tier1_sampling_diagnostics = tier1.get("sampling_diagnostics") or {}
             result.tier1_mean = tier1.get("mean")
             result.tier1_median = tier1.get("median")
             result.tier1_std = tier1.get("std")
@@ -179,6 +218,7 @@ class ReferenceSelector:
                     result.site_value, result.tier1_median, indicator_spec.higher_is_better
                 )
                 # Responsive, scale-aware benchmark (CS-3) — the value scoring should use.
+                _tb1 = time.perf_counter()
                 _b1 = estimators.benchmark(
                     site_value=result.site_value,
                     reference_median=result.tier1_median,
@@ -187,6 +227,7 @@ class ReferenceSelector:
                     reference_estimator=getattr(indicator_spec, "reference_estimator", None),
                     higher_is_better=indicator_spec.higher_is_better,
                 )
+                self._log_timing("benchmark_calculation_tier1", time.perf_counter() - _tb1, None)
                 result.tier1_benchmark = _b1["value"]
                 result.tier1_benchmark_estimator = _b1["estimator"]
         except Exception as e:
@@ -195,7 +236,9 @@ class ReferenceSelector:
         # --- Step 3: Tier 2 — Contemporary reference ---
         if indicator_spec.tier2_eligible:
             try:
-                tier2 = self._compute_tier2(indicator_spec, site_geometry, eco_id)
+                with self._timed("tier2_reference") as _t2:
+                    tier2 = self._compute_tier2(indicator_spec, site_geometry, eco_id)
+                    _t2["n"] = tier2.get("n")
                 result.tier2_mean = tier2.get("mean")
                 result.tier2_median = tier2.get("median")
                 result.tier2_std = tier2.get("std")
@@ -207,6 +250,16 @@ class ReferenceSelector:
                 result.tier2_pixels = tier2.get("pixels")
                 result.reference_hmi_realised = tier2.get("hmi_realised")
                 result.stratification_diagnostics = tier2.get("stratification_diagnostics", {})
+                _sd = tier2.get("sampling_diagnostics")
+                if _sd:
+                    result.stratification_diagnostics = {
+                        **(result.stratification_diagnostics or {}), **_sd,
+                        "reference_population_definition": self._tier2_population_definition(
+                            result.stratification_diagnostics or {}, tier2.get("hmi_realised")),
+                    }
+                if tier2.get("stability"):
+                    result.stratification_diagnostics = {
+                        **(result.stratification_diagnostics or {}), "reference_stability": tier2["stability"]}
                 if tier2.get("suppressed_reason"):
                     result.stratification_diagnostics = {
                         **result.stratification_diagnostics, "suppressed_reason": tier2["suppressed_reason"]}
@@ -227,6 +280,7 @@ class ReferenceSelector:
                     _ref_vals = None
                     if result.tier2_pixels is not None:
                         _ref_vals = np.atleast_1d(result.tier2_pixels).ravel().tolist()
+                    _tb2 = time.perf_counter()
                     _b2 = estimators.benchmark(
                         site_value=result.site_value,
                         reference_median=result.tier2_median,
@@ -236,6 +290,7 @@ class ReferenceSelector:
                         reference_estimator=getattr(indicator_spec, "reference_estimator", None),
                         higher_is_better=indicator_spec.higher_is_better,
                     )
+                    self._log_timing("benchmark_calculation_tier2", time.perf_counter() - _tb2, None)
                     result.tier2_benchmark = _b2["value"]
                     result.tier2_benchmark_estimator = _b2["estimator"]
                     result.tier2_percentile_in_reference = _b2["percentile_in_reference"]
@@ -250,6 +305,10 @@ class ReferenceSelector:
             except Exception as e:
                 logger.warning(f"Tier 2 failed for {indicator_spec.name}: {e}")
 
+        if result.tier1_sampling_diagnostics:
+            result.stratification_diagnostics = {
+                **(result.stratification_diagnostics or {}),
+                "tier1_reference_sampling": result.tier1_sampling_diagnostics}
         return result
 
     # ------------------------------------------------------------------
@@ -305,36 +364,14 @@ class ReferenceSelector:
                     logger.warning(f"FC Tier 1 failed for {spec.name}: {e}")
             return {}
 
-        stats = image.reduceRegion(
-            reducer=(
-                ee.Reducer.mean()
-                .combine(ee.Reducer.median(), sharedInputs=True)
-                .combine(ee.Reducer.stdDev(), sharedInputs=True)
-                .combine(ee.Reducer.percentile([25, 75, 90]), sharedInputs=True)
-                .combine(ee.Reducer.count(), sharedInputs=True)
-            ),
-            geometry=region,
-            scale=self._effective_scale(spec),
-            maxPixels=1e9,
-            bestEffort=True,
-        ).getInfo()
-
-        parsed = self._parse_gee_stats(stats)
-        # REAL BUG FIXED HERE (independent audit finding, verified directly against
-        # this exact code before fixing): estimators.robust_z() is documented and
-        # implemented as (site - median) / (1.4826 * MAD), but this call site was
-        # passing tier1_std (Reducer.stdDev()'s output) into the ref_mad argument --
-        # a genuinely different statistic, not an approximation of it. SD and MAD
-        # only coincide for a perfectly normal distribution; a real reference pool
-        # (a handful to a few dozen stratified pixels) is not guaranteed to be
-        # anywhere near normal, and using SD silently changes what "1.4826x" means.
-        # Fixed with a real, GEE-native two-pass MAD: median(|x - median(x)|),
-        # reusing the same region/scale/mask this reduceRegion already used --
-        # not a client-side approximation from percentiles or SD.
-        if parsed.get("median") is not None:
-            parsed["mad"] = self._compute_true_mad(
-                ee, image, region, parsed["median"], scale=self._effective_scale(spec))
-        parsed["effective_scale_m"] = self._effective_scale(spec)
+        # PERFORMANCE FIX (2026-09-28): the previous full-region native-scale reduceRegion
+        # plus a second full pass for MAD cost ~1.5 h/tile at 10-30 m over 50-150 km. Now a
+        # deterministic, bounded NATIVE-SCALE random sample of valid pixels; every statistic
+        # (incl. the true MAD) is computed from the sampled values -- never a coarsened image.
+        scale = self._effective_scale(spec)
+        parsed = self._sample_reference_stats(
+            ee, image, region, scale, label="tier1",
+            population=f"all valid pixels of the indicator image within {radius_km:g} km of the site centroid")
         return parsed
 
     def _tier1_from_local_raster(
@@ -437,7 +474,8 @@ class ReferenceSelector:
                 stable, diag = estimators.reference_is_stable(
                     pixels,
                     min_n=getattr(self.config, "reference_stability_min_n", 8),
-                    rel_tol=getattr(self.config, "reference_stability_rel_tol", 0.15))
+                    rel_tol=getattr(self.config, "reference_stability_rel_tol", 0.15),
+                    abs_tol=getattr(self.config, "reference_stability_abs_tol", None))
                 result["stability"] = diag
                 if not stable:
                     logger.info(f"  Tier 2: reference rejected as unstable "
@@ -838,24 +876,13 @@ class ReferenceSelector:
     def _extract_tier2_stats(self, ghm_zone, threshold, indicator_image, geometry, spec=None):
         """Extract indicator stats from reference pixels (HMI ≤ threshold)."""
         import ee
+        # All existing masks (ecoregion + land-cover stratum are already baked into ghm_zone;
+        # the HMI threshold mask is applied here) are applied BEFORE sampling, so the sample
+        # is drawn from exactly the selected reference population -- selection logic unchanged.
         ref_mask = ghm_zone.lte(ee.Number(threshold))
         ind_ref = indicator_image.updateMask(ref_mask).clip(geometry)
         scale = self._effective_scale(spec)
-        stats = ind_ref.reduceRegion(
-            reducer=(ee.Reducer.mean()
-                .combine(ee.Reducer.median(), sharedInputs=True)
-                .combine(ee.Reducer.stdDev(), sharedInputs=True)
-                .combine(ee.Reducer.percentile([25, 75, 90]), sharedInputs=True)
-                .combine(ee.Reducer.count(), sharedInputs=True)),
-            geometry=geometry, scale=scale, maxPixels=1e8, bestEffort=True
-        ).getInfo()
-        parsed = self._parse_gee_stats(stats)
-        # Same real MAD fix as _compute_tier1 -- see that method's comment for why.
-        # Reuses the SAME reference mask + geometry this Tier2 pool was built from.
-        if parsed.get("median") is not None:
-            parsed["mad"] = self._compute_true_mad(ee, ind_ref, geometry, parsed["median"], scale=scale)
-        parsed["effective_scale_m"] = scale
-        return parsed
+        return self._sample_reference_stats(ee, ind_ref, geometry, scale, label="tier2")
 
     # Independent audit item 4, real known native resolutions confirmed
     # directly this session (not guessed): every reference reduceRegion
@@ -876,6 +903,7 @@ class ReferenceSelector:
         "tspi": 10, "sabf": 10, "wcpi": 10, "edpp": 10, "mspl": 10,
         "sdi": 10, "rci": 10, "iri": 10,  # Sentinel-2-based
         "wsdi": 10,                 # Sentinel-1 GRD
+        "net_forest_change_rate": 30,  # Hansen GFC + DW proxy; declared 30 m reference scale
     }
     _DEFAULT_FALLBACK_SCALE_M = 100  # was 1000 -- still a real placeholder for
     # indicators not yet individually confirmed, but an order of magnitude
@@ -897,9 +925,99 @@ class ReferenceSelector:
                 return known
         return self._DEFAULT_FALLBACK_SCALE_M
 
+    # ------------------------------------------------------------------
+    # Bounded native-scale reference sampling + timing
+    # ------------------------------------------------------------------
+    def _log_timing(self, stage: str, elapsed: float, n_ref) -> None:
+        site, ind = getattr(self, "_timing_ctx", ("?", "?"))
+        rec = {"site_id": site, "indicator": ind, "stage": stage,
+               "elapsed_seconds": round(float(elapsed), 2), "n_reference_pixels": n_ref}
+        self.timing_log.append(rec)
+        TIMING_LOG.append(rec)
+        msg = (f"TIMING site_id={site} indicator={ind} stage={stage} "
+               f"elapsed_seconds={rec['elapsed_seconds']:.2f} n_reference_pixels={n_ref}")
+        logger.debug(msg)
+        print(msg, flush=True)   # printed (not only logged) so it is visible at any log level
+
+    @contextmanager
+    def _timed(self, stage: str):
+        info = {"n": None}
+        t0 = time.perf_counter()
+        try:
+            yield info
+        finally:
+            self._log_timing(stage, time.perf_counter() - t0, info.get("n"))
+
+    def _sample_reference_stats(self, ee, image, region, scale, label: str,
+                                population: str | None = None) -> Dict[str, Any]:
+        """Deterministic native-resolution reference sample -> statistics.
+
+        image  : ALREADY-MASKED reference image (sampling happens after every mask).
+        Draws ee.Image.sample(numPixels=N, seed=S, dropNulls=True, tileScale=T) at the
+        indicator's native `scale`, then computes mean/median/SD/MAD/p25/p75/p90/n from the
+        sampled values in numpy. If a heavily-masked pool returns far fewer valid pixels than
+        requested, the request is enlarged (bounded by reference_sample_max_pixels) and the
+        final requested/valid counts are recorded -- never silently coarsened."""
+        cfg = self.config
+        n_cfg = int(getattr(cfg, "reference_sample_pixels", 5000))
+        seed = int(getattr(cfg, "reference_sample_seed", 12345))
+        tile_scale = int(getattr(cfg, "reference_sample_tilescale", 4))
+        max_px = int(getattr(cfg, "reference_sample_max_pixels", 40000))
+        factor = max(2, int(getattr(cfg, "reference_sample_oversample_factor", 4)))
+        min_frac = float(getattr(cfg, "reference_sample_min_fraction", 0.5))
+
+        n_req, attempts, values = n_cfg, 0, []
+        t0 = time.perf_counter()
+        while True:
+            attempts += 1
+            fc = (image.select(0).rename("v")
+                  .sample(region=region, scale=scale, numPixels=n_req, seed=seed,
+                          dropNulls=True, geometries=False, tileScale=tile_scale))
+            values = [v for v in (fc.aggregate_array("v").getInfo() or []) if v is not None]
+            if len(values) >= min_frac * n_req or n_req >= max_px:
+                break
+            n_req = min(n_req * factor, max_px)
+        self._log_timing(f"reference_sampling_{label}", time.perf_counter() - t0, len(values))
+
+        parsed = reference_stats_from_values(values)
+        parsed["effective_scale_m"] = scale
+        parsed["sampling_diagnostics"] = {
+            "reference_sampling_method": "deterministic_native_scale_random_sample",
+            "reference_sample_requested": n_req,
+            "reference_sample_requested_initial": n_cfg,
+            "reference_sample_attempts": attempts,
+            "reference_sample_n": len(values),
+            "reference_sample_seed": seed,
+            "reference_sample_tilescale": tile_scale,
+            "reference_sample_max_pixels": max_px,
+            "reference_sample_retry_min_fraction": min_frac,
+            "reference_sample_oversample_factor": factor,
+            "effective_scale_m": scale,
+            "reference_population_definition": population,
+            "reference_stat_source": "sampled native-scale pixel values (not a coarsened image)",
+        }
+        return parsed
+
+    @staticmethod
+    def _tier2_population_definition(strat_diag: Dict[str, Any], hmi_realised) -> str:
+        level = (strat_diag or {}).get("fallback_level", "primary")
+        if (strat_diag or {}).get("ghm_independent_reference"):
+            sel = "NO HMI filter (independent regional reference for ghm; see audit item 3)"
+        else:
+            sel = (f"HMI <= {hmi_realised:.4f} (least-modified pixels)"
+                   if hmi_realised is not None else "HMI-threshold-selected least-modified pixels")
+        strat = {"primary": "ecoregion + Dynamic World land-cover stratum",
+                 "fallback_1_dropped_landcover": "ecoregion only (land-cover constraint dropped)"
+                 }.get(level, f"ecoregion + land-cover stratum, buffer widened ({level})")
+        return f"{strat}; {sel}"
+
     @staticmethod
     def _compute_true_mad(ee, image, region, median_value, scale=1000):
-        """Real, GEE-native two-pass Median Absolute Deviation: median(|x -
+        """DEPRECATED / UNUSED since 2026-09-28 (no callers): reference MAD is now computed
+        from the sampled values in reference_stats_from_values. Kept only for reference; it
+        performs a FULL-region reduceRegion and must not be reintroduced into the Tier 1/2 path.
+
+        Real, GEE-native two-pass Median Absolute Deviation: median(|x -
         median(x)|), computed over the exact same region/mask the median itself
         came from. Not an approximation from SD or percentiles -- an independent
         audit found this pipeline was silently using SD where its own documented

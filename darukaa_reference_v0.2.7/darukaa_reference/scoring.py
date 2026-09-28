@@ -106,7 +106,16 @@ def normalize(value: Optional[float], estimator: str) -> Optional[float]:
     if value is None:
         return None
     k = K_LRR if estimator == "log_response_ratio" else K_Z
-    return 1.0 / (1.0 + math.exp(-k * value))
+    z = k * value
+    # Numerically stable logistic (two-branch form). Mathematically identical to
+    # 1/(1+exp(-z)) but never evaluates exp() of a large POSITIVE argument, so extreme
+    # benchmarks (e.g. +/-5000 from a very tight reference pool) saturate to ~0/~1
+    # instead of raising OverflowError ("math range error"). The raw signed benchmark
+    # is never altered -- this only affects the bounded 0-1 roll-up score.
+    if z >= 0:
+        return 1.0 / (1.0 + math.exp(-z))
+    e = math.exp(z)
+    return e / (1.0 + e)
 
 
 def geometric_mean(scores: Sequence[float]) -> Optional[float]:

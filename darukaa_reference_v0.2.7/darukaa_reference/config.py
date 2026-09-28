@@ -136,6 +136,22 @@ class Config:
     use_variance_stability_floor: bool = True
     reference_stability_rel_tol: float = 0.15   # max bootstrap median SE / |median|
     reference_stability_min_n: int = 8          # absolute minimum finite pixels
+    # Optional absolute tolerance for the stability gate (bootstrap median SE). When set,
+    # a reference passes if EITHER the relative OR the absolute tolerance is met -- needed
+    # for zero-inflated indicators whose reference median is ~0 (relative SE undefined).
+    # Default None = existing behaviour, unchanged.
+    reference_stability_abs_tol: Optional[float] = None
+
+    # Bounded, deterministic NATIVE-SCALE reference sampling (performance fix, 2026-09-28).
+    # Reference statistics (Tier 1 and Tier 2) are computed from a fixed-size random sample
+    # of valid native-resolution pixels of the ALREADY-MASKED reference population, instead of
+    # full-region reduceRegion passes (which cost ~1.5 h/tile at 10-30 m over 50-150 km).
+    reference_sample_pixels: int = 5000        # target valid pixels per reference
+    reference_sample_seed: int = 12345         # fixed -> reproducible sample
+    reference_sample_tilescale: int = 4        # EE tileScale for the sample() call
+    reference_sample_max_pixels: int = 40000   # hard ceiling when oversampling a sparse mask
+    reference_sample_oversample_factor: int = 4  # request multiplier on each retry
+    reference_sample_min_fraction: float = 0.5   # retry if valid n < this * requested
 
     # OD-4 — SEED similarity-to-reference kernel (Eq. 1 in McElderry et al. 2024):
     # K = exp[-delta (x-x_r)^T C_r^-1 (x-x_r)] — a genuine Mahalanobis-distance kernel
