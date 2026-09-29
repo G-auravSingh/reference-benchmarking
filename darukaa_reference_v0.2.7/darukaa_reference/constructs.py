@@ -31,18 +31,29 @@ def years_in_window(first_code: int, last_code: int) -> int:
 
 
 # Net forest change (D5): same product, same compositing, two periods
-NET_CHANGE_EARLY_YEARS = (2017, 2018)
+NET_CHANGE_EARLY_YEARS = (2017, 2018)     # decision 8: current configurable early comparison period
 
 # Aquatic constructs
 FAI_BLOOM_THRESHOLD = 0.005            # Darukaa choice (audit item 14)
 TSM_NECHAD_A, TSM_NECHAD_C = 228.1, 0.1641
 TSM_MAX = 1000.0
 PURE_WATER_ERODE_PX = 1                # one-pixel erosion removes mixed shoreline pixels
-RIPARIAN_RING_WIDTH_M = 100.0          # E3 (Darukaa choice)
+RIPARIAN_RING_WIDTH_M = 100.0          # decision 7: current configurable methodology parameter (Darukaa choice)
+WOODY_MIN_TREE_FRACTION = 0.10         # site counts as a woody ecosystem when >= 10 % of it is DW trees (FLII precedent)
 
-# EDPP / MSPL: ABSOLUTE thermal scaling (v0.2.7 scaled by the site's own LST min/max, X3).
-# 20-40 degC is a Darukaa choice, unvalidated; both indicators are screening/context.
-THERMAL_MIN_C, THERMAL_MAX_C = 20.0, 40.0
+# EDPP / MSPL thermal term (decision 6): NO ecological temperature bound is adopted.
+# v0.2.7 scaled LST by the SITE's own min/max (X3). v0.2.8 first tried 20-40 degC, an unsupported
+# ecological guess, and that is withdrawn. The thermal term is now scaled over the SOURCE PRODUCT's
+# documented physical valid range, which is a numerical / QC bound only:
+#   Landsat Collection 2 Level-2 surface temperature: valid DN 293-65535, scale 0.00341802, offset 149.0
+#   (USGS "How do I use a scale factor with Landsat Level-2 science products?") -> 150.0 K to 373.0 K.
+# Values outside it are masked as invalid. Within that range the scaling is absolute (site-independent) but
+# NOT ecologically calibrated: EDPP / MSPL are screening / context and are not scored.
+LST_SCALE_FACTOR, LST_OFFSET_K = 0.00341802, 149.0
+LST_VALID_DN_MIN, LST_VALID_DN_MAX = 293, 65535
+KELVIN_TO_CELSIUS = 273.15
+LST_QC_MIN_C = LST_VALID_DN_MIN * LST_SCALE_FACTOR + LST_OFFSET_K - KELVIN_TO_CELSIUS     # -123.15 degC
+LST_QC_MAX_C = LST_VALID_DN_MAX * LST_SCALE_FACTOR + LST_OFFSET_K - KELVIN_TO_CELSIUS     #   99.85 degC
 MSPL_WEIGHTS = {"nutrient": 0.35, "thermal": 0.30, "turbidity": 0.20, "water_persistence": 0.15}
 
 # Native scales (verified where noted in the audit)

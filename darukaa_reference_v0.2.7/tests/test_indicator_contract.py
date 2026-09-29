@@ -39,7 +39,7 @@ def test_proposed_scoreable_sets_by_domain():
     sc = {n for n, c in C.items() if c.proposed_scoreability == "scoreable"}
     terr = {n for n in sc if "terrestrial" in C[n].applicability.domains}
     aqua_only = {n for n in sc if "terrestrial" not in C[n].applicability.domains}
-    assert terr == {"natural_habitat", "forest_loss_rate", "net_forest_change_rate", "ndvi", "chm", "bii",
+    assert terr == {"natural_habitat", "forest_loss_rate", "net_tree_cover_change_rate", "ndvi", "chm", "bii",
                     "ghm", "hdi", "light_pollution", "riparian_natural_veg_share"}
     assert aqua_only == {"tspi", "sabf", "wcpi", "sdi"}
     assert C["cpland"].proposed_scoreability == "pending_methodology"      # blocked on provenance
@@ -116,19 +116,29 @@ def test_water_body_indicator_needs_pure_water_rule():
 def test_generic_floor_is_10_native_pixels_and_specific_floors_are_explicit():
     assert IC.GENERIC_MIN_NATIVE_PIXELS == 10
     assert IC.effective_min_native_pixels(C["bii"]) == 10
-    assert IC.effective_min_native_pixels(C["natural_habitat"]) == 100          # indicator-specific
-    assert IC.effective_min_native_pixels(C["net_forest_change_rate"]) == 100
-    assert C["natural_habitat"].min_support_rationale and C["net_forest_change_rate"].min_support_rationale
+    assert IC.effective_min_native_pixels(C["natural_habitat"]) == 10           # decision 1: generic floor, not 100
+    assert IC.effective_min_native_pixels(C["net_tree_cover_change_rate"]) == 10
+    # no indicator currently needs a stricter floor; if one is added it must be documented (validator rule)
+    assert all(c.applicability.indicator_min_native_pixels is None for c in C.values())
     assert IC.effective_min_native_pixels(C["ghm"]) is None                    # exempt landscape pressure
-    assert C["ghm"].applicability.floor_basis == "exempt_landscape_pressure" and C["ghm"].min_support_rationale
+    for n in ("ghm", "hdi", "light_pollution"):                                 # decision 2: one named, explicit rule
+        assert C[n].applicability.floor_basis == "exempt_landscape_pressure"
+        assert C[n].min_support_rationale == IC.PRESSURE_SUPPORT_RULE
+    assert "Pressure-indicator support rule" in IC.PRESSURE_SUPPORT_RULE
+    for n, c in C.items():                                                       # condition indicators are never exempt
+        if c.construct != "C4_pressure":
+            assert c.applicability.floor_basis != "exempt_landscape_pressure", n
 
 
 def test_specific_floor_below_generic_or_without_rationale_is_rejected():
     bad = dataclasses.replace(C["natural_habitat"], applicability=IC.Applicability(
-        ("terrestrial", "mixed"), "any", None, 10, None, 5, "polygon_native_pixels"))
+        ("terrestrial", "mixed"), "any", None, 10, None, 5, "polygon_native_pixels"), min_support_rationale="x")
     assert any("must not be below the generic floor" in v for v in IC.validate_contract(bad))
-    bad = dataclasses.replace(C["natural_habitat"], min_support_rationale="")
-    assert any("rationale" in v for v in IC.validate_contract(bad))
+    stricter = dataclasses.replace(C["natural_habitat"], applicability=IC.Applicability(
+        ("terrestrial", "mixed"), "any", None, 10, None, 100, "polygon_native_pixels"))
+    assert any("rationale" in v for v in IC.validate_contract(stricter))          # a stricter floor needs a documented reason
+    documented = dataclasses.replace(stricter, min_support_rationale="documented scientific reason")
+    assert IC.validate_contract(documented) == []
 
 
 def test_exemption_only_for_pressures_with_rationale():
@@ -149,7 +159,7 @@ def test_aquatic_contracts_require_10_pure_water_px_min_reference_bodies_and_wat
 
 
 def test_tied_reference_forces_the_percentile_estimator():
-    for n in ("forest_loss_rate", "natural_habitat", "net_forest_change_rate", "sabf", "sdi",
+    for n in ("forest_loss_rate", "natural_habitat", "net_tree_cover_change_rate", "sabf", "sdi",
               "riparian_natural_veg_share"):
         assert C[n].estimator == "reference_percentile" and C[n].expects_tied_reference
     bad = dataclasses.replace(C["forest_loss_rate"], estimator="robust_z")
@@ -165,7 +175,7 @@ def test_scoreable_needs_documented_minimum_reference_n():
 def test_rci_replaced_and_net_change_uses_a_single_product():
     assert "riparian_natural_veg_share" in C and "rci" not in C
     assert "complexity" not in C["riparian_natural_veg_share"].definition.lower().split("replaces")[0]
-    nf = C["net_forest_change_rate"]
+    nf = C["net_tree_cover_change_rate"]
     assert "hansen" not in nf.inputs and nf.inputs == ("dw_label",)             # D5: DW only, no cross-product
     assert nf.reference_population == "regional_ecoregion"                      # not stratified on the outcome
 

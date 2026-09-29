@@ -106,21 +106,23 @@ def test_unit_records_builds_the_call_chain_and_reads_features():
     water.focal_min.assert_called_with(radius=K.PURE_WATER_ERODE_PX, kernelType="square", units="pixels")
 
 
-def test_window_reference_exposes_population_spacing_and_reference_n():
+def test_cell_reference_exposes_population_cell_size_and_reference_n():
     ee = MagicMock()
     fake = MagicMock(); fake.getInfo.return_value = [0.1, 0.2, None, 0.3]
-    img = MagicMock()
-    img.select.return_value.rename.return_value = img
-    img.unmask.return_value = img; img.mask.return_value.rename.return_value.toInt.return_value = img
-    img.addBands.return_value = img
-    img.stratifiedSample.return_value.filter.return_value.aggregate_array.return_value = fake
-    ref = RE.window_reference_ee(ee, window_image=img, region="Z", native_scale_m=10.0, site_area_m2=4.0e5, n=5000, seed=12345,
-                                 support="site_window_mean", construct="c", unit="u", temporal="t", population="regional_ecoregion",
-                                 tier="tier1", population_definition="ecoregion windows")
-    assert ref.reference_n == 3 and ref.population_definition == "ecoregion windows"
-    assert ref.spec.window_area_m2 == 4.0e5 and ref.diagnostics["sampling_spacing_m"] > 10.0
-    kw = img.stratifiedSample.call_args.kwargs
-    assert kw["numPoints"] == 0 and kw["classPoints"] == [5000] and kw["seed"] == 12345
+    fc = MagicMock(); fc.aggregate_array.return_value = fake
+    import darukaa_reference.support as S
+    orig = S.ee_sample_cells
+    S.ee_sample_cells = lambda *a, **k: fc
+    try:
+        ref = RE.cell_reference_ee(ee, cell_image="IMG", region="Z", native_scale_m=10.0, site_area_m2=4.01e5,
+                                   crs="EPSG:32643", n=5000, seed=12345, support="site_window_mean", construct="c",
+                                   unit="u", temporal="t", population="regional_ecoregion", tier="tier1",
+                                   population_definition="ecoregion cells")
+    finally:
+        S.ee_sample_cells = orig
+    assert ref.reference_n == 3 and ref.population_definition == "ecoregion cells"           # the None is dropped
+    assert ref.spec.window_area_m2 == 630.0 ** 2 and ref.diagnostics["cell_px"] == 63 and ref.diagnostics["crs"] == "EPSG:32643"
+    assert ref.diagnostics["seed"] == 12345 and ref.diagnostics["sample_requested"] == 5000
 
 
 def test_shared_water_definition_is_mndwi_and_pure_water_is_eroded():

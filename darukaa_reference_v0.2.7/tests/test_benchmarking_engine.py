@@ -155,23 +155,24 @@ def test_domain_ecosystem_feature_and_support_rules_give_explicit_reasons():
     assert B.check_applicability(C["sabf"], aq)[0] is None
 
 
-def test_hard_floor_and_indicator_specific_floor():
-    # natural_habitat: 10 m pixels, specific floor 100 px (1 ha)
-    assert B.check_applicability(C["natural_habitat"], B.SiteEvidence("terrestrial", 9.9e3))[0] == "site_below_product_resolution"
-    assert B.check_applicability(C["natural_habitat"], B.SiteEvidence("terrestrial", 1.0e4))[0] is None
+def test_hard_floor_is_10_native_pixels_for_condition_indicators():
+    # natural_habitat: 10 m pixels, generic floor 10 px (1,000 m2); NOT the 100 px of the first Phase 3 draft
+    assert B.check_applicability(C["natural_habitat"], B.SiteEvidence("terrestrial", 999.0))[0] == "site_below_product_resolution"
+    assert B.check_applicability(C["natural_habitat"], B.SiteEvidence("terrestrial", 1.0e3))[0] is None
+    assert B.check_applicability(C["net_tree_cover_change_rate"], B.SiteEvidence("terrestrial", 5.0e3))[0] is None
     # bii: 100 m pixels, generic floor 10 px (10 ha)
     assert B.check_applicability(C["bii"], B.SiteEvidence("terrestrial", 9.9e4))[0] == "site_below_product_resolution"
     assert B.check_applicability(C["bii"], B.SiteEvidence("terrestrial", 1.0e5))[0] is None
 
 
 def test_tata_zone_consequences_of_the_floors_documented():
-    """Real Tata EMU zone areas (ha, from the tile GeoJSONs). At 10 m every zone clears the generic 10-px
-    floor; the specific 100-px floor of natural_habitat excludes the two smallest; at the 100 m BII product
-    only the 40 ha Deccan forest clears 10 native pixels."""
+    """Real Tata EMU zone areas (ha, from the tile GeoJSONs). Decision 1: at 10 m EVERY zone clears the generic
+    10-pixel floor, including the 0.73 ha and 0.47 ha zones; at the 100 m BII product only the 40 ha Deccan
+    forest clears 10 native pixels."""
     zones = {"Deccan_forest": 40.10, "Grass_land": 2.80, "Narmada_valley": 9.25, "Savana": 1.72,
              "Seasonal_wetland": 0.73, "Trail_plots": 2.03, "Water_margin": 6.48, "Wetland_forest": 0.47, "Wildlife": 3.78}
     nh = {z: B.check_applicability(C["natural_habitat"], B.SiteEvidence("terrestrial", ha * 1e4))[0] is None for z, ha in zones.items()}
-    assert [z for z, ok in nh.items() if not ok] == ["Seasonal_wetland", "Wetland_forest"]
+    assert all(nh.values())                                                                      # no zone excluded
     bii = {z: B.check_applicability(C["bii"], B.SiteEvidence("terrestrial", ha * 1e4))[0] is None for z, ha in zones.items()}
     assert [z for z, ok in bii.items() if ok] == ["Deccan_forest"]
     ghm = {z: B.check_applicability(C["ghm"], B.SiteEvidence("terrestrial", ha * 1e4)) for z, ha in zones.items()}
@@ -284,3 +285,91 @@ def test_validation_dataset_results_can_never_enter_project_scoring():
     assert not p.validation_only
     kept = B.project_assessments([v, p])
     assert kept == [p]                                             # ...but never joins the project result
+
+
+# ================================================================== confirmed decisions (v0.2.8 review)
+WINDOW_SCOREABLE = sorted(n for n, c in C.items() if c.proposed_scoreability == "scoreable"
+                          and c.reference_support.startswith("site_window"))
+EV_ALL = B.SiteEvidence("terrestrial", 4.0e5, frozenset({"woody"}), forest_baseline_m2=2.0e5)
+
+
+def test_the_window_scoreable_set_is_the_expected_nine():
+    assert WINDOW_SCOREABLE == ["bii", "chm", "forest_loss_rate", "ghm", "hdi", "light_pollution", "natural_habitat",
+                                "ndvi", "net_tree_cover_change_rate"]
+
+
+@pytest.mark.parametrize("name", WINDOW_SCOREABLE)
+def test_fewer_than_30_reference_cells_is_never_silently_scored(name):
+    """Decision 3: minimum reference population = 30 windows; below it the status is explicit."""
+    c = C[name]
+    assert c.min_reference_n == 30 == IC.MIN_REFERENCE_WINDOWS
+    values = np.random.default_rng(1).normal(50, 5, 60)
+    site_value = 55.0
+    for n, expected in ((29, "reference_available_but_not_scoreable"), (30, "scored")):
+        site, ref = pair(c, values[:n], EV_ALL.site_area_m2)
+        a = B.evaluate_indicator(c, EV_ALL, site_value, site, {c.reference_tier: ref})
+        assert a.status == expected, (name, n, a.status, a.reason)
+        assert a.reference_n == n
+        if n == 29:
+            assert a.reason == "insufficient_reference_n" and a.score is None and "documented minimum 30" in a.detail
+
+
+FIVE_PERCENTILE = ("natural_habitat", "net_tree_cover_change_rate", "sabf", "sdi", "riparian_natural_veg_share")
+
+
+def test_percentile_convention_is_defined_once_and_used_by_exactly_these_indicators():
+    assert B.PERCENTILE_CONVENTION is IC.PERCENTILE_CONVENTION and "HIGHER score is always BETTER" in IC.PERCENTILE_CONVENTION
+    for n in FIVE_PERCENTILE + ("forest_loss_rate",):
+        assert C[n].estimator == "reference_percentile" and C[n].direction in ("higher_is_better", "lower_is_better")
+    assert {n for n, c in C.items() if c.estimator == "reference_percentile"} == set(FIVE_PERCENTILE) | {"forest_loss_rate"}
+
+
+@pytest.mark.parametrize("name", FIVE_PERCENTILE)
+def test_percentile_ties_and_directions_for_each_approved_indicator(name):
+    c = C[name]
+    better = (lambda x, d: x + d) if c.direction == "higher_is_better" else (lambda x, d: x - d)
+    worse = (lambda x, d: x - d) if c.direction == "higher_is_better" else (lambda x, d: x + d)
+    site = 0.5
+    # all reference units tied with the site -> mid-rank 0.5, whichever the direction
+    tied = B.percentile_benchmark(site, np.full(40, site), c.direction)
+    assert tied["score"] == 0.5 and tied["p_reference_tied"] == 1.0 and tied["p_reference_worse"] == tied["p_reference_better"] == 0.0
+    # site better than every reference unit -> 1.0 ; worse than every unit -> 0.0 (direction-aware)
+    assert B.percentile_benchmark(better(site, 0.2), np.full(40, site), c.direction)["score"] == 1.0
+    assert B.percentile_benchmark(worse(site, 0.2), np.full(40, site), c.direction)["score"] == 0.0
+    # 50 % tied, 25 % worse, 25 % better than the site -> 0.25 + 0.5 * 0.5 = 0.5 ; and with 30 % worse, 20 % better -> 0.55
+    ref = np.r_[np.full(20, site), np.full(10, worse(site, 0.1)), np.full(10, better(site, 0.1))]
+    assert B.percentile_benchmark(site, ref, c.direction)["score"] == pytest.approx(0.5)
+    ref2 = np.r_[np.full(20, site), np.full(12, worse(site, 0.1)), np.full(8, better(site, 0.1))]
+    r2 = B.percentile_benchmark(site, ref2, c.direction)
+    assert r2["score"] == pytest.approx(0.30 + 0.25) and r2["p_reference_tied"] == 0.5
+    assert r2["p_reference_worse"] + r2["p_reference_tied"] + r2["p_reference_better"] == pytest.approx(1.0)
+    # near-ties within isclose tolerance count as ties (float noise never splits a tie)
+    assert B.percentile_benchmark(site, np.full(10, site + 1e-13), c.direction)["p_reference_tied"] == 1.0
+    assert B.percentile_benchmark(site, np.full(10, site + 1e-3), c.direction)["p_reference_tied"] == 0.0
+
+
+def test_methodology_parameters_are_explicit_in_contract_and_configuration():
+    """Decisions 7 and 8: ring width and the early period are stored explicitly and are configurable."""
+    from darukaa_reference.config import Config
+    import darukaa_reference.indicators as I
+    cfg = Config()
+    assert cfg.riparian_ring_width_m == 100.0 == K.RIPARIAN_RING_WIDTH_M
+    assert dict(C["sdi"].parameters)["ring_width_m"] == dict(C["riparian_natural_veg_share"].parameters)["ring_width_m"] == cfg.riparian_ring_width_m
+    assert tuple(cfg.net_change_early_years) == (2017, 2018) == K.NET_CHANGE_EARLY_YEARS
+    assert dict(C["net_tree_cover_change_rate"].parameters)["early_years"] == (2017, 2018)
+    class Custom:
+        ndvi_year = 2025
+        net_change_early_years = (2019, 2020)
+    early, recent, dt = I._net_change_periods(Custom)                      # override honoured, identical processing at both ends
+    assert early == (2019, 2020) and recent == (2024, 2025) and dt == 5.0
+    assert "riparian_ring_width_m" in inspect.getsource(I._wb_unit_value)
+    Config(riparian_ring_width_m=50.0)                                     # configurable per run
+
+
+def test_rename_is_complete_and_documented_as_a_tree_cover_proxy():
+    reg = create_default_registry()
+    assert "net_forest_change_rate" not in reg and "net_forest_change_rate" not in C
+    spec = reg.get("net_tree_cover_change_rate")
+    assert "REMOTE-SENSING TREE-COVER PROXY" in spec.citation and "NOT direct forest-area gain/loss" in spec.citation
+    assert "tree-cover proxy" in C["net_tree_cover_change_rate"].definition
+    assert any("REMOTE-SENSING TREE-COVER PROXY" in x for x in C["net_tree_cover_change_rate"].limitations)

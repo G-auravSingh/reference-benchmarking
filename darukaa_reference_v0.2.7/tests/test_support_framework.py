@@ -234,19 +234,96 @@ def _fake_ee():
     return ee, img
 
 
-def test_ee_window_image_reprojects_to_native_and_uses_site_radius():
-    ee, img = _fake_ee()
-    S.ee_window_image(ee, img, native_scale_m=10, site_area_m2=4.01e5)
-    kw = ee.Kernel.circle.call_args.kwargs
-    assert kw["units"] == "meters" and kw["radius"] == pytest.approx(S.site_window_radius_m(4.01e5))
-    assert kw["normalize"] is False
-    ee.Projection.return_value.atScale.assert_called_with(10)
-    assert img.reproject.called
+# ------------------------------------------------------------- block cells (v0.2.8 Phase 3 definition)
+def test_cell_size_matches_site_area_and_never_goes_below_one_pixel():
+    assert S.cell_size_px(4.01e5, 10) == 63 and S.cell_area_m2(4.01e5, 10) == pytest.approx((63 * 10) ** 2)   # 40 ha at 10 m
+    assert S.cell_size_px(4.7e3, 10) == 7                                                                       # 0.47 ha
+    assert S.cell_size_px(4.7e3, 100) == 1 and S.cell_size_px(4.7e3, 463.83) == 1                              # coarse product: 1 pixel
+    assert abs(S.cell_area_m2(4.01e5, 10) - 4.01e5) / 4.01e5 < 0.02
 
 
-def test_ee_sample_windows_uses_nonoverlapping_spacing_and_valid_only():
+def test_block_mean_is_the_exact_cell_mean_with_known_answer():
+    a = np.arange(36, dtype=float).reshape(6, 6)
+    out = S.block_mean(a, None, 3)
+    assert out.shape == (2, 2)
+    assert out[0, 0] == a[:3, :3].mean() and out[1, 1] == a[3:, 3:].mean()
+    # offset: cells start `offset` pixels in; incomplete edge blocks are dropped
+    off = S.block_mean(np.arange(64, dtype=float).reshape(8, 8), None, 3, offset=(2, 1))
+    assert off.shape == (2, 2) and off[0, 0] == np.arange(64).reshape(8, 8)[2:5, 1:4].mean()
+
+
+def test_block_mean_of_a_binary_image_is_the_cell_proportion_and_ignores_masked_pixels():
+    b = np.zeros((6, 6)); b[:3, :3] = 1.0; b[3, 3] = 1.0
+    out = S.block_mean(b, None, 3)
+    assert out[0, 0] == 1.0 and out[0, 1] == 0.0 and out[1, 1] == pytest.approx(1 / 9)
+    v = np.ones((6, 6), bool); v[:, 3:] = False; bad = b.copy(); bad[~v] = 999.0        # masked values must never leak
+    m = S.block_mean(bad, v, 3)
+    assert m[0, 0] == 1.0 and np.isnan(m[0, 1]) and np.isnan(m[1, 1])
+    half = np.ones((6, 6), bool); half[:2, :] = False                                     # 2/3 of cell 0 masked -> coverage < 0.9
+    assert np.isnan(S.block_mean(np.ones((6, 6)), half, 3)[0, 0]) and S.block_mean(np.ones((6, 6)), half, 3)[1, 0] == 1.0
+
+
+def test_block_rate_is_a_ratio_of_sums_with_a_floor_and_never_a_mean_of_rates():
+    den = np.zeros((6, 6)); num = np.zeros((6, 6))
+    den[:3, :3] = 1.0; num[0, 0] = 1.0                                   # cell 0: 9 forest px, 1 lost
+    den[:3, 3:] = 1.0; den[0, 3:5] = 0.0; num[1, 3] = 1.0                # cell 1: 7 forest px, 1 lost
+    out = S.block_rate(num, den, 3, years=5.0, pixel_area_m2=900.0)
+    assert out[0, 0] == pytest.approx(1 / 9 * 100 / 5) and out[0, 1] == pytest.approx(1 / 7 * 100 / 5)
+    assert np.isnan(out[1, 0]) and np.isnan(out[1, 1])                   # no baseline forest: undefined, not 0
+    floored = S.block_rate(num, den, 3, 5.0, 900.0, min_denominator_area_m2=8 * 900.0)
+    assert floored[0, 0] == out[0, 0] and np.isnan(floored[0, 1])        # 7 px * 900 m2 < floor
+    one_cell = S.block_rate(num, den, 6, 5.0, 900.0)[0, 0]               # the whole raster as one cell: 2 lost / 16 forest
+    assert one_cell == pytest.approx(2 / 16 * 100 / 5) and one_cell != pytest.approx(np.mean([1 / 9, 1 / 7]) * 100 / 5)
+
+
+def test_block_centres_apply_a_native_eligibility_mask_to_cells():
+    el = np.zeros((6, 6), bool); el[1, 1] = True; el[4, 4] = True        # centre pixels of cells (0,0) and (1,1)
+    assert S.block_centres(el, 3).tolist() == [[True, False], [False, True]]
+
+
+def test_cells_tile_the_zone_without_overlap_or_pixel_reuse():
+    z = np.arange(90 * 90, dtype=float).reshape(90, 90)
+    cells = S.block_mean(z, None, 9)
+    assert cells.size == 100                                             # 90x90 px tiled by 9x9 cells: each pixel used exactly once
+    assert np.isclose(cells.mean(), z.mean())                            # the mean of the cell means is the zone mean
+    coarse = np.kron(np.random.default_rng(0).random((10, 10)), np.ones((46, 46)))    # a 4.6 km cell seen at 100 m
+    assert S.block_mean(coarse, None, 1).size == coarse.size             # 1-px cells would be pseudo-replication...
+    assert np.unique(S.block_mean(coarse, None, 46)).size == 100         # ...one native-product cell per cell removes it
+
+
+# ------------------------------------------------------------- EE layer (structure only)
+def test_utm_crs_for_the_site():
+    assert S.utm_crs_for(73.8, 18.6) == "EPSG:32643" and S.utm_crs_for(-3.7, 40.4) == "EPSG:32630"
+    assert S.utm_crs_for(151.2, -33.9) == "EPSG:32756"
+
+
+def test_ee_block_mean_image_fixes_the_native_grid_and_reduces_resolution_to_the_cell():
     ee, img = _fake_ee()
-    S.ee_sample_windows(ee, img, "REGION", native_scale_m=10, site_area_m2=4.01e5, n=5000, seed=1)
+    for m in ("reduceResolution", "reproject", "updateMask", "gte", "rename", "mask"):
+        getattr(img, m).return_value = img
+    S.ee_block_mean_image(ee, img, native_scale_m=10, site_area_m2=4.01e5, crs="EPSG:32643")
+    scales = [c.args[0] for c in ee.Projection.return_value.atScale.call_args_list]
+    assert 10 in scales and 630 in scales                                # native grid, then the 63 x 63 px cell
+    assert img.reduceResolution.call_args.kwargs["maxPixels"] == 63 * 63
+    assert ee.Projection.call_args.args[0] == "EPSG:32643"
+
+
+def test_ee_block_rate_image_uses_sums_of_areas_and_a_denominator_floor():
+    ee, img = _fake_ee()
+    for m in ("reduceResolution", "reproject", "updateMask", "gte", "gt", "rename", "unmask", "multiply", "divide", "And"):
+        getattr(img, m).return_value = img
+    S.ee_block_rate_image(ee, img, img, 30, 9.8e5, 25, "EPSG:32643", min_denominator_area_m2=5e4)
+    assert ee.Reducer.sum.called and not ee.Reducer.mean.called          # sums (ratio of sums), never means
+    multiplies = [c.args[0] for c in img.multiply.call_args_list]
+    assert 900.0 in multiplies and any(abs(m - 100.0 / 25) < 1e-12 for m in multiplies)     # pixel area, and 100 / years
+
+
+def test_ee_sample_cells_samples_valid_cells_once_in_the_cell_projection():
+    ee, img = _fake_ee()
+    for m in ("select", "rename", "unmask", "addBands", "mask", "toInt"):
+        getattr(img, m).return_value = img
+    S.ee_sample_cells(ee, img, "REGION", 10, 4.01e5, "EPSG:32643", n=5000, seed=1)
     kw = img.stratifiedSample.call_args.kwargs
-    assert kw["scale"] == pytest.approx(S.sampling_spacing_m(10, 4.01e5))
-    assert kw["numPoints"] == 0 and kw["classValues"] == [1] and kw["classPoints"] == [5000]
+    assert kw["numPoints"] == 0 and kw["classValues"] == [1] and kw["classPoints"] == [5000] and kw["seed"] == 1
+    assert kw["projection"] is ee.Projection.return_value.atScale.return_value and "scale" not in kw
+    assert 630 in [c.args[0] for c in ee.Projection.return_value.atScale.call_args_list]

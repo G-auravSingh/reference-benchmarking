@@ -72,15 +72,15 @@
 
 | Site support | Matched reference support | Construction |
 |---|---|---|
-| `polygon_proportion` | `site_window_proportion` | Mean of a 0/1 image over a circular window with area = site area |
-| `polygon_mean` | `site_window_mean` | Mean of a continuous image over the same window |
-| `polygon_rate` | `site_window_rate` | Σ numerator area / Σ denominator area × 100 / years over the window, with a denominator floor. It is **never** the mean of per-pixel rates. |
+| `polygon_proportion` | `site_window_proportion` | Mean of a 0/1 image over a tessellation cell (square block of native pixels, area ≈ site area) |
+| `polygon_mean` | `site_window_mean` | Mean of a continuous image over the same cell |
+| `polygon_rate` | `site_window_rate` | Σ numerator area / Σ denominator area × 100 / years over the cell, with a denominator floor. It is **never** the mean of per-pixel rates. |
 | `water_body_unit` | `water_body_unit` | The metric over each comparable water body's own pure-water mask (eroded 1 px) |
 | `riparian_ring_unit` | `riparian_ring_unit` | The metric over a fixed-width ring around each comparable water body, excluding all water |
 | `polygon_scalar`, `not_computed` | none | Not benchmarked |
 
 - **Coverage.** Windows with less than 90 % valid coverage are dropped, so every reference value represents a full site-sized area.
-- **Sampling.** Windows are sampled on a grid spaced at max(native pixel, window diameter). Windows therefore never overlap, and a coarse cell is never counted twice.
+- **Cells, not moving windows (Phase 3 revision).** A disc window at every 10 m pixel costs ~4,000 neighbours per pixel over a ~78-million-pixel zone, which Earth Engine cannot compute even when sampling only spaced points. The reference unit is therefore a **tessellation cell**: side = round(√site area / native pixel) native pixels, aligned to the native grid (a 40 ha site at 10 m → 63×63 px = 39.7 ha; 0.47 ha → 7×7 px). Cells tile the zone without overlap, so no pixel is counted twice. A product whose pixel exceeds the site uses 1 pixel per cell (the covering pixel's value). The moving-disc functions in `support.py` remain as a tested alternative definition but are not what Earth Engine computes.
 - **Comparable water bodies** have an area within [site/3, site × 3] and a mean permanence within ±0.25 of the site's. Both thresholds are proposed and need your decision (§8).
 
 **Verified by synthetic tests with known answers:**
@@ -95,10 +95,11 @@
 - Ring pixel counts match the analytic value and rings exclude neighbouring water.
 - A coarse 4.6 km cell is sampled exactly once.
 
-**Unverified Earth Engine assumptions** (to be checked in the first live run, Phase 5):
-- **A1.** `.reproject(native)` forces the focal sums to be computed on the native grid.
-- **A2.** Sampling a reprojected image at a coarser spacing is point sampling, not re-aggregation.
-- **Cost.** A 10 m focal window of radius ~357 m (a 40 ha site) over a 50 km zone is heavy. The planned mitigation is exact pre-aggregation: sum and count at an intermediate grid via `reduceResolution(sum)`, then the focal step on that grid. This is exact for area proportions and area-weighted means. It is not yet implemented, and its timing must be measured.
+**Unverified Earth Engine assumptions** (checked by the parity harness in the smoke test):
+- **A1.** `image.reproject(native).reduceResolution(mean, maxPixels=cell²).reproject(cell)` is the exact mean of the native pixels in each cell (masked pixels ignored), on a grid aligned to multiples of the cell size from the CRS origin.
+- **A2.** `stratifiedSample` in the cell projection returns one value per valid cell.
+- **A3.** Water bodies vectorised on the native UTM grid, pure-water erosion via `focal_min`, and `reduceRegions` per unit match the numpy `label_units` / `unit_values`.
+- **Cost.** One pass over the native pixels (`reduceResolution` + `reproject`), the same order as the v0.2.7 10 m sampling. Not yet timed live.
 
 ## 4. Proposed scoreable sets (from the contract; none active)
 
@@ -107,7 +108,7 @@
 | Terrestrial (8) | natural_habitat, forest_loss_rate (only where baseline forest ≥ 5 ha), ndvi, chm (woody ecosystems only), bii, ghm, hdi, light_pollution |
 | Aquatic (4) | tspi, sabf, wcpi, sdi |
 | Shared with aquatic | ghm, hdi, light_pollution are landscape pressures and also apply to aquatic sites |
-| Pending | cpland (asset provenance), net_forest_change_rate (redefinition), rci (redefinition), hsas (eDNA) |
+| Pending | cpland (asset provenance), net_tree_cover_change_rate (redefinition), rci (redefinition), hsas (eDNA) |
 
 **Aquatic C3 (fauna) has no EO-based indicator.** The report must say so explicitly.
 
@@ -161,7 +162,7 @@ The aggregation rules must be defined before the headline is computed. The propo
 | Indicator | Site change | Reference change | Synthetic test | Live check |
 |---|---|---|---|---|
 | forest_loss_rate | keep num/den rate | `ee_window_rate_image` (same window, 30 % threshold, 5 ha floor) in the least-disturbed stratum | known-rate fixture; site = window at identical support; values in %/yr | **Deccan is not applicable (0.01 ha).** Needs a tile with ≥ 5 ha forest baseline, possibly not in Tata (§8) |
-| net_forest_change_rate | redefine (proposal): change in DW tree-cover share, early window (2017–18) vs recent window, percentage points per year, same classifier both ends | window version of the same | identical start/end → 0; planting from bare land → positive | after you decide on the definition |
+| net_tree_cover_change_rate | redefine (proposal): change in DW tree-cover share, early window (2017–18) vs recent window, percentage points per year, same classifier both ends | window version of the same | identical start/end → 0; planting from bare land → positive | after you decide on the definition |
 | sabf | pure-water mask per water body | comparable water bodies | land never counts as bloom | aquatic tile |
 | wcpi | raw 1/(TSM+1) over pure water, no site normalisation | comparable water bodies | site value independent of its own min/max | aquatic tile |
 | edpp | single-band EDPP, absolute thermal scaling | same construct | reference band = site construct | stays screening |
@@ -169,7 +170,7 @@ The aggregation rules must be defined before the headline is computed. The propo
 | rci | redefine (proposal): natural-vegetation share of the riparian ring | comparable rings | ring geometry test (exists) | aquatic tile |
 | sdi | disturbed share of the ring | comparable rings | ring vs all-land difference | aquatic tile |
 | ghm | site read at native 90 m | window mean, regional unfiltered stratum | site scale = native | Deccan |
-| natural_habitat | unchanged | absolute level (100 %) or window proportion (§8) | 81.6 % → ln(0.816) | Deccan |
+| natural_habitat | unchanged | cell proportion, regional ecoregion (D2); 100 % as a diagnostic | known answer in `test_natural_habitat_regional_window_reference_and_absolute_diagnostic` | Deccan |
 | cpland | — | — | — | **blocked until the PV binary provenance is documented** |
 
 ### Phase 4: remaining proposed-scoreable indicators
@@ -198,12 +199,27 @@ The run also checks the Earth Engine assumptions A1 and A2 and the cost of the w
 | # | Decision | Implementation |
 |---|---|---|
 | D2 | natural_habitat: benchmark = site-sized windows in the regional/ecoregional population; keep 100 % natural as a separate diagnostic | population `regional_ecoregion` (no land-cover stratum, no pressure filter); percentile estimator; `absolute_natural_reference` diagnostic reported beside, never inside, the score |
-| D3 | Generic hard floor 10 native pixels; indicator-specific floors where justified; aquatic ≥ 10 pure-water px + valid water-body geometry; explicit in contract | `Applicability.min_native_pixels=10`, `indicator_min_native_pixels` (natural_habitat, net_forest_change_rate: 100 px, rationale recorded), `floor_basis` (`polygon_native_pixels` / `pure_water_pixels` / `exempt_landscape_pressure`). **Landscape pressures (ghm, hdi, light_pollution) are exempt from the polygon floor: my assumption, needs your confirmation.** |
-| D5 | net_forest_change_rate rebuilt on one product/time series | Dynamic World tree-cover share, early (2017–18) vs recent (ndvi_year−1..ndvi_year), pp/yr between period mid-points; one function builds both endpoints; no Hansen. Percentile estimator (tie-heavy reference). |
+| D3 | Generic hard floor 10 native pixels; indicator-specific floors where justified; aquatic ≥ 10 pure-water px + valid water-body geometry; explicit in contract | `Applicability.min_native_pixels=10`, `indicator_min_native_pixels` (natural_habitat, net_tree_cover_change_rate: 100 px, rationale recorded), `floor_basis` (`polygon_native_pixels` / `pure_water_pixels` / `exempt_landscape_pressure`). **Landscape pressures (ghm, hdi, light_pollution) are exempt from the polygon floor: my assumption, needs your confirmation.** |
+| D5 | net_tree_cover_change_rate rebuilt on one product/time series | Dynamic World tree-cover share, early (2017–18) vs recent (ndvi_year−1..ndvi_year), pp/yr between period mid-points; one function builds both endpoints; no Hansen. Percentile estimator (tie-heavy reference). |
 | E1 | forest loss: empirical percentile/CDF; explicit direction, ties, zero windows; keep distribution and n | `reference_percentile`, `lower_is_better`, mid-rank ties, `fraction_reference_zero`, `p_reference_tied/worse/better`, `reference_n`, DKW 95 % half-width |
 | E2 | Comparable water bodies: area ratio in [1/3, 3], \|permanence difference\| ≤ 0.25; documented minimum n; `reference_n` exposed; otherwise `reference_available_but_not_scoreable` | `MIN_COMPARABLE_WATER_BODIES = 10` (my proposal), radius ladder 10/25/50 km, funnel counts (`n_rejected_size`, `n_rejected_permanence`, …) in the audit trail |
 | E3 | RCI → 100 m riparian-ring natural-vegetation proportion, honestly named | `rci` retired; `riparian_natural_veg_share` (same ring, DW natural classes, land only, all water excluded, for target and every reference ring) |
 | E4 | External forested validation polygon, labelled, never in Tata scoring | `SiteEvidence.validation_dataset_label`; `project_assessments()` drops validation-only results. **The polygon itself is not chosen yet.** |
+
+## 8b. Decisions confirmed at the Phase 3 review
+
+| # | Decision | Where it lives |
+|---|---|---|
+| 1 | Generic condition support floor = **10 native pixels**. A stricter floor is allowed only if scientifically justified and documented (validator requires `min_support_rationale`); **none is currently used**, so `natural_habitat` and `net_tree_cover_change_rate` use 10 and all Tata zones (≥ 47 px at 10 m) are assessed. | `Applicability`, `effective_min_native_pixels` |
+| 2 | `ghm`, `hdi`, `light_pollution` are exempt from the condition-polygon floor as **landscape-pressure indicators** (one named rule, `PRESSURE_SUPPORT_RULE`); condition indicators are never exempt (test). | `indicator_contract.PRESSURE_SUPPORT_RULE` |
+| 3 | Minimum reference population = **30 windows** (cells); below it `reference_available_but_not_scoreable` (`insufficient_reference_n`), tested for all nine window indicators at n = 29 vs 30. | `MIN_REFERENCE_WINDOWS` |
+| 4 | Minimum comparable aquatic references = **10 water bodies**; the audit trail exposes candidate count, size rejections, permanence rejections and the final count. | `reference_funnel` column |
+| 5 | Percentile scoring approved for `natural_habitat`, `net_tree_cover_change_rate`, `sabf`, `sdi`, `riparian_natural_veg_share` (and `forest_loss_rate`). Convention defined once, ties tested per indicator. | `IC.PERCENTILE_CONVENTION`, `benchmarking.percentile_benchmark` |
+| 6 | **20–40 °C withdrawn.** EDPP / MSPL thermal term is scaled over the source product's documented valid range (Landsat C2 L2 ST: DN 293–65535 → 150–373 K → −123.15…99.85 °C, USGS) as a numerical / QC bound; values outside it are masked. No ecological threshold is adopted; both stay screening / context. | `constructs.LST_QC_*` |
+| 7 | Riparian ring **100 m**, stored in the contract (`parameters`) and `Config.riparian_ring_width_m`. | contract + config |
+| 8 | Early period **2017–18** for the tree-cover change, identical processing at both endpoints, in the contract and `Config.net_change_early_years`. | contract + config |
+| 9 | `net_forest_change_rate` → **`net_tree_cover_change_rate`**: documented as a remote-sensing tree-cover proxy. Equivalence with forest change is **not demonstrated** (the DW "trees" class can include plantations and tall tree crops; "forest" is a definitional / land-use concept). | registry citation, contract limitation |
+| 10 | `forest_loss_rate` keeps the ≥ 5 ha rule; the 25/6/3-year denominators and baseline-canopy masking are checked by a synthetic known-rate case; a live check needs a forested polygon (Deccan has 0.01 ha). | tests; smoke notebook cell 8 |
 
 ## 9. Phase 3 delivered
 
@@ -228,3 +244,19 @@ The v0.2.8 engine and builders are not called by `ReferenceSelector.compute()` y
 1. orchestrate per-tile evidence (domain, ecosystem tags, forest baseline, water body), site values and references, and call
    `evaluate_indicator`; 2. write both reference tiers and the nine statuses to JSON / CSV / HTML (Phase 8 wording);
 3. verify the Earth Engine assumptions A1 / A2 and the cost of window and water-body builders on EMU_Deccan_forest.
+
+## 11. Live smoke-test wiring (this delivery)
+
+`assess.py` (orchestrator + `EEProvider` + audit-trail writers), `parity.py` (EE vs numpy), `notebooks/v028_smoke_test.ipynb`.
+It runs ONE terrestrial zone (`EMU_Deccan_forest`) and ONE aquatic zone (`Lake_Suman`); it does not touch the headline
+aggregation, `main`, or the 15-tile run. Only indicators that are applicable AND proposed-scoreable are computed; contextual and
+screening indicators are listed with their status and reason. `tspi` is reported `pending_methodology` (Phase 4).
+
+Audit trail columns: `indicator, status, site_value, site_unit, site_support, reference_population, reference_n, reference_unit,
+reference_support, benchmark, scoring_method, applicability_reason, compatibility_checks, provenance` (+ reason, detail, score,
+direction, tier, reference median / MAD, water-body funnel, diagnostics, flags, other references, validation status, seconds).
+
+Parity checks (statuses MATCH / DISCREPANCY / INFO / HARNESS_ERROR): per-pixel constructs vs the numpy formulas on the same
+pixels (natural share, riparian natural cover, shoreline disturbance, net tree-cover change, raw wcpi, forest-loss numerator /
+denominator / year count); block cells (A1); cell sampling (A2); site aggregation (EE `reduceRegion` vs numpy coverage-weighted mean,
+with the boundary-pixel weighting effect reported separately); water-body records (area, pure-water pixels, unit value).

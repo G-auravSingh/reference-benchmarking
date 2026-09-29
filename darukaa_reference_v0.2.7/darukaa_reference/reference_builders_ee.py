@@ -90,13 +90,13 @@ def _add_uid(ee, fc):
 
 def unit_records_ee(ee, *, region, water_mask, metric_image, kind: str, native_scale_m: float,
                     permanence_image=None, ring_width_m: float = K.RIPARIAN_RING_WIDTH_M,
-                    min_area_m2: float = 0.0, tile_scale: int = 4) -> List[Dict]:
+                    min_area_m2: float = 0.0, tile_scale: int = 4, crs: Optional[str] = None) -> List[Dict]:
     """One record per water body in `region`: uid, area_m2, pure_px, value, permanence.
 
     kind='water': value = mean of `metric_image` over the body's PURE-water pixels.
     kind='ring' : value = mean over the land ring of width ring_width_m (ALL water excluded)."""
     pure = pure_water_mask(water_mask)
-    units = _add_uid(ee, S.ee_water_body_units(ee, water_mask, region, native_scale_m, min_area_m2))
+    units = _add_uid(ee, S.ee_water_body_units(ee, water_mask, region, native_scale_m, min_area_m2, crs=crs))
     v = metric_image.select(0).rename("v")
     if kind == "water":
         val_fc = units
@@ -106,10 +106,11 @@ def unit_records_ee(ee, *, region, water_mask, metric_image, kind: str, native_s
         v = v.updateMask(water_mask.Not())
     perm = (permanence_image.select(0).rename("perm") if permanence_image is not None
             else ee.Image.constant(0).rename("perm"))
+    extra = {"crs": S.ee_native_projection(ee, native_scale_m, crs)} if crs else {}
     vals = v.addBands(perm).reduceRegions(collection=val_fc, reducer=ee.Reducer.mean(),
-                                          scale=native_scale_m, tileScale=tile_scale)
+                                          scale=native_scale_m, tileScale=tile_scale, **extra)
     pure_px = pure.rename("p").reduceRegions(collection=units, reducer=ee.Reducer.sum(),
-                                             scale=native_scale_m, tileScale=tile_scale)
+                                             scale=native_scale_m, tileScale=tile_scale, **extra)
     vf = {f["properties"]["uid"]: f["properties"] for f in vals.getInfo()["features"]}
     pf = {f["properties"]["uid"]: f["properties"] for f in pure_px.getInfo()["features"]}
     out = []
@@ -125,7 +126,8 @@ def water_body_reference_ee(ee, *, site_geometry, water_mask, metric_image, kind
                             radii_km: Sequence[float] = (10.0, 25.0, 50.0), min_reference_n: int = IC.MIN_COMPARABLE_WATER_BODIES,
                             permanence_image=None, ring_width_m: float = K.RIPARIAN_RING_WIDTH_M,
                             min_pure_px: int = IC.MIN_PURE_WATER_PIXELS, area_ratio: float = IC.WATER_BODY_AREA_RATIO,
-                            permanence_tol: float = IC.WATER_BODY_PERMANENCE_TOL, want_reference: bool = True) -> Dict:
+                            permanence_tol: float = IC.WATER_BODY_PERMANENCE_TOL, want_reference: bool = True,
+                            crs: Optional[str] = None) -> Dict:
     """Target water body + comparable-water-body reference, widening the radius until the
     documented minimum number of comparable bodies is reached (never fabricating one).
 
@@ -141,8 +143,8 @@ def water_body_reference_ee(ee, *, site_geometry, water_mask, metric_image, kind
         zone = centre.buffer(r_km * 1000.0)
         recs = unit_records_ee(ee, region=zone, water_mask=water_mask, metric_image=metric_image, kind=kind,
                                native_scale_m=native_scale_m, permanence_image=permanence_image,
-                               ring_width_m=ring_width_m)
-        hits = _bodies_touching_site(ee, zone, site_geometry, water_mask, native_scale_m)
+                               ring_width_m=ring_width_m, min_area_m2=30.0 * native_scale_m ** 2, crs=crs)
+        hits = _bodies_touching_site(ee, zone, site_geometry, water_mask, native_scale_m, crs)
         target = next((r for r in recs if r["uid"] in hits), None)
         if target is None:
             continue
@@ -172,24 +174,27 @@ def water_body_reference_ee(ee, *, site_geometry, water_mask, metric_image, kind
     return result
 
 
-def _bodies_touching_site(ee, zone, site_geometry, water_mask, native_scale_m) -> set:
+def _bodies_touching_site(ee, zone, site_geometry, water_mask, native_scale_m, crs=None) -> set:
     """uids of the water bodies (vectorised in `zone`) that intersect the site."""
-    units = _add_uid(ee, S.ee_water_body_units(ee, water_mask, zone, native_scale_m, 0.0))
+    units = _add_uid(ee, S.ee_water_body_units(ee, water_mask, zone, native_scale_m, 0.0, crs=crs))
     hits = units.filterBounds(site_geometry)
     return {f["properties"]["uid"] for f in hits.getInfo()["features"]}
 
 
-# ---------------------------------------------------------------- window references
-def window_reference_ee(ee, *, window_image, region, native_scale_m: float, site_area_m2: float, n: int, seed: int,
-                        support: str, construct: str, unit: str, temporal: str, population: str, tier: str,
-                        population_definition: str, tile_scale: int = 4, extra: Optional[Dict] = None) -> ReferenceData:
-    """Sample non-overlapping site-sized windows of an already-built window image."""
-    vals = S.ee_sample_windows(ee, window_image, region, native_scale_m, site_area_m2, n, seed, tile_scale).getInfo()
+# ---------------------------------------------------------------- cell (site-sized window) references
+def cell_reference_ee(ee, *, cell_image, region, native_scale_m: float, site_area_m2: float, crs: str, n: int,
+                      seed: int, support: str, construct: str, unit: str, temporal: str, population: str,
+                      tier: str, population_definition: str, tile_scale: int = 4,
+                      extra: Optional[Dict] = None) -> ReferenceData:
+    """Sample site-sized cells (each at most once) of an already-built cell image."""
+    fc = S.ee_sample_cells(ee, cell_image, region, native_scale_m, site_area_m2, crs, n, seed, tile_scale)
+    vals = fc.aggregate_array("v").getInfo()
     vals = np.array([v for v in (vals or []) if v is not None], dtype=float)
+    k = S.cell_size_px(site_area_m2, native_scale_m)
     spec = MetricSpec(construct, unit, temporal, support, population,
-                      window_area_m2=float(site_area_m2), native_scale_m=native_scale_m)
-    diag = {"window_radius_m": S.site_window_radius_m(site_area_m2),
-            "sampling_spacing_m": S.sampling_spacing_m(native_scale_m, site_area_m2),
-            "sample_requested": n, "seed": seed, "sampling": "stratifiedSample on validity band, numPoints=0"}
+                      window_area_m2=float(k * native_scale_m) ** 2, native_scale_m=native_scale_m)
+    diag = {"cell_px": k, "cell_side_m": k * native_scale_m, "cell_area_m2": float(k * native_scale_m) ** 2,
+            "site_area_m2": site_area_m2, "crs": crs, "sample_requested": n, "seed": seed,
+            "sampling": "stratifiedSample on validity band in the cell projection, numPoints=0"}
     diag.update(extra or {})
     return ReferenceData(vals, spec, tier, population_definition, diag)

@@ -26,7 +26,7 @@ from darukaa_reference.benchmarking import MetricSpec, ReferenceData
 
 
 # ----------------------------------------------------------------------------------------
-# Site-sized window references (proportions, means, rates)
+# Site-sized cell references (proportions, means, rates): TESSELLATION CELLS (see support.py)
 # ----------------------------------------------------------------------------------------
 def _thin(values: np.ndarray, max_n: Optional[int], seed: int) -> np.ndarray:
     if max_n and values.size > max_n:
@@ -34,51 +34,54 @@ def _thin(values: np.ndarray, max_n: Optional[int], seed: int) -> np.ndarray:
     return values
 
 
-def _window_ref(win: np.ndarray, kernel_area_px: float, site_area_m2: float, native_scale_m: float,
-                support: str, construct: str, unit: str, temporal: str, population: str, tier: str,
-                population_definition: str, eligible: Optional[np.ndarray], max_n: Optional[int], seed: int,
-                extra: Optional[Dict] = None) -> ReferenceData:
-    spacing_px = max(1, int(math.ceil(S.sampling_spacing_m(native_scale_m, site_area_m2) / native_scale_m)))
-    w = win if eligible is None else np.where(eligible, win, np.nan)
-    vals = S.grid_sample(w, spacing_px)
+def _cell_ref(cells: np.ndarray, cell_px: int, site_area_m2: float, native_scale_m: float, support: str,
+              construct: str, unit: str, temporal: str, population: str, tier: str, population_definition: str,
+              eligible_cells: Optional[np.ndarray], max_n: Optional[int], seed: int,
+              extra: Optional[Dict] = None) -> ReferenceData:
+    c = cells if eligible_cells is None else np.where(np.asarray(eligible_cells, bool), cells, np.nan)
+    vals = c[np.isfinite(c)]
     n_before = int(vals.size)
     vals = _thin(vals, max_n, seed)
     spec = MetricSpec(construct, unit, temporal, support, population,
-                      window_area_m2=float(kernel_area_px) * native_scale_m ** 2, native_scale_m=native_scale_m)
-    diag = {"window_radius_m": S.site_window_radius_m(site_area_m2),
-            "sampling_spacing_m": spacing_px * native_scale_m, "n_windows_before_thinning": n_before,
-            "windows_centred_on": "eligible pixels only" if eligible is not None else "all valid pixels"}
+                      window_area_m2=float(cell_px * native_scale_m) ** 2, native_scale_m=native_scale_m)
+    diag = {"cell_px": cell_px, "cell_side_m": cell_px * native_scale_m,
+            "cell_area_m2": float(cell_px * native_scale_m) ** 2, "site_area_m2": site_area_m2,
+            "n_cells_before_thinning": n_before,
+            "cells_centred_on": "eligible cells only" if eligible_cells is not None else "all valid cells"}
     diag.update(extra or {})
     return ReferenceData(vals, spec, tier, population_definition, diag)
 
 
 def window_proportion_reference(binary, valid, site_area_m2, native_scale_m, *, construct, unit, temporal,
                                 population, tier, population_definition, eligible=None, max_n=None, seed=0,
-                                scale_to_percent=False):
-    r = S.window_radius_px(site_area_m2, native_scale_m)
-    win = S.window_mean(np.asarray(binary, float), valid, r)
+                                scale_to_percent=False, offset=(0, 0)):
+    k = S.cell_size_px(site_area_m2, native_scale_m)
+    cells = S.block_mean(np.asarray(binary, float), valid, k, offset)
     if scale_to_percent:
-        win = win * 100.0
-    return _window_ref(win, S.disk_kernel(r).sum(), site_area_m2, native_scale_m, "site_window_proportion",
-                       construct, unit, temporal, population, tier, population_definition, eligible, max_n, seed)
+        cells = cells * 100.0
+    el = None if eligible is None else S.block_centres(eligible, k, offset)
+    return _cell_ref(cells, k, site_area_m2, native_scale_m, "site_window_proportion", construct, unit, temporal,
+                     population, tier, population_definition, el, max_n, seed)
 
 
 def window_mean_reference(values, valid, site_area_m2, native_scale_m, *, construct, unit, temporal,
-                          population, tier, population_definition, eligible=None, max_n=None, seed=0):
-    r = S.window_radius_px(site_area_m2, native_scale_m)
-    win = S.window_mean(np.asarray(values, float), valid, r)
-    return _window_ref(win, S.disk_kernel(r).sum(), site_area_m2, native_scale_m, "site_window_mean",
-                       construct, unit, temporal, population, tier, population_definition, eligible, max_n, seed)
+                          population, tier, population_definition, eligible=None, max_n=None, seed=0, offset=(0, 0)):
+    k = S.cell_size_px(site_area_m2, native_scale_m)
+    cells = S.block_mean(np.asarray(values, float), valid, k, offset)
+    el = None if eligible is None else S.block_centres(eligible, k, offset)
+    return _cell_ref(cells, k, site_area_m2, native_scale_m, "site_window_mean", construct, unit, temporal,
+                     population, tier, population_definition, el, max_n, seed)
 
 
 def window_rate_reference(numerator, denominator, site_area_m2, native_scale_m, years, *, construct, unit,
                           temporal, population, tier, population_definition, pixel_area_m2,
-                          min_denominator_area_m2=0.0, eligible=None, max_n=None, seed=0):
-    r = S.window_radius_px(site_area_m2, native_scale_m)
-    win = S.window_rate(numerator, denominator, r, years, pixel_area_m2, min_denominator_area_m2)
-    return _window_ref(win, S.disk_kernel(r).sum(), site_area_m2, native_scale_m, "site_window_rate",
-                       construct, unit, temporal, population, tier, population_definition, eligible, max_n, seed,
-                       {"min_window_denominator_area_m2": min_denominator_area_m2})
+                          min_denominator_area_m2=0.0, eligible=None, max_n=None, seed=0, offset=(0, 0)):
+    k = S.cell_size_px(site_area_m2, native_scale_m)
+    cells = S.block_rate(numerator, denominator, k, years, pixel_area_m2, min_denominator_area_m2, offset)
+    el = None if eligible is None else S.block_centres(eligible, k, offset)
+    return _cell_ref(cells, k, site_area_m2, native_scale_m, "site_window_rate", construct, unit, temporal,
+                     population, tier, population_definition, el, max_n, seed,
+                     {"min_cell_denominator_area_m2": min_denominator_area_m2})
 
 
 def site_mean(values, polygon, valid=None) -> Optional[float]:
@@ -114,8 +117,8 @@ def forest_loss_terms(lossyear, treecover2000, first_code, last_code):
 
 
 def forest_loss_case(lossyear, treecover2000, polygon, *, pixel_size_m=30.0, first_code=1, last_code=25,
-                     eligible=None, max_n=None, seed=0, tier="tier2",
-                     population_definition="least-disturbed stratum windows centred on eligible pixels") -> Case:
+                     eligible=None, max_n=None, seed=0, offset=(0, 0), tier="tier2",
+                     population_definition="least-disturbed stratum cells (centre pixel eligible)") -> Case:
     num, den, years = forest_loss_terms(lossyear, treecover2000, first_code, last_code)
     px_area = pixel_size_m ** 2
     poly = np.asarray(polygon, bool)
@@ -128,12 +131,12 @@ def forest_loss_case(lossyear, treecover2000, polygon, *, pixel_size_m=30.0, fir
     ref = window_rate_reference(num, den, site_area, pixel_size_m, years, construct="gross_forest_loss_rate",
                                 unit="percent_per_year", temporal=temporal, population="least_disturbed_stratum",
                                 tier=tier, population_definition=population_definition, pixel_area_m2=px_area,
-                                min_denominator_area_m2=floor, eligible=eligible, max_n=max_n, seed=seed)
+                                min_denominator_area_m2=floor, eligible=eligible, max_n=max_n, seed=seed, offset=offset)
     return Case(site, site_spec, ref, site_area, {"years": years, "baseline_forest_m2": float(den[poly].sum() * px_area)})
 
 
 # ----------------------------------------------------------------------------------------
-# net_forest_change_rate  (D5)
+# net_tree_cover_change_rate  (D5)
 # ----------------------------------------------------------------------------------------
 def dw_tree_indicator(dw_label):
     """1 where Dynamic World says trees, 0 elsewhere, NaN where there is no classification."""
@@ -151,8 +154,8 @@ def tree_share_change_pp_per_year(dw_early, dw_recent, dt_years):
 
 
 def net_change_case(dw_early, dw_recent, polygon, *, dt_years, pixel_size_m=10.0, eligible=None, max_n=None,
-                    seed=0, tier="tier1",
-                    population_definition="all valid site-sized windows of the ecoregion (no land-cover stratum)") -> Case:
+                    seed=0, offset=(0, 0), tier="tier1",
+                    population_definition="all valid site-sized cells of the ecoregion (no land-cover stratum)") -> Case:
     diff = tree_share_change_pp_per_year(dw_early, dw_recent, dt_years)
     valid = np.isfinite(diff)
     poly = np.asarray(polygon, bool)
@@ -164,7 +167,7 @@ def net_change_case(dw_early, dw_recent, polygon, *, dt_years, pixel_size_m=10.0
     ref = window_mean_reference(diff, valid, site_area, pixel_size_m, construct="net_tree_cover_change",
                                 unit="percentage_points_per_year", temporal=temporal, population="regional_ecoregion",
                                 tier=tier, population_definition=population_definition, eligible=eligible,
-                                max_n=max_n, seed=seed)
+                                max_n=max_n, seed=seed, offset=offset)
     return Case(site, site_spec, ref, site_area)
 
 
@@ -176,8 +179,8 @@ def natural_binary(dw_label):
     return np.where(np.isfinite(d), np.isin(d, K.NATURAL_CLASSES).astype(float), np.nan)
 
 
-def natural_habitat_case(dw_label, polygon, *, pixel_size_m=10.0, eligible=None, max_n=None, seed=0,
-                         population_definition="all valid site-sized windows of the ecoregion (no land-cover stratum)") -> Case:
+def natural_habitat_case(dw_label, polygon, *, pixel_size_m=10.0, eligible=None, max_n=None, seed=0, offset=(0, 0),
+                         population_definition="all valid site-sized cells of the ecoregion (no land-cover stratum)") -> Case:
     nat = natural_binary(dw_label)
     valid = np.isfinite(nat)
     poly = np.asarray(polygon, bool)
@@ -189,15 +192,15 @@ def natural_habitat_case(dw_label, polygon, *, pixel_size_m=10.0, eligible=None,
     ref = window_proportion_reference(nat, valid, site_area, pixel_size_m, construct="natural_habitat_share",
                                       unit="percent", temporal="dw_annual_mode", population="regional_ecoregion",
                                       tier="tier1", population_definition=population_definition, eligible=eligible,
-                                      max_n=max_n, seed=seed, scale_to_percent=True)
+                                      max_n=max_n, seed=seed, scale_to_percent=True, offset=offset)
     return Case(site, site_spec, ref, site_area)
 
 
 # ----------------------------------------------------------------------------------------
 # ghm  (site read at native resolution, regional unfiltered stratum)
 # ----------------------------------------------------------------------------------------
-def ghm_case(hmi, polygon, *, pixel_size_m=K.GHM_NATIVE_M, eligible=None, max_n=None, seed=0,
-             population_definition="regional stratum windows, NO pressure filter (item 3, option B)") -> Case:
+def ghm_case(hmi, polygon, *, pixel_size_m=K.GHM_NATIVE_M, eligible=None, max_n=None, seed=0, offset=(0, 0),
+             population_definition="regional stratum cells, NO pressure filter (item 3, option B)") -> Case:
     h = np.asarray(hmi, float)
     valid = np.isfinite(h)
     poly = np.asarray(polygon, bool)
@@ -206,7 +209,7 @@ def ghm_case(hmi, polygon, *, pixel_size_m=K.GHM_NATIVE_M, eligible=None, max_n=
                            native_scale_m=pixel_size_m)
     ref = window_mean_reference(h, valid, site_area, pixel_size_m, construct="human_modification", unit="index_0_1",
                                 temporal="static_2022", population="regional_stratum_unfiltered", tier="tier2",
-                                population_definition=population_definition, eligible=eligible, max_n=max_n, seed=seed)
+                                population_definition=population_definition, eligible=eligible, max_n=max_n, seed=seed, offset=offset)
     return Case(site_mean(h, poly, valid), site_spec, ref, site_area)
 
 
@@ -246,18 +249,25 @@ def sdi_pixel_disturbed(dw_label):
     return np.where(np.isfinite(d), dist.astype(float), np.nan)
 
 
+def thermal_term(lst_c):
+    """Thermal term 0-1 over the SOURCE PRODUCT's valid range (numerical / QC scaling, no ecological threshold);
+    values outside the product's valid range are invalid (NaN)."""
+    t = np.asarray(lst_c, float)
+    span = K.LST_QC_MAX_C - K.LST_QC_MIN_C
+    ok = (t >= K.LST_QC_MIN_C) & (t <= K.LST_QC_MAX_C)
+    return np.where(ok, np.clip((t - K.LST_QC_MIN_C) / span, 0, 1), np.nan)
+
+
 def edpp_index(lst_c, turbidity_protection, moisture, exposure):
-    """Single-band EDPP with ABSOLUTE thermal scaling."""
-    thermal = np.clip((np.asarray(lst_c, float) - K.THERMAL_MIN_C) / (K.THERMAL_MAX_C - K.THERMAL_MIN_C), 0, 1)
-    return np.clip((1 - thermal) * turbidity_protection * moisture * (1 - exposure), 0, 1)
+    """Single-band EDPP; thermal term = 1 - product-range-scaled LST."""
+    return np.clip((1 - thermal_term(lst_c)) * turbidity_protection * moisture * (1 - exposure), 0, 1)
 
 
 def mspl_index(lst_c, nutrient, turbidity, water_persistence):
-    """Single-band MSPL with ABSOLUTE thermal scaling."""
+    """Single-band MSPL; thermal term over the product's valid range."""
     w = K.MSPL_WEIGHTS
-    thermal = np.clip((np.asarray(lst_c, float) - K.THERMAL_MIN_C) / (K.THERMAL_MAX_C - K.THERMAL_MIN_C), 0, 1)
-    return np.clip(w["nutrient"] * nutrient + w["thermal"] * thermal + w["turbidity"] * turbidity
-                   + w["water_persistence"] * water_persistence, 0, 1)
+    return np.clip(w["nutrient"] * nutrient + w["thermal"] * np.nan_to_num(thermal_term(lst_c), nan=0.0)
+                   + w["turbidity"] * turbidity + w["water_persistence"] * water_persistence, 0, 1)
 
 
 # ----------------------------------------------------------------------------------------

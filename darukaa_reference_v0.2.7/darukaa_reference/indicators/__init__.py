@@ -338,29 +338,33 @@ def _img_forest_loss(c):
     f = gfc.select("treecover2000").gte(30)
     return gfc.select("lossyear").updateMask(f).rename("forest_loss_rate")
 
+def _dw_period_label(start_year, end_year):
+    """Dynamic World annual-MODE label over [start_year, end_year]: the raw classification both endpoints use."""
+    import ee
+    return (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
+            .filterDate(f"{start_year}-01-01", f"{end_year}-12-31").select("label").mode())
+
+
 def _dw_tree_binary_period(start_year, end_year):
     """1 where the Dynamic World annual-mode label over [start_year, end_year] is trees, else 0.
     The SAME function builds both endpoints: identical compositing, seasonal handling, masking."""
-    import ee
-    lab = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
-           .filterDate(f"{start_year}-01-01", f"{end_year}-12-31").select("label").mode())
-    return lab.eq(_K.DW_TREES).rename("trees")
+    return _dw_period_label(start_year, end_year).eq(_K.DW_TREES).rename("trees")
 
 
 def _net_change_periods(c):
-    early = tuple(_K.NET_CHANGE_EARLY_YEARS)
+    early = tuple(getattr(c, "net_change_early_years", None) or _K.NET_CHANGE_EARLY_YEARS)
     recent = (c.ndvi_year - 1, c.ndvi_year)
     dt = (sum(recent) / 2.0) - (sum(early) / 2.0)
     return early, recent, dt
 
 
-def _img_net_forest_change(c):
+def _img_net_tree_cover_change(c):
     """Per-pixel change in tree-cover share, percentage points per year (D5): recent - early,
     both from Dynamic World annual-mode composites, divided by the years between the period
     mid-points. Site mean and site-sized window mean are both the change in tree-cover share."""
     early, recent, dt = _net_change_periods(c)
     return (_dw_tree_binary_period(*recent).subtract(_dw_tree_binary_period(*early))
-            .multiply(100.0 / dt).rename("net_forest_change_rate"))
+            .multiply(100.0 / dt).rename("net_tree_cover_change_rate"))
 
 def _img_ndvi(c):
     import ee; y=c.ndvi_year
@@ -587,7 +591,7 @@ def _img_bii(c):
     Real improvement this unlocks: since the new asset is genuinely ANNUAL (not a fixed
     2017-2020 composite), this now selects the specific year matching config.ndvi_year
     (this pipeline's existing "currency standard" -- see forest_loss_rate/
-    net_forest_change_rate) when available, falling back to the full-collection mean only
+    net_tree_cover_change_rate) when available, falling back to the full-collection mean only
     if that year has no image (e.g. a future year not yet published) -- a real accuracy
     improvement over always averaging 2017-2020 regardless of assessment date.
 
@@ -870,7 +874,8 @@ def _wb_unit_value(g, c, metric_img, kind, native_m, construct, unit, population
         out = RB.water_body_reference_ee(
             ee, site_geometry=eg, water_mask=wm, metric_image=metric_img, kind=kind, native_scale_m=native_m,
             construct=construct, unit=unit, temporal=f"annual:{c.ndvi_year} S2 composite", population=population,
-            radii_km=(2.0,), want_reference=False)
+            radii_km=(2.0,), want_reference=False,
+            ring_width_m=float(getattr(c, "riparian_ring_width_m", _K.RIPARIAN_RING_WIDTH_M)))
         if not out["valid"]:
             return {"value": None, "pixels": None, "metadata": {"reason": out["invalid_reason"],
                     "n_pure_water_px": out.get("n_pure_water_px")}}
@@ -945,9 +950,13 @@ def _img_iri(c):
             .add(accessibility.multiply(0.10)).rename('IRI').clamp(0,1))
 
 def _thermal_absolute(lst):
-    """Thermal stress 0-1 from ABSOLUTE bounds (constructs.THERMAL_MIN_C..MAX_C). v0.2.7 scaled by
-    the SITE's own LST min/max, so a site's value depended on the site's own range (X3)."""
-    return lst.subtract(_K.THERMAL_MIN_C).divide(_K.THERMAL_MAX_C - _K.THERMAL_MIN_C).clamp(0, 1)
+    """Thermal term 0-1 over the SOURCE PRODUCT's documented valid range (constructs.LST_QC_MIN_C..MAX_C,
+    Landsat C2 L2 surface temperature, USGS). Absolute (site-independent, fixing X3) but a numerical /
+    QC scaling only: NO ecological temperature threshold is adopted, so EDPP / MSPL stay screening /
+    context. Values outside the product's valid range are masked."""
+    span = _K.LST_QC_MAX_C - _K.LST_QC_MIN_C
+    valid = lst.gte(_K.LST_QC_MIN_C).And(lst.lte(_K.LST_QC_MAX_C))
+    return lst.updateMask(valid).subtract(_K.LST_QC_MIN_C).divide(span).clamp(0, 1)
 
 
 def _img_edpp(c):
@@ -1199,21 +1208,24 @@ def create_default_registry() -> IndicatorRegistry:
                        "Does NOT capture grassland, shrubland, or riparian vegetation "
                        "dynamics — use ndvi_trend and habitat_health for those signals. "
                        "GROSS loss only (independent audit item 9) — does not net off "
-                       "any regrowth/planting; see net_forest_change_rate for that."),
+                       "any regrowth/planting; see net_tree_cover_change_rate for that."),
         "min_reliable_baseline_ha": 5.0,})
 
-    r.register(name="net_forest_change_rate", applicable_realms=("terrestrial", "mixed"),
+    r.register(name="net_tree_cover_change_rate", applicable_realms=("terrestrial", "mixed"),
         display_name="Net Tree-Cover Change (Dynamic World, pp/yr)", source_type="gee",
-        extract_fn=extract_net_forest_change_rate, unit="percentage points per year", value_range=(-100, 100),
-        citation=("Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4. REDEFINED (v0.2.8, decision D5): "
-                  "change in the Dynamic World tree-cover share between an early period (2017-2018) and a recent "
-                  "period (ndvi_year-1..ndvi_year), percentage points per year between period mid-points. ONE product, "
+        extract_fn=extract_net_tree_cover_change_rate, unit="percentage points per year", value_range=(-100, 100),
+        citation=("Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4. REDEFINED and RENAMED (v0.2.8, decisions "
+                  "D5 / 9; was net_forest_change_rate): change in the Dynamic World 'trees' share between an early period "
+                  "(default 2017-2018, configurable) and a recent period (ndvi_year-1..ndvi_year), percentage points per year "
+                  "between period mid-points. A REMOTE-SENSING TREE-COVER PROXY, NOT direct forest-area gain/loss: the DW "
+                  "'trees' class is a per-pixel land-cover label that can include plantations, orchards and other tall "
+                  "dense vegetation, whereas 'forest' is a land-use / definitional concept (minimum area, canopy height "
+                  "and cover, exclusion of agricultural tree crops), so equivalence is not demonstrated. ONE product, "
                   "identical annual-mode compositing, seasonal handling and masking at both endpoints; Hansen is NOT "
-                  "combined with DW (v0.2.7 gain = DW trees now on pixels below 30 % canopy in Hansen 2000 compared "
-                  "two products' definitions). Absolute tree-area change (ha) is a separate diagnostic."),
+                  "combined with DW. Absolute tree-area change (ha) is a separate diagnostic."),
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=1,
-        metadata={"gee_image_fn": _img_net_forest_change, "tnfd_dim": 1,
-                  "display_name_report": "Net Tree-Cover Change (pp/yr, Dynamic World)",
+        metadata={"gee_image_fn": _img_net_tree_cover_change, "tnfd_dim": 1,
+                  "display_name_report": "Net Tree-Cover Change (pp/yr, Dynamic World tree-cover proxy)",
                   "scope_note": ("Signed: positive = tree-cover share increased. Classifier noise between periods "
                                  "produces spurious +/- change; the site is placed among site-sized windows by "
                                  "percentile, which carry that noise.")})
@@ -1741,7 +1753,7 @@ def _annualized_rate_pct(area_m2, baseline_m2, n_years):
     """Pure-Python rate arithmetic (area / baseline * 100 / years), factored out
     of the GEE call chain so it is directly unit-testable without live GEE
     credentials (see tests/test_forest_indicators.py) and so both
-    extract_forest_loss_rate and extract_net_forest_change_rate share exactly
+    extract_forest_loss_rate and extract_net_tree_cover_change_rate share exactly
     one implementation of this arithmetic rather than two independently-typed
     copies that could silently drift apart. Mirrors the GEE-side `.max(1)`
     baseline floor exactly, so a client-side test exercises the SAME numeric
@@ -1768,7 +1780,7 @@ def _forest_loss_terms_image(c):
 
 def _forest_baseline_and_loss(eg, c):
     """Shared real GEE computation used by BOTH forest_loss_rate (gross loss
-    only) and net_forest_change_rate (gain - loss): the Hansen GFC image,
+    only) and net_tree_cover_change_rate (gain - loss): the Hansen GFC image,
     2000 forest baseline area, and per-window loss areas. Factored out
     (independent audit item 9 follow-up) so the two indicators can never
     silently compute the baseline or loss windows differently from each
@@ -1828,7 +1840,7 @@ def extract_forest_loss_rate(g, c):
     just an estimator mismatch. Split instead of reverted: this indicator goes
     back to being pure gross loss (the original, historically-established
     "Tree Cover Loss Rate" definition -- see Thread 01/03), and the gain
-    signal now drives its own separate indicator, net_forest_change_rate
+    signal now drives its own separate indicator, net_tree_cover_change_rate
     (robust_z, genuinely signed-compatible), rather than overloading one
     metric with two incompatible statistical treatments.
 
@@ -1887,7 +1899,7 @@ def extract_forest_loss_rate(g, c):
                 "low_baseline_flag": low_baseline,
                 "note": (f"Gross tree-canopy loss rate ONLY (Hansen GFC lossyear, "
                         f"≥30% canopy density threshold) for '{primary_label}'. Does not "
-                        f"net off any regrowth/planting -- see net_forest_change_rate for "
+                        f"net off any regrowth/planting -- see net_tree_cover_change_rate for "
                         f"the signed gain-minus-loss picture, e.g. for restoration/"
                         f"agroforestry projects."),
                 "low_baseline_note": (
@@ -1906,7 +1918,7 @@ def extract_forest_loss_rate(g, c):
         return {"value": None, "pixels": None}
 
 
-def extract_net_forest_change_rate(g, c):
+def extract_net_tree_cover_change_rate(g, c):
     """Net tree-cover change, percentage points per year (D5), from ONE product (Dynamic World).
     Does not combine DW with Hansen: v0.2.7's gain (DW trees now on pixels below 30 % canopy in
     Hansen 2000) compared two products' definitions rather than measuring change."""
@@ -1914,7 +1926,7 @@ def extract_net_forest_change_rate(g, c):
     eg = _to_ee(g)
     try:
         early, recent, dt = _net_change_periods(c)
-        r = _reduce(_img_net_forest_change(c), g, 10)
+        r = _reduce(_img_net_tree_cover_change(c), g, 10)
         pa = ee.Image.pixelArea()
         def area_ha(period):
             a = pa.updateMask(_dw_tree_binary_period(*period)).reduceRegion(
@@ -1927,7 +1939,7 @@ def extract_net_forest_change_rate(g, c):
                          "note": "percentage points of tree-cover share per year; one product, identical compositing"}
         return r
     except Exception as e:
-        logger.warning(f"net_forest_change_rate: {e}")
+        logger.warning(f"net_tree_cover_change_rate: {e}")
         return {"value": None, "pixels": None}
 
 def extract_kba_overlap(g,c):
@@ -2299,6 +2311,19 @@ def extract_riparian_ndvi_trend(g,c):
         return _reduce(trend_img,riparian,10)
     except Exception as e: logger.warning(f"riparian_ndvi_trend: {e}"); return {"value":None,"pixels":None}
 
+def _s1_water_occurrence(c):
+    """Continuous water OCCURRENCE 0-1 (share of Sentinel-1 dates classified as water): the permanence
+    used to match comparable water bodies (|permanence difference| <= 0.25, decision E2). Same detection
+    rule as _img_jrc_water_persistence, before its > 0.75 threshold."""
+    import ee
+    y = c.ndvi_year
+    s1 = (ee.ImageCollection('COPERNICUS/S1_GRD').filterDate(f'{y - 1}-01-01', f'{y}-12-31')
+          .filter(ee.Filter.eq('instrumentMode', 'IW'))
+          .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')).select('VV'))
+    water = s1.map(lambda img: img.focal_mean(radius=30, units='meters').lt(-16).rename('Water'))
+    return water.mean().rename('permanence')
+
+
 def _img_jrc_water_persistence(c):
     """Real, reusable, geometry-independent persistent-water image (0/1 per
     pixel) -- extracted out of extract_jrc_water_persistence's own logic so
@@ -2412,7 +2437,9 @@ def extract_shdi(g,c):
     except Exception as e: logger.warning(f"shdi: {e}"); return {"value":None,"pixels":None}
 
 def extract_lai(g,c): return _reduce(_img_lai(c),g,500)
-def extract_chm(g,c): return _reduce(_img_chm(c),g,25)
+def extract_chm(g, c):
+    # v0.2.8: read at the ETH product's native 10 m (v0.2.7 read it at 25 m while the reference used 10 m)
+    return _reduce(_img_chm(c), g, 10)
 
 def extract_ivsi(g,c):
     import ee; eg=_to_ee(g)

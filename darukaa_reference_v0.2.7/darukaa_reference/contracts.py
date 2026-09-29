@@ -63,9 +63,9 @@ C: Dict[str, dict] = {
          "requires -- log_response_ratio is undefined for site_value<=0, and a real v0.2.5 "
          "change had made site_value a signed gain-minus-loss NET rate, breaking that "
          "contract for the common real-world case of net loss. Split into two indicators "
-         "instead of reverting the real gain-detection work: see net_forest_change_rate "
+         "instead of reverting the real gain-detection work: see net_tree_cover_change_rate "
          "for the signed picture, on its own robust_z-based contract.")),
- "net_forest_change_rate": dict(construct="C1_landscape", subdimension="restoration_trajectory",
+ "net_tree_cover_change_rate": dict(construct="C1_landscape", subdimension="restoration_trajectory",
     measurement_scale="interval", reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="retain", input_layers=[HANSEN, DW],
     note=("NEW (independent audit item 9, 2026-09-27): split out of forest_loss_rate. Signed "

@@ -19,7 +19,7 @@ Scored = active AND computed-eligible (has reference + uncertainty + baseline ti
 | `flii` | forest_integrity | retain | ✅ | baseline | bounded | robust_z | contemporary_best_on_offer | terr/mixe | flii_asset | Forest realm only. v0.2.1: renamed from 'FLII' — this is a Darukaa-computed proxy (VIIRS + |
 | `jrc_water_persistence` | hydrology | retain | ✅ | baseline | ratio | log_response_ratio | regional_distribution | terr/aqua/mixe | jrc_water | Hydrology/surface-water permanence. |
 | `riparian_ndvi_trend` | hydrology | context | — | contextual | interval | — | — | terr/aqua/mixe | sentinel2_ndvi | Trend-based (correct NDVI use); contextual at cycle-1. |
-| `net_forest_change_rate` | restoration_trajectory | retain | ✅ | baseline | interval | robust_z | regional_distribution | terr/mixe | hansen_gfc, dynamic_world |  |
+| `net_tree_cover_change_rate` | restoration_trajectory | retain | ✅ | baseline | interval | robust_z | regional_distribution | terr/mixe | hansen_gfc, dynamic_world |  |
 | `riparian_natural_veg_share` | riparian_condition | retain | ✅ | baseline | bounded | robust_z | regional_distribution | aqua/mixe | dynamic_world |  |
 
 ## C2 · Vegetation condition

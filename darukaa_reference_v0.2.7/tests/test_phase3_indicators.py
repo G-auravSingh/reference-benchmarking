@@ -39,26 +39,26 @@ def _forest(n=480, p_loss=0.10, seed=1):
 
 
 def test_forest_loss_site_and_reference_are_the_same_rate():
-    ly, tc = _forest()
-    poly = disk(ly.shape, (240, 240), 15)
+    ly, tc = _forest()                                   # 480 x 480 px of 30 m, 10 % of pixels lost over 25 years
+    poly = np.zeros(ly.shape, bool); poly[231:264, 231:264] = True        # ONE cell: 33 x 33 px = 98 ha
     case = R.forest_loss_case(ly, tc, poly, pixel_size_m=30.0)
-    # the discretised disc and the window kernel are the same footprint for this site
-    assert S.disk_kernel(15).sum() == S.disk_kernel(S.window_radius_px(case.site_area_m2, 30.0)).sum() == poly.sum()
+    assert S.cell_size_px(case.site_area_m2, 30.0) == 33 and case.reference.spec.window_area_m2 == case.site_area_m2
     num, den, years = R.forest_loss_terms(ly, tc, 1, 25)
     expected = num[poly].sum() / den[poly].sum() * 100.0 / 25.0                       # by hand
     assert case.site_value == pytest.approx(expected) and years == 25
-    ref_at_site = S.window_rate(num, den, 15, 25, 900.0, IC.FOREST_BASELINE_MIN_M2)[240, 240]
-    assert ref_at_site == pytest.approx(case.site_value, rel=1e-12)                    # identical unit -> identical value
+    cells = S.block_rate(num, den, 33, 25, 900.0, IC.FOREST_BASELINE_MIN_M2)
+    assert cells[7, 7] == pytest.approx(case.site_value, rel=1e-12)                    # identical unit -> identical value
+    assert np.any(np.isclose(case.reference.values, case.site_value))                  # ...and it is in the reference
     assert case.reference.spec.unit == case.site_spec.unit == "percent_per_year"
     v = case.reference.finite()
     assert v.size >= IC.MIN_REFERENCE_WINDOWS and np.all((v >= 0) & (v <= 100 / 25))  # %/yr, never a year code (v0.2.7: 16/17)
     assert v.mean() == pytest.approx(0.10 * 100 / 25, rel=0.05)                         # 10 % loss over 25 y = 0.4 %/yr
     assert case.reference.population_definition and case.reference.reference_n == v.size
-    # end to end
     ev = B.SiteEvidence("terrestrial", case.site_area_m2, frozenset({"woody"}), forest_baseline_m2=case.extras["baseline_forest_m2"])
     a = B.evaluate_indicator(C["forest_loss_rate"], ev, case.site_value, case.site_spec, {"tier2": case.reference})
     assert a.status == "scored" and a.estimator == "reference_percentile" and a.direction == "lower_is_better"
     assert a.reference_n == v.size and 0.0 <= a.score <= 1.0
+    assert all(x.startswith("PASS") for x in a.compatibility.values())                 # every compatibility check passed
 
 
 def test_forest_loss_numerator_is_a_subset_of_the_baseline_and_the_5ha_floor_applies():
@@ -108,7 +108,7 @@ def test_percentile_lower_is_better_with_zero_inflated_reference():
     assert a_hot.benchmark_details["reference_n"] == a_hot.reference_n
 
 
-# ==================================================================== net_forest_change_rate (D5)
+# ==================================================================== net_tree_cover_change_rate (D5)
 def _dw(shape, fill):
     return np.full(shape, float(fill))
 
@@ -118,7 +118,7 @@ def test_net_change_identical_endpoints_gives_zero():
     poly = disk(dw.shape, (150, 150), 15)
     case = R.net_change_case(dw, dw.copy(), poly, dt_years=7.0)
     assert case.site_value == 0.0 and np.all(case.reference.finite() == 0.0)
-    a = B.evaluate_indicator(C["net_forest_change_rate"], B.SiteEvidence("terrestrial", case.site_area_m2), case.site_value,
+    a = B.evaluate_indicator(C["net_tree_cover_change_rate"], B.SiteEvidence("terrestrial", case.site_area_m2), case.site_value,
                              case.site_spec, {"tier1": case.reference})
     assert a.status == "scored" and a.score == pytest.approx(0.5)            # equal to an all-tied reference: mid-rank
 
@@ -133,14 +133,14 @@ def test_net_change_planting_gives_positive_pp_per_year():
     half = recent.copy(); half[poly & (np.arange(300)[None, :] < 150)] = K.DW_GRASS
     case_half = R.net_change_case(early, half, poly, dt_years=7.0)
     assert case_half.site_value == pytest.approx((poly & (np.arange(300)[None, :] >= 150)).sum() / poly.sum() * 100 / 7.0)
-    a = B.evaluate_indicator(C["net_forest_change_rate"], B.SiteEvidence("terrestrial", case.site_area_m2), case.site_value,
+    a = B.evaluate_indicator(C["net_tree_cover_change_rate"], B.SiteEvidence("terrestrial", case.site_area_m2), case.site_value,
                              case.site_spec, {"tier1": case.reference})
     assert a.status == "scored" and a.score > 0.95 and a.direction == "higher_is_better"
     # tree LOSS is negative and scores below the regional reference
     loss = _dw((300, 300), K.DW_TREES); loss_recent = loss.copy(); loss_recent[poly] = K.DW_CROPS
     cl = R.net_change_case(loss, loss_recent, poly, dt_years=7.0)
     assert cl.site_value == pytest.approx(-100.0 / 7.0)
-    assert B.evaluate_indicator(C["net_forest_change_rate"], B.SiteEvidence("terrestrial", cl.site_area_m2), cl.site_value,
+    assert B.evaluate_indicator(C["net_tree_cover_change_rate"], B.SiteEvidence("terrestrial", cl.site_area_m2), cl.site_value,
                                 cl.site_spec, {"tier1": cl.reference}).score < 0.05
 
 
@@ -153,8 +153,8 @@ def test_net_change_reference_is_not_fixed_by_the_stratum():
     v = case.reference.finite()
     assert v.std() > 0 and len(np.unique(np.round(v, 9))) > 10               # a real distribution, not a constant
     assert case.reference.spec.population == "regional_ecoregion"
-    assert case.reference.diagnostics["windows_centred_on"] == "all valid pixels"      # no DW-class stratum
-    assert IC.CONTRACTS["net_forest_change_rate"].reference_population not in IC.POPULATION_SELECTORS
+    assert case.reference.diagnostics["cells_centred_on"] == "all valid cells"      # no DW-class stratum
+    assert IC.CONTRACTS["net_tree_cover_change_rate"].reference_population not in IC.POPULATION_SELECTORS
     # v0.2.7 reference: +/-1 proxy conditioned on the tree stratum had median exactly 1
     proxy_pool = np.where(early == K.DW_TREES, 1.0, np.nan)
     assert np.nanmedian(proxy_pool) == 1.0
@@ -166,7 +166,8 @@ def test_net_change_reference_is_not_fixed_by_the_stratum():
 
 def test_net_change_single_product_no_hansen_in_the_ee_definition():
     import darukaa_reference.indicators as I
-    src = inspect.getsource(I._img_net_forest_change) + inspect.getsource(I._dw_tree_binary_period) + inspect.getsource(I.extract_net_forest_change_rate)
+    src = (inspect.getsource(I._img_net_tree_cover_change) + inspect.getsource(I._dw_tree_binary_period)
+           + inspect.getsource(I._dw_period_label) + inspect.getsource(I.extract_net_tree_cover_change_rate))
     assert "UMD/hansen" not in src and "global_forest_change" not in src and "treecover2000" not in src
     assert "GOOGLE/DYNAMICWORLD" in src
     class Cfg: ndvi_year = 2025
@@ -188,20 +189,25 @@ def test_natural_habitat_regional_window_reference_and_absolute_diagnostic():
     case = R.natural_habitat_case(dw, poly, pixel_size_m=10.0)
     assert case.site_value == pytest.approx(100.0 * round(0.8 * idx.size) / idx.size)      # by hand
     v = case.reference.finite()
-    assert abs(v.mean() - 60.0) < 1.5 and v.std() > 1.0                                    # regional windows: spread, centred on 60 %
+    assert abs(v.mean() - 60.0) < 1.5 and v.std() > 1.0                                    # cells: spread, centred on 60 %
     pix = R.natural_binary(dw).ravel() * 100
     assert np.median(np.abs(pix - np.median(pix))) == 0.0 and np.median(np.abs(v - np.median(v))) > 0.5   # v0.2.7 pixel MAD = 0
     ev = B.SiteEvidence("terrestrial", case.site_area_m2)
     a = B.evaluate_indicator(C["natural_habitat"], ev, case.site_value, case.site_spec, {"tier1": case.reference})
-    assert a.status == "scored" and a.score > 0.99                                          # far above the regional windows
-    assert a.reference_population.startswith("all valid site-sized windows of the ecoregion")
+    assert a.status == "scored" and a.score > 0.99                                          # far above the regional cells
+    assert a.reference_population.startswith("all valid site-sized cells of the ecoregion")
     assert a.reference_n == v.size >= IC.MIN_REFERENCE_WINDOWS
     d = a.diagnostics["absolute_natural_reference"]                                        # SEPARATE from the score
     assert d["departure_percentage_points"] == pytest.approx(100.0 - case.site_value)
     assert d["reference_condition"] == "100 % natural cover"
-    # site exactly at the regional condition sits mid-distribution, not at an extreme
     typical = B.percentile_benchmark(float(np.median(v)), v, "higher_is_better")["score"]
-    assert 0.4 < typical < 0.6
+    assert 0.4 < typical < 0.6                                                              # a typical site sits mid-distribution
+    # decision 1: a 0.47 ha zone (47 native pixels) IS assessed, against cells of its own size
+    tiny = np.zeros(dw.shape, bool); tiny[100:107, 100:107] = True                          # 49 px = 0.49 ha
+    tc = R.natural_habitat_case(dw, tiny, pixel_size_m=10.0)
+    assert tc.reference.spec.window_area_m2 == 4900.0 and tc.reference.reference_n > 1000
+    assert B.evaluate_indicator(C["natural_habitat"], B.SiteEvidence("terrestrial", 4.9e3), tc.site_value, tc.site_spec,
+                                {"tier1": tc.reference}).status == "scored"
 
 
 # ==================================================================== ghm
@@ -408,31 +414,41 @@ def test_ring_metric_uses_the_same_ring_for_target_and_reference():
 
 # ==================================================================== EDPP / MSPL
 def test_edpp_mspl_use_absolute_thermal_scaling_and_a_single_band():
+    # decision 6: NO ecological temperature bound. The scaling range is the SOURCE PRODUCT's valid range.
+    assert not hasattr(K, "THERMAL_MIN_C") and not hasattr(K, "THERMAL_MAX_C")            # the 20-40 degC guess is withdrawn
+    assert K.LST_VALID_DN_MIN == 293 and K.LST_VALID_DN_MAX == 65535                       # USGS Landsat C2 L2 ST valid DN range
+    assert K.LST_QC_MIN_C == pytest.approx(293 * 0.00341802 + 149.0 - 273.15)
+    assert K.LST_QC_MAX_C == pytest.approx(65535 * 0.00341802 + 149.0 - 273.15)
+    assert K.LST_QC_MIN_C == pytest.approx(-123.15, abs=0.01) and K.LST_QC_MAX_C == pytest.approx(99.85, abs=0.01)
     # two sites with the SAME absolute temperature (30 degC) but different local ranges
     site_a = np.array([30.0, 30.2, 30.5]); site_b = np.array([29.0, 30.0, 31.0])
     old = lambda lst, x: (x - lst.min()) / max(lst.max() - lst.min(), 1e-6)
-    assert old(site_a, 30.0) == 0.0 and old(site_b, 30.0) == 0.5                        # v0.2.7: range-dependent
-    thermal = (30.0 - K.THERMAL_MIN_C) / (K.THERMAL_MAX_C - K.THERMAL_MIN_C)
-    assert thermal == 0.5
-    assert R.edpp_index(30.0, 1.0, 1.0, 0.0) == pytest.approx(1 - 0.5)                  # absolute: identical for both sites
-    assert R.edpp_index(20.0, 1.0, 1.0, 0.0) == 1.0 and R.edpp_index(40.0, 1.0, 1.0, 0.0) == 0.0
-    assert R.mspl_index(30.0, 0.0, 0.0, 0.0) == pytest.approx(K.MSPL_WEIGHTS["thermal"] * 0.5)
-    assert R.mspl_index(45.0, 1, 1, 1) == pytest.approx(1.0) and sum(K.MSPL_WEIGHTS.values()) == pytest.approx(1.0)
-    # code structure: one image function per indicator is BOTH the site value and the reference
+    assert old(site_a, 30.0) == 0.0 and old(site_b, 30.0) == 0.5                            # v0.2.7: range-dependent
+    span = K.LST_QC_MAX_C - K.LST_QC_MIN_C
+    thermal30 = (30.0 - K.LST_QC_MIN_C) / span
+    assert R.thermal_term(30.0) == pytest.approx(thermal30) and R.thermal_term(30.0) == R.thermal_term(np.float64(30.0))
+    assert R.edpp_index(30.0, 1.0, 1.0, 0.0) == pytest.approx(1 - thermal30)                # identical for both sites
+    assert R.mspl_index(30.0, 0.0, 0.0, 0.0) == pytest.approx(K.MSPL_WEIGHTS["thermal"] * thermal30)
+    assert np.isnan(R.thermal_term(150.0)) and np.isnan(R.thermal_term(-130.0))              # outside the product's valid range: invalid
+    assert sum(K.MSPL_WEIGHTS.values()) == pytest.approx(1.0)
+    # no ecological discrimination is claimed: over terrestrial temperatures the term barely varies
+    assert R.thermal_term(45.0) - R.thermal_term(20.0) < 0.15
     import darukaa_reference.indicators as I
     from darukaa_reference.indicators import create_default_registry
     reg = create_default_registry()
     assert reg.get("edpp").metadata["gee_image_fn"] is I._img_edpp and reg.get("mspl").metadata["gee_image_fn"] is I._img_mspl
     for extract, img in ((I.extract_edpp, "_img_edpp(c)"), (I.extract_mspl, "_img_mspl(c)")):
-        s = inspect.getsource(extract)
-        assert img in s and "minMax" not in s and "reduceRegion" not in s
+        s_ = inspect.getsource(extract)
+        assert img in s_ and "minMax" not in s_ and "reduceRegion" not in s_
     for fn in (I._img_edpp, I._img_mspl, I._thermal_absolute):
-        s = inspect.getsource(fn)
-        assert "minMax" not in s and "reduceRegion" not in s                            # no site-derived statistic
+        s_ = inspect.getsource(fn)
+        assert "minMax" not in s_ and "reduceRegion" not in s_                              # no site-derived statistic
+    assert "_K.LST_QC_MIN_C" in inspect.getsource(I._thermal_absolute) and "20" not in inspect.getsource(I._thermal_absolute)
     assert 'rename("EDPP")' in inspect.getsource(I._img_edpp) and 'rename("MSPL")' in inspect.getsource(I._img_mspl)
-    assert "_K.THERMAL_MIN_C" in inspect.getsource(I._thermal_absolute)
     for n in ("edpp", "mspl"):
         assert C[n].image_is_single_band and not C[n].site_relative_normalisation
+        assert C[n].proposed_scoreability in ("screening", "contextual")                    # NOT promoted to scoreable
+        assert "NOT an ecological threshold" in C[n].definition
 
 
 # ==================================================================== blocked / retired

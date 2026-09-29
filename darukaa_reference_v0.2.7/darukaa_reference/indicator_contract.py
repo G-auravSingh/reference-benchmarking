@@ -74,6 +74,17 @@ MIN_REFERENCE_WINDOWS = 30            # documented minimum reference windows (pr
 MIN_COMPARABLE_WATER_BODIES = 10      # documented minimum comparable reference water bodies (E2; proposal)
 WATER_BODY_AREA_RATIO = 3.0           # comparable if area within [1/3, 3] x target (E2)
 WATER_BODY_PERMANENCE_TOL = 0.25      # comparable if |permanence difference| <= 0.25 (E2)
+# Decision 5: the percentile convention is defined ONCE, here, and implemented in benchmarking.percentile_benchmark.
+PERCENTILE_CONVENTION = ("mid-rank empirical CDF of the reference units, oriented so that a HIGHER score is always "
+                         "BETTER: score = P(reference worse than site) + 0.5 * P(reference tied with site); "
+                         "'worse' means lower for higher_is_better indicators and higher for lower_is_better ones; "
+                         "ties are within isclose(rtol=1e-9, atol=1e-12); score is already in [0, 1], no logistic")
+# Decision 2: the pressure-indicator support rule, stated once and referenced by every exempt contract.
+PRESSURE_SUPPORT_RULE = ("Pressure-indicator support rule: ghm, hdi and light_pollution are LANDSCAPE-PRESSURE "
+                         "indicators. Their value describes the landscape around a site at the product's own "
+                         "resolution, so they are exempt from the generic condition-polygon floor (10 native "
+                         "pixels): a site smaller than the product pixel reports the covering pixel(s) and is "
+                         "flagged below_generic_floor_landscape_pressure_exempt. Condition indicators are NOT exempt.")
 FLOOR_BASES = ("polygon_native_pixels", "pure_water_pixels", "exempt_landscape_pressure")
 IMPLEMENTATION_STATUSES = ("v0.2.7_legacy", "v0.2.8_synthetic_tested", "blocked", "v0.2.8_live_validated")
 
@@ -162,6 +173,7 @@ class IndicatorContract:
     diagnostics: Tuple[str, ...] = ()            # contextual diagnostics reported beside (never inside) the score
     implementation_status: str = "v0.2.7_legacy"
     synthetic_tests: Tuple[str, ...] = ()        # names of the synthetic fixtures with known answers
+    parameters: Tuple[Tuple[str, object], ...] = ()   # explicit, configurable methodology parameters (decisions 7, 8)
 
 
 # ------------------------------------------------------------------------------ validator
@@ -304,12 +316,11 @@ IndicatorContract(
         "scoreable", "D2: departure from REGIONAL condition = percentile of the site among site-sized windows "
         "of the ecoregion. Departure from an ideal (100 % natural) is reported separately as a diagnostic.",
         "reference_percentile", "higher_is_better", "annual:ndvi_year (DW mode)", 10.0, False,
-        Applicability(TM, "any", None, 10, None, 100, "polygon_native_pixels"), inputs=("dw_label",),
+        Applicability(TM, "any", None, 10), inputs=("dw_label",),
         min_reference_n=MIN_REFERENCE_WINDOWS, expects_tied_reference=True,
         diagnostics=("absolute_natural_reference",),
-        min_support_rationale="A share computed from n pixels has resolution 1/n; below ~100 native pixels "
-                              "(1 ha at 10 m) it is too coarse to place a site inside the window distribution.",
-        limitations=("Windows are centred on ecoregion pixels of any land cover (no class stratification) so the "
+        limitations=("Generic 10-native-pixel floor (decision 1): a share from 10-99 pixels is coarse (resolution "
+                     "1/n); the reference cells are the same size, so the comparison stays like-for-like.","Windows are centred on ecoregion pixels of any land cover (no class stratification) so the "
                      "reference is the regional condition, not a like-for-like habitat comparison.",
                      "Reference is tie-heavy where much of the ecoregion is 100 % natural: percentile, not z-score."),
         implementation_status="v0.2.8_synthetic_tested",
@@ -343,19 +354,21 @@ IndicatorContract(
                          "test_forest_loss_windows_use_correct_year_counts",
                          "test_percentile_lower_is_better_with_zero_inflated_reference")),
 IndicatorContract(
-        "net_forest_change_rate", "D5: change in Dynamic World tree-cover share between an early and a recent period, "
-        "percentage points per year (one product, identical compositing at both endpoints).",
+        "net_tree_cover_change_rate", "Change in Dynamic World tree-cover share between an early and a recent period, percentage "
+        "points per year (one product, identical compositing at both endpoints): a remote-sensing "
+        "tree-cover proxy, not direct forest-area gain/loss.",
         "C1_landscape", "restoration_trajectory", "polygon_mean", "site_window_mean", "regional_ecoregion",
         "tier1", "scoreable", "Single-product change; site and reference windows use the same difference image. "
         "Population is NOT land-cover stratified (the stratum is chosen from the same DW classes the change is "
         "measured on: selection on the outcome, X2).",
         "reference_percentile", "higher_is_better",
         "early:2017-2018 vs recent:(ndvi_year-1)-ndvi_year, DW annual-mode composites, full calendar years", 10.0, False,
-        Applicability(TM, "any", None, 10, None, 100, "polygon_native_pixels"), inputs=("dw_label",),
+        Applicability(TM, "any", None, 10), inputs=("dw_label",),
         min_reference_n=MIN_REFERENCE_WINDOWS, expects_tied_reference=True,
-        min_support_rationale="Class-share change from a per-pixel classifier only averages out classification "
-                              "noise with >= ~100 native pixels.",
-        limitations=("DW classifier noise between periods produces spurious +/- change; the reference distribution "
+        parameters=(("early_years", (2017, 2018)),),
+        limitations=("Generic 10-native-pixel floor (decision 1).",
+                     "REMOTE-SENSING TREE-COVER PROXY, not direct forest-area gain/loss (decision 9): DW 'trees' can "
+                     "include plantations and tall tree crops; equivalence with forest change is not demonstrated.","DW classifier noise between periods produces spurious +/- change; the reference distribution "
                      "of windows carries that noise, which is why the site is placed by percentile.",
                      "Does not use Hansen: no cross-product comparison. Absolute area change is a separate diagnostic.",
                      "Early period start is limited by DW availability (2015-06 onward)."),
@@ -453,13 +466,15 @@ IndicatorContract(
     _ctx("hsas", "Habitat suitability aligned with eDNA detections.", "C2_vegetation", "habitat_suitability",
          "polygon_mean", "Needs eDNA; suitability layer is land-weighted (50 % NDVI).", 10.0, False, AM,
          status="pending_methodology", defects=("reference is suitability, site may be eDNA alignment",)),
-_ctx("edpp", "eDNA preservation potential (survey design aid): single-band index, ABSOLUTE thermal scaling.",
+_ctx("edpp", "eDNA preservation potential (survey design aid): single-band index; thermal term scaled over the source "
+         "product's valid range (a numerical / QC bound, NOT an ecological threshold).",
          "C2_vegetation", "edna_persistence", "polygon_mean",
          "Operational survey-design aid, not biodiversity condition.", 30.0, False, AM,
          status="screening", image_is_single_band=True, site_relative_normalisation=False,
          implementation_status="v0.2.8_synthetic_tested",
          synthetic_tests=("test_edpp_mspl_use_absolute_thermal_scaling_and_a_single_band",)),
-_ctx("mspl", "Microbial stress proxy (Darukaa composite): single-band, ABSOLUTE thermal scaling.",
+_ctx("mspl", "Microbial stress proxy (Darukaa composite): single-band; thermal term scaled over the source product's "
+         "valid range (a numerical / QC bound, NOT an ecological threshold).",
          "C2_vegetation", "microbial_stress", "polygon_mean",
          "Unvalidated composite; overlaps tspi and wcpi.", 20.0, False, AM,
          groups=("R4_trophic_signal",), image_is_single_band=True, site_relative_normalisation=False,
@@ -476,8 +491,9 @@ IndicatorContract(
         "annual:ndvi_year (DW mode)", 10.0, False,
         Applicability(TAM, "any", "water_body", None, MIN_PURE_WATER_PIXELS, None, "pure_water_pixels"),
         inputs=("dw_label",), min_reference_n=MIN_COMPARABLE_WATER_BODIES, expects_tied_reference=True,
+        parameters=(("ring_width_m", 100.0),),
         limitations=("Natural = DW trees / grass / flooded vegetation / shrub (same class set as natural_habitat).",
-                     "Ring width 100 m is a Darukaa choice.",
+                     "Ring width 100 m is the current configurable methodology parameter (config.riparian_ring_width_m).",
                      "Fully vegetated rings give ties at 1.0: percentile, not z-score."),
         implementation_status="v0.2.8_synthetic_tested",
         synthetic_tests=("test_ring_metric_uses_the_same_ring_for_target_and_reference",
@@ -528,9 +544,7 @@ IndicatorContract(
         "robust_z", "lower_is_better", "static:2022", 90.0, True,
         Applicability(TAM, "any", None, None, None, None, "exempt_landscape_pressure"),
         inputs=("hmi",), redundancy_groups=("R2_human_modification",), min_reference_n=MIN_REFERENCE_WINDOWS,
-        min_support_rationale="Landscape-level pressure: the 90 m value describes the surrounding landscape; a site "
-                              "below the product's resolution reports the covering pixel(s). Flagged in the report; "
-                              "to be confirmed against the D3 hard floor.",
+        min_support_rationale=PRESSURE_SUPPORT_RULE,
         implementation_status="v0.2.8_synthetic_tested",
         synthetic_tests=("test_ghm_site_is_read_at_native_90m",)),
 IndicatorContract(
@@ -540,7 +554,7 @@ IndicatorContract(
         "robust_z", "lower_is_better", "annual:ndvi_year", 463.83, False,
         Applicability(TAM, "any", None, None, None, None, "exempt_landscape_pressure"),
         inputs=("viirs",), min_reference_n=MIN_REFERENCE_WINDOWS,
-        min_support_rationale="Landscape-level pressure at ~463 m: reports the covering pixel(s) for small sites.",
+        min_support_rationale=PRESSURE_SUPPORT_RULE,
         current_defects=("X1",)),
 IndicatorContract(
         "hdi", "Built-up / settlement proximity pressure (Dynamic World built-up distance).", "C4_pressure",
@@ -549,8 +563,7 @@ IndicatorContract(
         "annual:ndvi_year (DW mode)", 10.0, False,
         Applicability(TAM, "any", None, None, None, None, "exempt_landscape_pressure"),
         inputs=("dw_label",), redundancy_groups=("R5_built_up",), min_reference_n=MIN_REFERENCE_WINDOWS,
-        min_support_rationale="Proximity to built-up land is a landscape-level pressure: it is defined for sites "
-                              "of any size (a distance surface), so no polygon floor applies.",
+        min_support_rationale=PRESSURE_SUPPORT_RULE,
         current_defects=("X1",)),
     _ctx("lst_day", "MODIS day land-surface temperature.", "C4_pressure", "climate_exposure", "polygon_mean",
          "Climate exposure, not condition.", 1000.0, False, TAM, defects=("X7",)),
@@ -563,6 +576,7 @@ IndicatorContract(
         "reference_percentile", "lower_is_better", "annual:ndvi_year (DW mode)", 10.0, False,
         Applicability(AM, "open_water", "water_body", None, MIN_PURE_WATER_PIXELS, None, "pure_water_pixels"),
         inputs=("dw_label",), min_reference_n=MIN_COMPARABLE_WATER_BODIES, expects_tied_reference=True,
+        parameters=(("ring_width_m", 100.0),),
         limitations=("Road proxy = built-up edge, not a road dataset.",
                      "Undisturbed shorelines give many zero shares: percentile, not z-score."),
         implementation_status="v0.2.8_synthetic_tested",

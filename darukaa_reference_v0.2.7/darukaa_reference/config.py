@@ -108,6 +108,11 @@ class Config:
     ])
     forest_loss_primary_window: str = "loss_longterm_2001_2025"
 
+    # v0.2.8 methodology parameters (single source: constructs.py; overridable per run, and recorded in the audit trail)
+    riparian_ring_width_m: float = _K.RIPARIAN_RING_WIDTH_M            # decision 7
+    net_change_early_years: Tuple[int, int] = _K.NET_CHANGE_EARLY_YEARS  # decision 8
+    water_body_reference_radii_km: Tuple[float, ...] = (10.0, 25.0, 50.0)
+
     # Statistical parameters
     bootstrap_iterations: int = 10000
     permutation_iterations: int = 10000

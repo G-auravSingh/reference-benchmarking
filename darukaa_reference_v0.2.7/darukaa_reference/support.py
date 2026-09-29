@@ -20,16 +20,24 @@ This module makes the reference unit equal to the site unit:
   water_body_unit          water_body_unit                   label_units + unit_values
   riparian_ring_unit       riparian_ring_unit                ring_masks + unit_values
 
-A "site window" is a circular window whose AREA equals the site area. Window statistics
-are computed at the dataset's NATIVE resolution (never on a coarsened image); only the
-comparison unit changes. For area proportions and area-weighted rates this aggregation is
-exact, not an approximation.
+A "site window" is a TESSELLATION CELL: a square block of native pixels whose area is the
+site area (side = round(sqrt(area) / native pixel) native pixels, at least 1), aligned to the
+native pixel grid. Cell statistics are exact block means / block sums of the native pixels
+(never of a coarsened image); only the comparison unit changes. For area proportions and
+area-weighted rates this aggregation is exact, not an approximation.
+
+Why blocks and not a moving disc (v0.2.8 Phase 3 revision): a disc window at every 10 m
+pixel costs ~4,000 neighbours per pixel over a ~78-million-pixel zone, which Earth Engine
+cannot compute even when only spaced points are sampled (it still evaluates whole tiles).
+Block cells cost one pass over the native pixels (reduceResolution) and are non-overlapping
+by construction. The moving-disc functions below are kept as a documented alternative
+definition (tested) but are NOT what the Earth Engine code computes.
 
 NO PSEUDO-REPLICATION
 ---------------------
-Windows are sampled on a grid whose spacing is >= max(native pixel, window diameter), so
-sampled windows do not overlap and no coarse pixel is counted more than once. Coarse
-products whose pixel exceeds the window are sampled at their own native spacing.
+Cells tile the zone without overlap, so no pixel is in two reference values; a product whose
+native pixel exceeds the site is used at its own pixel (cell = 1 pixel: the value the covering
+pixel reports), never sampled finer.
 
 TWO LAYERS
 ----------
@@ -178,6 +186,63 @@ def polygon_rate(numerator: np.ndarray, denominator: np.ndarray, polygon: np.nda
     return num / den * 100.0 / years
 
 
+def cell_size_px(site_area_m2: float, native_scale_m: float) -> int:
+    """Side, in native pixels, of the square cell whose area best matches the site area."""
+    if site_area_m2 <= 0 or native_scale_m <= 0:
+        raise ValueError("site area and native scale must be positive")
+    return max(1, int(round(math.sqrt(site_area_m2) / float(native_scale_m))))
+
+
+def cell_area_m2(site_area_m2: float, native_scale_m: float) -> float:
+    return (cell_size_px(site_area_m2, native_scale_m) * float(native_scale_m)) ** 2
+
+
+def _blocks(a: np.ndarray, cell_px: int, offset: Tuple[int, int]) -> np.ndarray:
+    """(H, W) -> (nby, nbx, cell_px, cell_px), dropping incomplete edge blocks. `offset` is the
+    number of leading rows / columns to skip so block edges fall on the grid's cell boundaries
+    (cells start at multiples of cell_px native pixels from the CRS origin)."""
+    a = np.asarray(a)[offset[0]:, offset[1]:]
+    nby, nbx = a.shape[0] // cell_px, a.shape[1] // cell_px
+    a = a[:nby * cell_px, :nbx * cell_px]
+    return a.reshape(nby, cell_px, nbx, cell_px).swapaxes(1, 2)
+
+
+def block_mean(values: np.ndarray, valid: Optional[np.ndarray], cell_px: int,
+               offset: Tuple[int, int] = (0, 0), min_coverage: float = 0.9) -> np.ndarray:
+    """Mean of the VALID native pixels in each cell; NaN where valid coverage < min_coverage.
+    Binary input gives the cell PROPORTION, continuous input the cell MEAN."""
+    v = np.asarray(values, float)
+    ok = np.isfinite(v) if valid is None else (np.asarray(valid, bool) & np.isfinite(v))
+    vb = _blocks(np.where(ok, v, 0.0), cell_px, offset)
+    cb = _blocks(ok.astype(float), cell_px, offset)
+    cnt = cb.sum(axis=(2, 3))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = vb.sum(axis=(2, 3)) / cnt
+    out[(cnt == 0) | (cnt / float(cell_px * cell_px) < min_coverage)] = np.nan
+    return out
+
+
+def block_rate(numerator: np.ndarray, denominator: np.ndarray, cell_px: int, years: float,
+               pixel_area_m2: float = 1.0, min_denominator_area_m2: float = 0.0,
+               offset: Tuple[int, int] = (0, 0)) -> np.ndarray:
+    """Rate per cell = SUM(numerator area) / SUM(denominator area) * 100 / years (ratio of sums,
+    never the mean of per-pixel rates); NaN where the denominator area is below the floor."""
+    if years <= 0:
+        raise ValueError("years must be positive")
+    num = _blocks(np.asarray(numerator, float), cell_px, offset).sum(axis=(2, 3)) * pixel_area_m2
+    den = _blocks(np.asarray(denominator, float), cell_px, offset).sum(axis=(2, 3)) * pixel_area_m2
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = num / den * 100.0 / years
+    out[(den <= 0) | (den < min_denominator_area_m2)] = np.nan
+    return out
+
+
+def block_centres(a: np.ndarray, cell_px: int, offset: Tuple[int, int] = (0, 0)) -> np.ndarray:
+    """Value of `a` at each cell's centre pixel: how a native-grid eligibility mask (e.g. the
+    least-disturbed stratum) is applied to a cell grid."""
+    return _blocks(np.asarray(a), cell_px, offset)[:, :, cell_px // 2, cell_px // 2]
+
+
 def grid_sample(image: np.ndarray, spacing_px: int, offset: Tuple[int, int] = (0, 0)) -> np.ndarray:
     """Values on a regular grid (non-overlapping windows); NaNs dropped."""
     s = max(int(spacing_px), 1)
@@ -273,64 +338,77 @@ def unit_masks(units: WaterUnits, pure: bool = True, erode_px: int = 1) -> Dict[
 # ----------------------------------------------------------------------------------------
 # Earth Engine layer  (same semantics; structure-tested offline, NOT yet verified live)
 # ----------------------------------------------------------------------------------------
-def ee_native_projection(ee, native_scale_m: float, crs: str = "EPSG:4326"):
-    """Explicit native projection. Composites (e.g. a median of an ImageCollection) have a
-    default 1-degree projection, so their native grid must be imposed explicitly."""
+def utm_crs_for(lon: float, lat: float) -> str:
+    """UTM CRS of the site (near-equal-area metres, so a 30 m cell is 900 m2)."""
+    zone = int((lon + 180.0) // 6.0) + 1
+    return f"EPSG:{(32600 if lat >= 0 else 32700) + zone}"
+
+
+def ee_native_projection(ee, native_scale_m: float, crs: str):
+    """Explicit native grid. Composites (medians of collections) have a default 1-degree projection,
+    so their native grid must be imposed explicitly."""
     return ee.Projection(crs).atScale(native_scale_m)
 
 
-def ee_window_image(ee, image, native_scale_m: float, site_area_m2: float,
-                    min_coverage: float = 0.9, crs: str = "EPSG:4326"):
-    """Site-window mean/proportion of `image` (band 0), computed at the native scale.
+def ee_block_mean_image(ee, image, native_scale_m: float, site_area_m2: float, crs: str,
+                        min_coverage: float = 0.9):
+    """Cell (site-sized block) mean / proportion of `image` (band 0) on the native grid.
 
-    UNVERIFIED EE ASSUMPTION A1: .reproject(native) forces the focal sums to be computed on
-    the native grid even when the result is later sampled at a coarser spacing."""
-    r = site_window_radius_m(site_area_m2)
-    v = image.select(0)
-    valid = v.mask().gt(0)
-    k = ee.Kernel.circle(radius=r, units="meters", normalize=False)
-    num = v.unmask(0).multiply(valid).reduceNeighborhood(reducer=ee.Reducer.sum(), kernel=k)
-    cnt = valid.reduceNeighborhood(reducer=ee.Reducer.sum(), kernel=k)
-    full = ee.Image.constant(1).reduceNeighborhood(reducer=ee.Reducer.sum(), kernel=k)
-    out = num.divide(cnt).updateMask(cnt.divide(full).gte(min_coverage))
-    return out.rename("window_value").reproject(ee_native_projection(ee, native_scale_m, crs))
+    UNVERIFIED EE ASSUMPTION A1: image.reproject(native) fixes the native grid, and
+    reduceResolution(mean, maxPixels=cell_px^2).reproject(cell) is the exact mean of the native
+    pixels in each cell (masked pixels ignored). Checked by the parity harness."""
+    cell_px = cell_size_px(site_area_m2, native_scale_m)
+    max_px = cell_px * cell_px
+    native = ee_native_projection(ee, native_scale_m, crs)
+    cell = ee_native_projection(ee, native_scale_m * cell_px, crs)
+    v = image.select(0).rename("v").reproject(native)
+    mean = v.reduceResolution(reducer=ee.Reducer.mean(), maxPixels=max_px).reproject(cell)
+    cover = v.mask().reduceResolution(reducer=ee.Reducer.mean(), maxPixels=max_px).reproject(cell)
+    return mean.updateMask(cover.gte(min_coverage)).rename("block_value")
 
 
-def ee_window_rate_image(ee, numerator_bin, denominator_bin, native_scale_m: float,
-                         site_area_m2: float, years: float, min_denominator_area_m2: float = 0.0,
-                         crs: str = "EPSG:4326"):
-    """Site-window rate = sum(numerator area) / sum(denominator area) * 100 / years."""
-    r = site_window_radius_m(site_area_m2)
-    k = ee.Kernel.circle(radius=r, units="meters", normalize=False)
-    pa = ee.Image.pixelArea()
-    num = pa.multiply(numerator_bin.unmask(0)).reduceNeighborhood(reducer=ee.Reducer.sum(), kernel=k)
-    den = pa.multiply(denominator_bin.unmask(0)).reduceNeighborhood(reducer=ee.Reducer.sum(), kernel=k)
+def ee_block_rate_image(ee, numerator_bin, denominator_bin, native_scale_m: float, site_area_m2: float,
+                        years: float, crs: str, min_denominator_area_m2: float = 0.0):
+    """Cell rate = sum(numerator area) / sum(denominator area) * 100 / years (ratio of sums)."""
+    cell_px = cell_size_px(site_area_m2, native_scale_m)
+    max_px = cell_px * cell_px
+    native = ee_native_projection(ee, native_scale_m, crs)
+    cell = ee_native_projection(ee, native_scale_m * cell_px, crs)
+    px_area = float(native_scale_m) ** 2
+
+    def block_sum(b):
+        return (b.select(0).unmask(0).reproject(native)
+                .reduceResolution(reducer=ee.Reducer.sum(), maxPixels=max_px).reproject(cell).multiply(px_area))
+    num, den = block_sum(numerator_bin), block_sum(denominator_bin)
     rate = num.divide(den).multiply(100.0 / years)
-    rate = rate.updateMask(den.gt(0).And(den.gte(min_denominator_area_m2)))
-    return rate.rename("window_rate").reproject(ee_native_projection(ee, native_scale_m, crs))
+    return rate.updateMask(den.gt(0).And(den.gte(min_denominator_area_m2))).rename("block_rate")
 
 
-def ee_sample_windows(ee, window_image, region, native_scale_m: float, site_area_m2: float,
-                      n: int, seed: int, tile_scale: int = 4):
-    """Sample non-overlapping windows: points on a grid of spacing max(native, window diameter).
+def ee_sample_cells(ee, cell_image, region, native_scale_m: float, site_area_m2: float, crs: str, n: int,
+                    seed: int, tile_scale: int = 4, geometries: bool = False):
+    """Sample cells (each at most once): valid cells only, numPoints=0 so masked cells are never drawn.
 
-    UNVERIFIED EE ASSUMPTION A2: sampling a reprojected (fixed-projection) image at a coarser
-    `scale` point-samples it (nearest neighbour) rather than re-aggregating it."""
-    spacing = sampling_spacing_m(native_scale_m, site_area_m2)
-    v = window_image.select(0).rename("v")
+    UNVERIFIED EE ASSUMPTION A2: stratifiedSample in the cell projection returns one value per cell
+    (the cell-grid pixel value), not a re-aggregation."""
+    cell = ee_native_projection(ee, native_scale_m * cell_size_px(site_area_m2, native_scale_m), crs)
+    v = cell_image.select(0).rename("v")
     img = v.unmask(0).addBands(v.mask().rename("valid").toInt())
-    fc = img.stratifiedSample(numPoints=0, classBand="valid", region=region, scale=spacing, seed=seed,
-                              classValues=[1], classPoints=[n], dropNulls=True,
-                              tileScale=tile_scale, geometries=False)
-    return fc.filter(ee.Filter.eq("valid", 1)).aggregate_array("v")
+    fc = img.stratifiedSample(numPoints=0, classBand="valid", region=region, projection=cell, seed=seed,
+                              classValues=[1], classPoints=[n], dropNulls=True, tileScale=tile_scale,
+                              geometries=geometries)
+    return fc.filter(ee.Filter.eq("valid", 1))
 
 
 def ee_water_body_units(ee, water_mask, region, native_scale_m: float, min_area_m2: float,
-                        max_units: int = 5000):
-    """Water bodies as vectors (connected components of the water mask), with area."""
-    vec = water_mask.selfMask().rename("w").reduceToVectors(
-        geometry=region, scale=native_scale_m, geometryType="polygon", eightConnected=False,
-        maxPixels=1e10, bestEffort=True)
+                        max_units: int = 5000, crs: Optional[str] = None):
+    """Water bodies as vectors (4-connected components of the water mask), with area. With `crs`, the mask is
+    vectorised on the SAME native grid the numpy definition uses (a 1-degree default grid would give pixels
+    of a different ground area)."""
+    kw = dict(geometry=region, scale=native_scale_m, geometryType="polygon", eightConnected=False,
+              maxPixels=1e10, bestEffort=False)
+    if crs:
+        kw["crs"] = ee_native_projection(ee, native_scale_m, crs)
+    vec = water_mask.selfMask().rename("w").reduceToVectors(**kw)
     vec = vec.map(lambda f: f.set("area_m2", f.geometry().area(1)))
     return vec.filter(ee.Filter.gte("area_m2", min_area_m2)).limit(max_units)
 
@@ -346,10 +424,13 @@ def ee_ring(ee, feature, width_m: float, error_m: float = 1.0):
     return ee.Feature(g.buffer(width_m, error_m).difference(g, error_m)).copyProperties(feature)
 
 
-def ee_unit_values(ee, units, value_image, native_scale_m: float, extra_mask=None, tile_scale: int = 4):
+def ee_unit_values(ee, units, value_image, native_scale_m: float, extra_mask=None, tile_scale: int = 4,
+                   crs: Optional[str] = None):
     """One mean value per unit, over that unit's own geometry (and optional pure-water mask)."""
     img = value_image.select(0).rename("v")
     if extra_mask is not None:
         img = img.updateMask(extra_mask)
-    return img.reduceRegions(collection=units, reducer=ee.Reducer.mean(),
-                             scale=native_scale_m, tileScale=tile_scale)
+    kw = dict(collection=units, reducer=ee.Reducer.mean(), scale=native_scale_m, tileScale=tile_scale)
+    if crs:
+        kw["crs"] = ee_native_projection(ee, native_scale_m, crs)
+    return img.reduceRegions(**kw)

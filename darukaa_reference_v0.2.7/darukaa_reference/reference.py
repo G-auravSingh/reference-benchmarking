@@ -905,7 +905,7 @@ class ReferenceSelector:
         "tspi": 10, "sabf": 10, "wcpi": 10, "edpp": 10, "mspl": 10,
         "sdi": 10, "riparian_natural_veg_share": 10, "iri": 10,  # Sentinel-2-based
         "wsdi": 10,                 # Sentinel-1 GRD
-        "net_forest_change_rate": 30,  # Hansen GFC + DW proxy; declared 30 m reference scale
+        "net_tree_cover_change_rate": 10,  # Dynamic World (10 m) tree-cover share change: a remote-sensing proxy
     }
     _DEFAULT_FALLBACK_SCALE_M = 100  # was 1000 -- still a real placeholder for
     # indicators not yet individually confirmed, but an order of magnitude

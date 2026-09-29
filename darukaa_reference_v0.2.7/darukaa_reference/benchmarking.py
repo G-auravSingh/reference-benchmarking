@@ -78,37 +78,66 @@ class ReferenceData:
                 "support": self.spec.support}
 
 
+COMPATIBILITY_CHECKS = ("construct", "unit", "temporal", "spatial_support", "population", "native_scale",
+                        "support_size")
+
+
+def compatibility_report(site: MetricSpec, ref: MetricSpec, contract: IC.IndicatorContract,
+                         site_area_m2: Optional[float] = None) -> Dict[str, Dict]:
+    """Every compatibility check with its verdict: {check: {"pass": bool, "detail": str}}."""
+    r: Dict[str, Dict] = {}
+    def put(name, ok, detail_ok, detail_bad):
+        r[name] = {"pass": bool(ok), "detail": detail_ok if ok else detail_bad}
+    put("construct", site.construct == ref.construct, site.construct,
+        f"site {site.construct!r} vs reference {ref.construct!r}")
+    put("unit", site.unit == ref.unit, site.unit, f"site {site.unit!r} vs reference {ref.unit!r}")
+    put("temporal", site.temporal == ref.temporal, site.temporal,
+        f"site {site.temporal!r} vs reference {ref.temporal!r}")
+    expected = MATCHED_REFERENCE_SUPPORT.get(site.support)
+    ok = ref.support == expected and ref.support == contract.reference_support
+    put("spatial_support", ok, f"{site.support} -> {ref.support}",
+        f"site {site.support!r} needs reference {expected!r} (contract {contract.reference_support!r}), got {ref.support!r}")
+    put("population", ref.population == contract.reference_population, ref.population,
+        f"contract {contract.reference_population!r}, got {ref.population!r}")
+    if site.native_scale_m and ref.native_scale_m:
+        put("native_scale", abs(site.native_scale_m - ref.native_scale_m) <= 1e-9, f"{site.native_scale_m:g} m",
+            f"site {site.native_scale_m:g} m vs reference {ref.native_scale_m:g} m")
+    else:
+        put("native_scale", True, "not declared", "")
+    if ref.support.startswith("site_window") and site_area_m2:
+        if ref.window_area_m2 is None:
+            put("support_size", False, "", "window (cell) reference does not declare its window area")
+        elif ref.native_scale_m:
+            from darukaa_reference.support import cell_size_px
+            k_ref = int(round(math.sqrt(ref.window_area_m2) / ref.native_scale_m))
+            k_exp = cell_size_px(site_area_m2, ref.native_scale_m)
+            put("support_size", k_ref == k_exp, f"cell {k_ref} x {k_ref} native px (site area {site_area_m2:.0f} m2)",
+                f"window area: cell of {k_ref} native px per side, expected {k_exp} for site area {site_area_m2:.0f} m2")
+        else:
+            rel = abs(ref.window_area_m2 - site_area_m2) / site_area_m2
+            put("support_size", rel <= WINDOW_AREA_TOLERANCE, f"window area within {rel:.1%} of site area",
+                f"window area {ref.window_area_m2:.0f} m2 differs from site area {site_area_m2:.0f} m2 by {rel:.0%}")
+    else:
+        put("support_size", True, "not a window support", "")
+    return r
+
+
 def check_compatibility(site: MetricSpec, ref: MetricSpec, contract: IC.IndicatorContract,
                         site_area_m2: Optional[float] = None) -> List[str]:
     """Construct, unit, temporal, spatial-support and population compatibility (returns violations)."""
-    v: List[str] = []
-    if site.construct != ref.construct:
-        v.append(f"construct differs: site {site.construct!r} vs reference {ref.construct!r}")
-    if site.unit != ref.unit:
-        v.append(f"unit differs: site {site.unit!r} vs reference {ref.unit!r}")
-    if site.temporal != ref.temporal:
-        v.append(f"temporal window differs: site {site.temporal!r} vs reference {ref.temporal!r}")
-    expected = MATCHED_REFERENCE_SUPPORT.get(site.support)
-    if ref.support != expected:
-        v.append(f"spatial support differs: site {site.support!r} needs reference {expected!r}, got {ref.support!r}")
-    if ref.support != contract.reference_support:
-        v.append(f"reference support {ref.support!r} is not the contract's {contract.reference_support!r}")
-    if ref.population != contract.reference_population:
-        v.append(f"population differs: contract {contract.reference_population!r}, got {ref.population!r}")
-    if site.native_scale_m and ref.native_scale_m and abs(site.native_scale_m - ref.native_scale_m) > 1e-9:
-        v.append(f"native scale differs: site {site.native_scale_m} m vs reference {ref.native_scale_m} m")
-    if ref.support.startswith("site_window") and site_area_m2:
-        if ref.window_area_m2 is None:
-            v.append("window reference does not declare its window area")
-        elif abs(ref.window_area_m2 - site_area_m2) / site_area_m2 > WINDOW_AREA_TOLERANCE:
-            v.append(f"window area {ref.window_area_m2:.0f} m2 differs from site area {site_area_m2:.0f} m2 "
-                     f"by more than {WINDOW_AREA_TOLERANCE:.0%}")
-    return v
+    rep = compatibility_report(site, ref, contract, site_area_m2)
+    words = {"construct": "construct differs", "unit": "unit differs", "temporal": "temporal window differs",
+             "spatial_support": "spatial support differs", "population": "population differs",
+             "native_scale": "native scale differs", "support_size": ""}
+    return [(f"{words[name]}: " if words[name] else "") + v["detail"] for name, v in rep.items() if not v["pass"]]
 
 
 # ----------------------------------------------------------------------------------------
 # Estimators
 # ----------------------------------------------------------------------------------------
+PERCENTILE_CONVENTION = IC.PERCENTILE_CONVENTION      # single definition: indicator_contract.PERCENTILE_CONVENTION
+
+
 def _direction_bool(direction: str) -> bool:
     if direction not in ("higher_is_better", "lower_is_better"):
         raise ValueError(f"a benchmark needs an explicit direction, got {direction!r}")
@@ -117,6 +146,7 @@ def _direction_bool(direction: str) -> bool:
 
 def percentile_benchmark(site_value: float, ref_values: Sequence[float], direction: str) -> Optional[Dict]:
     """Empirical-CDF benchmark, oriented so that a HIGHER score is always BETTER.
+    Convention (defined once, IC.PERCENTILE_CONVENTION):
 
     score = P(reference worse than site) + 0.5 * P(reference tied with site)   (mid-rank ties)
 
@@ -279,6 +309,7 @@ class IndicatorAssessment:
     diagnostics: Dict = field(default_factory=dict)
     flags: List[str] = field(default_factory=list)
     other_references: Dict = field(default_factory=dict)
+    compatibility: Dict = field(default_factory=dict)          # {check: "PASS: ..." | "FAIL: ..."}
     validation_only: bool = False                 # E4: methodological validation dataset, never project scoring
 
     def __post_init__(self):
@@ -336,6 +367,8 @@ def evaluate_indicator(contract: IC.IndicatorContract, evidence: SiteEvidence,
     if site_spec is None:
         a.status, a.reason = "reference_available_but_not_scoreable", "site_metric_spec_missing"
         return a
+    rep_ = compatibility_report(site_spec, ref.spec, contract, evidence.site_area_m2)
+    a.compatibility = {k: ("PASS: " if v["pass"] else "FAIL: ") + v["detail"] for k, v in rep_.items()}
     bad = check_compatibility(site_spec, ref.spec, contract, evidence.site_area_m2)
     if bad:
         a.status, a.reason, a.detail = "reference_available_but_not_scoreable", "incompatible_site_reference", "; ".join(bad)

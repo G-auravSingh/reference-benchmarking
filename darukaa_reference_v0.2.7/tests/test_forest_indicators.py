@@ -13,7 +13,7 @@ agroforestry clients plant trees and a real gain needs to be visible, not
 silently netted into a ratio-scale indicator): split into two indicators.
 forest_loss_rate goes back to gross loss only (always >=0, matching its
 original historically-established "Tree Cover Loss Rate" definition -- see
-Thread 01/03). A new net_forest_change_rate carries the signed gain-minus-
+Thread 01/03). A new net_tree_cover_change_rate carries the signed gain-minus-
 loss picture on its own robust_z-based contract instead.
 
 These tests cover the pure-Python rate arithmetic shared by both indicators
@@ -48,7 +48,7 @@ def test_annualized_rate_pct_floors_near_zero_baseline_like_gee_max1():
     rate_at_floor = _annualized_rate_pct(24_2600, 0.001, 24)      # floored to 1
     assert math.isclose(rate_at_floor, _annualized_rate_pct(24_2600, 1, 24), rel_tol=1e-9)
     # both are still absurdly large (this is exactly why low_baseline suppression
-    # exists downstream in extract_forest_loss_rate / extract_net_forest_change_rate)
+    # exists downstream in extract_forest_loss_rate / extract_net_tree_cover_change_rate)
     assert rate_at_floor > 1000
     assert rate_at_true_value > 1000
 
@@ -58,10 +58,10 @@ def test_annualized_rate_pct_handles_zero_area():
     assert _annualized_rate_pct(0, 50000, 5) == 0.0
 
 
-def test_forest_loss_rate_and_net_forest_change_rate_are_both_registered():
+def test_forest_loss_rate_and_net_tree_cover_change_rate_are_both_registered():
     reg = create_default_registry()
     assert "forest_loss_rate" in reg
-    assert "net_forest_change_rate" in reg
+    assert "net_tree_cover_change_rate" in reg
 
 
 def test_forest_loss_rate_contract_is_log_response_ratio_compatible():
@@ -81,26 +81,26 @@ def test_forest_loss_rate_contract_is_log_response_ratio_compatible():
     assert log_response_ratio(2.0, 5.0) is not None
 
 
-def test_net_forest_change_rate_contract_uses_robust_z_not_log_response_ratio():
-    """net_forest_change_rate is where the real, signed gain-minus-loss value
+def test_net_tree_cover_change_rate_contract_uses_robust_z_not_log_response_ratio():
+    """net_tree_cover_change_rate is where the real, signed gain-minus-loss value
     now lives -- must use an estimator defined for negative/zero values."""
     reg = create_default_registry()
-    spec = reg.get("net_forest_change_rate")
+    spec = reg.get("net_tree_cover_change_rate")
     assert spec.reference_estimator == "robust_z"
     assert spec.reference_estimator != "log_response_ratio"
-    assert spec.value_range[0] < 0, "net_forest_change_rate must allow negative (net loss) values"
+    assert spec.value_range[0] < 0, "net_tree_cover_change_rate must allow negative (net loss) values"
     # sanity: robust_z IS defined for a negative site_value (a real net-loss case)
     assert robust_z(-4.0, ref_median=0.0, ref_mad=2.0) is not None
 
 
-def test_forest_loss_rate_and_net_forest_change_rate_do_not_share_a_subdimension():
+def test_forest_loss_rate_and_net_tree_cover_change_rate_do_not_share_a_subdimension():
     """Both are C1_landscape and both scored -- if they shared a subdimension,
     scoring.py would silently AVERAGE the pure-loss signal with the signed
     net signal, exactly the class of bug independent audit item 2 fixed for
     ghm/hdi. Real regression guardrail, same pattern as test_contracts.py."""
     reg = create_default_registry()
     loss_spec = reg.get("forest_loss_rate")
-    net_spec = reg.get("net_forest_change_rate")
+    net_spec = reg.get("net_tree_cover_change_rate")
     assert loss_spec.construct == net_spec.construct == "C1_landscape"
     assert loss_spec.subdimension != net_spec.subdimension
     assert loss_spec.scoring_eligible
@@ -111,8 +111,8 @@ if __name__ == "__main__":
     test_annualized_rate_pct_matches_hand_computation()
     test_annualized_rate_pct_floors_near_zero_baseline_like_gee_max1()
     test_annualized_rate_pct_handles_zero_area()
-    test_forest_loss_rate_and_net_forest_change_rate_are_both_registered()
+    test_forest_loss_rate_and_net_tree_cover_change_rate_are_both_registered()
     test_forest_loss_rate_contract_is_log_response_ratio_compatible()
-    test_net_forest_change_rate_contract_uses_robust_z_not_log_response_ratio()
-    test_forest_loss_rate_and_net_forest_change_rate_do_not_share_a_subdimension()
+    test_net_tree_cover_change_rate_contract_uses_robust_z_not_log_response_ratio()
+    test_forest_loss_rate_and_net_tree_cover_change_rate_do_not_share_a_subdimension()
     print("All test_forest_indicators tests passed.")

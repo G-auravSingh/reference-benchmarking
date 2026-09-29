@@ -245,7 +245,7 @@ def test_native_scales_are_kept_and_net_forest_change_has_a_declared_scale():
     class S:  # minimal spec stand-in
         def __init__(self, name): self.name = name
     for name, expected in [("natural_habitat", 10), ("hdi", 10), ("forest_loss_rate", 30),
-                           ("net_forest_change_rate", 30), ("ghm", 90), ("chm", 10)]:
+                           ("net_tree_cover_change_rate", 10), ("ghm", 90), ("chm", 10)]:
         assert sel._effective_scale(S(name)) == expected, name
     assert Config().reference_sample_pixels == 5000 and Config().reference_sample_seed == 12345
 
