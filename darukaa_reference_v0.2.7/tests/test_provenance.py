@@ -124,7 +124,8 @@ def test_parity_files_carry_the_same_provenance(tmp_path):
 # ================================================================== run-3: a leftover / legacy artifact can never be shipped as if current
 def _write_good(path, commit=None, contract="0.2.8", written=None, dirty=False, warnings=(), rows_commit=None, source=None):
     p = PV.run_provenance(Config(), A.CODE_VERSION)
-    p.update({"git_commit": commit or PV.LOADED["commit"], "contract_version": contract, "dirty": dirty, "warnings": list(warnings)})
+    full = commit or PV.LOADED["commit"]
+    p.update({"git_commit": full, "git_commit_short": full[:7], "contract_version": contract, "dirty": dirty, "warnings": list(warnings)})
     if written: p["written_utc"] = written
     if source: p["source_sha256_at_import"] = source
     row = {"indicator": "ghm", "provenance": {"git_commit": rows_commit or PV.LOADED["commit"]}}
