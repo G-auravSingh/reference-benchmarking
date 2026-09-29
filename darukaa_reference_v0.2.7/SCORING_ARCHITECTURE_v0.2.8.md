@@ -428,3 +428,17 @@ baseline 0.01 ha, `not_applicable`); (b) the forest pixel-window check has only 
 evidence; (c) the forest polygon pull read 10.85 million pixels (the validation tile is a multi-part geometry with a ~99 km bounding box): a harness cost,
 not a correctness issue; (d) run time is long under restricted quota (ndvi 30 min, net change 22 min, each aquatic reference 14-18 min); (e) 0.4-0.8 %
 residuals between EE and numpy site values remain unexplained (by decision not investigated); (f) `tspi` is `pending_methodology`.
+
+### 13.4 Recorded limitation: forest-loss reference availability on an external forest zone
+
+On the external validation zone (`FCF_GV_FCF_GV_EMU_Ganjam_1`, a multi-part 335 ha tile) the forest-loss **reference** is not available: the
+least-disturbed-stratum population had 43 cells eligible by the population mask, all 43 were requested, and none returned a valid metric value
+(`n_returned = 0`, `shortfall = 43`; masked by the metric itself: the 5 ha baseline floor, < 90 % valid coverage, or no data; the diagnostics do not
+say which). The audit row is `applicable_but_no_reference` / `no_tier2_reference_units`, with the site value (1.6818 %/yr) reported as a measurement
+only and `benchmark`, `score` and `reference_n` empty. The engine cannot score without a reference: `n = 0`, a missing reference and a NaN-only
+reference give `applicable_but_no_reference`; `n < 30` gives `reference_available_but_not_scoreable` / `insufficient_reference_n`; only `n >= 30` scores.
+
+Status of the construct: forest-loss **construct parity** (Hansen numerator and denominator, and the site rate) passed on this zone, non-degenerate
+(485 baseline px, 5 loss px in the pixel window; the site rate EE 1.6818 vs numpy 1.6947, 0.76 %, INFO). What is **not** validated is forest-loss
+**reference construction** for zones with forest. **No Tata zone can reach it** (the Deccan baseline is 0.01 ha, `not_applicable`). Do not use
+forest-loss benchmarks for a forest project until this is diagnosed; it is deliberately not redesigned in v0.2.8.
