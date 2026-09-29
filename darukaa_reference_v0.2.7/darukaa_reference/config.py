@@ -112,6 +112,8 @@ class Config:
     riparian_ring_width_m: float = _K.RIPARIAN_RING_WIDTH_M            # decision 7
     net_change_early_years: Tuple[int, int] = _K.NET_CHANGE_EARLY_YEARS  # decision 8
     water_body_reference_radii_km: Tuple[float, ...] = (10.0, 25.0, 50.0)
+    water_body_max_extent_m: float = _K.MAX_WATER_BODY_EXTENT_M          # population rule shared by numpy and Earth Engine
+    reference_tile_native_px: int = 3072      # Earth Engine request size cap for reference cells (native pixels per tile side)
 
     # Statistical parameters
     bootstrap_iterations: int = 10000

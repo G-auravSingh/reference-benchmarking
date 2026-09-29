@@ -85,11 +85,13 @@ def window_rate_reference(numerator, denominator, site_area_m2, native_scale_m, 
 
 
 def site_mean(values, polygon, valid=None) -> Optional[float]:
+    """Site value under the PRODUCTION convention: coverage-weighted mean over valid pixels (support.SITE_SUPPORT_
+    CONVENTION). `polygon` is a boolean mask (weights 1/0) or a float coverage-fraction array."""
     v = np.asarray(values, float)
-    m = np.asarray(polygon, bool) & np.isfinite(v)
+    w = np.asarray(polygon, float).copy()
     if valid is not None:
-        m &= np.asarray(valid, bool)
-    return float(v[m].mean()) if m.any() else None
+        w = w * np.asarray(valid, bool)
+    return S.weighted_mean(v, w)
 
 
 @dataclass

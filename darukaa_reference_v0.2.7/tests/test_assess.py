@@ -200,3 +200,109 @@ def test_ee_provider_dispatch_uses_native_scale_utm_and_the_shared_population_co
     assert mask is None and "ecoregion" not in pdef
     no_eco = A.Zone("z", None, "terrestrial", None)
     assert "warning" in prov._population(no_eco, "regional_ecoregion", 50.0)[3]        # missing ecoregion is never silent
+
+
+# ================================================================== evidence: probe outcomes and persisted diagnostics
+def _provider_with_probe(monkeypatch, probe_result=None, raises=None):
+    import darukaa_reference.indicators as I
+    from darukaa_reference import reference_builders_ee as RB
+    from shapely.geometry import box as sbox
+    from darukaa_reference.config import Config
+    ee = MagicMock()
+    ee.Image.constant.return_value.updateMask.return_value.reproject.return_value.reduceRegion.return_value.getInfo.return_value = {"constant": 458.0}
+    monkeypatch.setattr(I, "_to_ee", lambda g: MagicMock(area=lambda m: MagicMock(getInfo=lambda: 84700.0)))
+    monkeypatch.setattr(I, "_dw_mode", lambda c: MagicMock())
+    monkeypatch.setattr(I, "_s2_masked", lambda c: MagicMock())
+    monkeypatch.setattr(I, "_forest_baseline_and_loss", lambda eg, c: (None, None, MagicMock(getInfo=lambda: 12.0)))
+    def probe(*a, **k):
+        if raises:
+            raise raises
+        return probe_result
+    monkeypatch.setattr(RB, "water_body_reference_ee", probe)
+    prov = A.EEProvider(Config(), create_default_registry(), ee=ee, selector=MagicMock(), log=lambda *a: None)
+    zone = A.Zone("Lake_test", sbox(73.809, 18.640, 73.812, 18.643), "aquatic", 296)
+    return prov, zone
+
+
+def test_evidence_records_a_found_water_body_with_all_diagnostics(monkeypatch):
+    target = {"uid": "u", "n_px": 458, "area_m2": 45800.0, "geodesic_area_m2": 45962.0, "pure_px": 340, "bbox": (1, 2, 3, 4), "cx": 5.0, "cy": 6.0, "interior": True}
+    prov, zone = _provider_with_probe(monkeypatch, {"valid": True, "invalid_reason": "", "target": target, "n_pure_water_px": 340,
+                                                    "diagnostics": {"probe": [{"margin_m": 500.0}], "max_extent_m": 2000.0}})
+    ev = prov.evidence(zone)
+    assert ev.water_probe == "ok" and ev.water_body_valid and ev.n_pure_water_px == 340 and "open_water" in ev.ecosystem_tags
+    d = ev.diagnostics
+    assert d["water_mask"]["water_area_in_site_m2"] == 45800.0 and d["water_body_probe"]["target"]["pure_px"] == 340
+    assert d["ecosystem_classification"]["open_water"] is True and "MNDWI" in d["water_mask"]["definition"]
+    meta = {}
+    A.assess_zone(zone, prov, only=["sabf"], log=lambda *a: None, meta_out=meta)
+    assert meta["evidence"]["n_pure_water_px"] == 340 and meta["evidence"]["diagnostics"]["crs"] == "EPSG:32643"      # persisted for the audit JSON
+
+
+def test_evidence_probe_exception_is_an_error_with_the_message_not_a_silent_no_water(monkeypatch):
+    prov, zone = _provider_with_probe(monkeypatch, raises=RuntimeError("User memory limit exceeded."))
+    ev = prov.evidence(zone)
+    assert ev.water_probe == "error" and not ev.water_body_valid and "memory limit" in ev.water_probe_detail
+    assert "memory limit" in ev.diagnostics["errors"]["water_probe"]
+    rows = {r["indicator"]: r for r in A.assess_zone(zone, prov, log=lambda *a: None)}
+    assert rows["sabf"]["status"] == "applicable_but_no_site_value" and rows["sabf"]["reason"] == "applicability_undetermined"
+
+
+def test_evidence_distinguishes_no_water_from_insufficient_pure_water_and_inconclusive(monkeypatch):
+    prov, zone = _provider_with_probe(monkeypatch, {"valid": False, "invalid_reason": "no_water_body_in_site", "target": None, "diagnostics": {"probe": []}})
+    ev = prov.evidence(zone)
+    assert ev.water_probe == "no_water_body" and not ev.water_body_valid
+    prov, zone = _provider_with_probe(monkeypatch, {"valid": False, "invalid_reason": "insufficient_pure_water", "n_pure_water_px": 4,
+                                                    "target": {"uid": "u", "n_px": 30, "area_m2": 3000.0, "pure_px": 4, "bbox": (0, 0, 60, 60), "cx": 1, "cy": 1, "interior": True},
+                                                    "diagnostics": {"probe": []}})
+    ev = prov.evidence(zone)
+    assert ev.water_probe == "ok" and ev.water_body_valid and ev.n_pure_water_px == 4 and "open_water" not in ev.ecosystem_tags
+    prov, zone = _provider_with_probe(monkeypatch, {"valid": False, "invalid_reason": "target_truncated_at_region_edge", "target": None, "diagnostics": {"probe": []}})
+    ev = prov.evidence(zone)
+    assert ev.water_probe == "error" and "inconclusive" in ev.water_probe_detail
+
+
+def test_site_values_are_coverage_weighted_never_unweighted():
+    import inspect
+    src = inspect.getsource(A.EEProvider._site_mean)
+    assert "Reducer.mean()" in src and "unweighted" not in src                        # frozen convention: coverage-weighted polygon mean
+    from darukaa_reference import support as S
+    assert S.SITE_SUPPORT_CONVENTION == "polygon_coverage_weighted"
+
+
+# ================================================================== forest validation zone (never invented; measured live)
+def test_forest_validation_zone_is_chosen_by_measured_baseline_and_loss_and_labelled(monkeypatch):
+    import darukaa_reference.indicators as I
+    from shapely.geometry import box as sbox
+    from darukaa_reference.config import Config
+    zones = [A.Zone("small_no_forest", sbox(0, 0, .1, .1), "terrestrial"), A.Zone("forest_a", sbox(1, 1, 1.1, 1.1), "terrestrial"),
+             A.Zone("forest_b", sbox(2, 2, 2.1, 2.1), "terrestrial"), A.Zone("no_loss", sbox(3, 3, 3.1, 3.1), "terrestrial"),
+             A.Zone("errors", sbox(4, 4, 4.1, 4.1), "terrestrial")]
+    stats = {"small_no_forest": (0.01, 0.0, 40.0), "forest_a": (150.0, 4.0, 300.0), "forest_b": (90.0, 9.0, 200.0), "no_loss": (200.0, 0.0, 250.0), "errors": (0.0, 0.0, 10.0)}
+    cur = {}
+    def to_ee(g):
+        cur["k"] = next(z.label for z in zones if z.geometry.equals(g))
+        return MagicMock(area=lambda m: MagicMock(getInfo=lambda: stats[cur["k"]][2] * 1e4))
+    def fbl(eg, cfg):
+        if cur["k"] == "errors":
+            raise RuntimeError("Computation timed out.")
+        b, l, _ = stats[cur["k"]]
+        return (None, None, MagicMock(getInfo=lambda: b * 1e4), None, "p", {"p": MagicMock(getInfo=lambda: l * 1e4)})
+    monkeypatch.setattr(I, "_to_ee", to_ee); monkeypatch.setattr(I, "_forest_baseline_and_loss", fbl)
+    prov = MagicMock(); prov.config = Config()
+    best, table = A.select_forest_validation_zone(prov, zones, log=lambda *a: None)
+    assert best.label == "forest_b" and best.validation_label == A.FOREST_VALIDATION_LABEL          # largest loss among eligible
+    by = {r["label"]: r for r in table}
+    assert not by["small_no_forest"]["eligible"] and not by["no_loss"]["eligible"] and by["forest_a"]["eligible"]
+    assert "timed out" in by["errors"]["error"] and not by["errors"]["eligible"]
+    none, _ = A.select_forest_validation_zone(prov, [zones[0], zones[3]], log=lambda *a: None)
+    assert none is None                                                                            # nothing eligible: report, never invent
+
+
+def test_find_candidate_tiles_reads_only_existing_assets(tmp_path):
+    import geopandas as gpd
+    from shapely.geometry import box as sbox
+    d = tmp_path / "x" / "projects" / "FCF_GV" / "outputs" / "07_reference_handoff" / "tiles"; d.mkdir(parents=True)
+    gpd.GeoDataFrame(geometry=[sbox(84.4, 19.7, 84.42, 19.72)], crs=4326).to_file(d / "FCF_GV_EMU_Ganjam_1.geojson", driver="GeoJSON")
+    rows = A.find_candidate_tiles(str(tmp_path))
+    assert [r["label"] for r in rows] == ["FCF_GV_EMU_Ganjam_1"] and rows[0]["area_ha"] > 0
+    assert A.find_candidate_tiles(str(tmp_path / "nothing")) == []

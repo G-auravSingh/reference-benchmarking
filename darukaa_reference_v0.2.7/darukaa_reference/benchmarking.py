@@ -254,26 +254,41 @@ class SiteEvidence:
     # E4: a non-project polygon used ONLY to validate a method (e.g. forest loss when no project zone has
     # >= 5 ha of baseline forest). It is labelled, and its assessments can never enter project scoring.
     validation_dataset_label: Optional[str] = None
+    # Water-body evidence (aquatic indicators). water_probe: 'not_run' | 'ok' (a target body was found and measured) |
+    # 'no_water_body' (the probe ran and found none touching the site) | 'error' (the probe failed or was inconclusive:
+    # applicability is then UNDETERMINED, never "not applicable").
+    water_probe: str = "not_run"
+    water_probe_detail: str = ""
+    water_body_invalid_reason: str = ""
+    diagnostics: Dict = field(default_factory=dict)      # everything the provider measured, persisted in the audit trail
 
 
 def check_applicability(c: IC.IndicatorContract, ev: SiteEvidence) -> Tuple[Optional[str], str, List[str]]:
-    """-> (not_applicable_reason | None, detail, non-blocking flags)."""
+    """-> (not_applicable_reason | None, detail, non-blocking flags).
+
+    Order: domain -> water-body feature and pure-water floor -> ecosystem (woody) -> other feature -> support floor.
+    A water-body indicator needs a water body (feature) with enough pure-water pixels; an ABSENT body is
+    `target_feature_absent`, never an "ecosystem mismatch". If the water-body probe itself failed, the answer is
+    `applicability_undetermined` (the engine turns it into applicable_but_no_site_value), never `not_applicable`."""
     ap, flags = c.applicability, []
     if ev.domain not in ap.domains:
         return "domain_mismatch", f"{c.name} applies to {ap.domains}; tile is {ev.domain}", flags
-    if ap.ecosystem in ("woody", "open_water") and ap.ecosystem not in ev.ecosystem_tags:
-        return "ecosystem_type_mismatch", f"needs a {ap.ecosystem} ecosystem", flags
-    if ap.requires_feature == "water_body" and not ev.water_body_valid:
-        return "target_feature_absent", "no valid water-body geometry for this site", flags
+    if ap.requires_feature == "water_body" or ap.ecosystem == "open_water":
+        if ev.water_probe == "error":
+            return "applicability_undetermined", f"water-body probe failed or was inconclusive: {ev.water_probe_detail}", flags
+        if not ev.water_body_valid:
+            why = f" ({ev.water_body_invalid_reason})" if ev.water_body_invalid_reason else ""
+            return "target_feature_absent", "no valid water-body geometry for this site" + why, flags
+        need = max(ap.min_pure_water_pixels or 0, IC.MIN_PURE_WATER_PIXELS)
+        if (ev.n_pure_water_px or 0) < need:
+            return "insufficient_pure_water", f"{ev.n_pure_water_px or 0} pure-water px < {need}", flags
+    if ap.ecosystem == "woody" and "woody" not in ev.ecosystem_tags:
+        return "ecosystem_type_mismatch", "needs a woody ecosystem", flags
     if ap.requires_feature == "forest_baseline_5ha":
         if ev.forest_baseline_m2 is None or ev.forest_baseline_m2 < IC.FOREST_BASELINE_MIN_M2:
             have = "unknown" if ev.forest_baseline_m2 is None else f"{ev.forest_baseline_m2 / 1e4:.2f} ha"
             return "target_feature_absent", f"baseline forest {have} < 5 ha", flags
-    if ap.floor_basis == "pure_water_pixels":
-        if (ev.n_pure_water_px or 0) < (ap.min_pure_water_pixels or IC.MIN_PURE_WATER_PIXELS):
-            return ("insufficient_pure_water",
-                    f"{ev.n_pure_water_px or 0} pure-water px < {ap.min_pure_water_pixels}", flags)
-    elif ap.floor_basis == "polygon_native_pixels" and c.native_resolution_m:
+    if ap.floor_basis == "polygon_native_pixels" and c.native_resolution_m:
         need = IC.effective_min_native_pixels(c)
         have = native_pixels_in_site(ev.site_area_m2, c.native_resolution_m)
         if need and have < need:
@@ -282,6 +297,8 @@ def check_applicability(c: IC.IndicatorContract, ev: SiteEvidence) -> Tuple[Opti
     elif ap.floor_basis == "exempt_landscape_pressure" and c.native_resolution_m:
         if native_pixels_in_site(ev.site_area_m2, c.native_resolution_m) < IC.GENERIC_MIN_NATIVE_PIXELS:
             flags.append("below_generic_floor_landscape_pressure_exempt")
+    if c.native_resolution_m and ev.site_area_m2 < float(c.native_resolution_m) ** 2:
+        flags.append("site_smaller_than_one_native_pixel")          # the reference cell is one pixel: support is coarser than the site
     return None, "", flags
 
 
@@ -342,6 +359,9 @@ def evaluate_indicator(contract: IC.IndicatorContract, evidence: SiteEvidence,
     a.flags = list(a.flags) + list(flags)
     if contract.proposed_scoreability == "removed":
         a.status, a.reason = "not_applicable", "indicator_removed"
+        return a
+    if reason == "applicability_undetermined":                     # the evidence failed: unknown, not "not applicable"
+        a.status, a.reason, a.detail = "applicable_but_no_site_value", reason, detail
         return a
     if reason:
         a.status, a.reason, a.detail = "not_applicable", reason, detail

@@ -25,7 +25,7 @@ import os
 import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -36,7 +36,7 @@ from darukaa_reference import support as S
 
 logger = logging.getLogger(__name__)
 
-CODE_VERSION = "v0.2.8-contract (smoke-test wiring)"
+CODE_VERSION = "v0.2.8-contract (smoke-test fixes 1)"
 
 AUDIT_COLUMNS = ["indicator", "status", "site_value", "site_unit", "site_support", "reference_population",
                  "reference_n", "reference_unit", "reference_support", "benchmark", "scoring_method",
@@ -131,13 +131,20 @@ def _row(c, a, zone, site, ref, seconds, prov) -> Dict:
 
 
 def assess_zone(zone: Zone, provider, contracts: Optional[Dict[str, IC.IndicatorContract]] = None,
-                require_validated: bool = False, config=None, log=print, only: Optional[Sequence[str]] = None) -> List[Dict]:
+                require_validated: bool = False, config=None, log=print, only: Optional[Sequence[str]] = None,
+                meta_out: Optional[Dict] = None) -> List[Dict]:
     """One audit row per contract. Nothing is skipped silently: every indicator gets a status and a reason."""
     contracts = contracts or IC.CONTRACTS
     commit = git_commit()
     t0 = time.perf_counter()
     ev = provider.evidence(zone)
     ev.validation_dataset_label = zone.validation_label
+    if meta_out is not None:                                       # persist EVERYTHING the applicability rules were based on
+        meta_out["evidence"] = {"domain": ev.domain, "site_area_m2": ev.site_area_m2, "ecosystem_tags": sorted(ev.ecosystem_tags),
+                                "forest_baseline_m2": ev.forest_baseline_m2, "water_body_valid": ev.water_body_valid,
+                                "n_pure_water_px": ev.n_pure_water_px, "water_probe": ev.water_probe,
+                                "water_probe_detail": ev.water_probe_detail, "water_body_invalid_reason": ev.water_body_invalid_reason,
+                                "diagnostics": ev.diagnostics}
     log(f"[{zone.label}] evidence ({time.perf_counter() - t0:.1f}s): domain={ev.domain} area={ev.site_area_m2:.0f} m2 "
         f"tags={sorted(ev.ecosystem_tags)} forest_baseline_m2={ev.forest_baseline_m2} "
         f"water_body_valid={ev.water_body_valid} pure_water_px={ev.n_pure_water_px}")
@@ -191,7 +198,7 @@ def summarise(rows: Sequence[Dict]) -> Dict[str, int]:
 # ----------------------------------------------------------------------------------------
 # Writers
 # ----------------------------------------------------------------------------------------
-def write_audit(rows: Sequence[Dict], out_dir: str, stem: str) -> Dict[str, str]:
+def write_audit(rows: Sequence[Dict], out_dir: str, stem: str, meta: Optional[Dict] = None) -> Dict[str, str]:
     os.makedirs(out_dir, exist_ok=True)
     cols = AUDIT_COLUMNS + EXTRA_COLUMNS
     paths = {"csv": os.path.join(out_dir, f"{stem}_audit.csv"), "json": os.path.join(out_dir, f"{stem}_audit.json"),
@@ -203,7 +210,7 @@ def write_audit(rows: Sequence[Dict], out_dir: str, stem: str) -> Dict[str, str]
             w.writerow(r)
     with open(paths["json"], "w", encoding="utf-8") as f:
         json.dump({"code_version": CODE_VERSION, "git_commit": git_commit(), "summary": summarise(rows),
-                   "rows": list(rows)}, f, indent=1, default=str)
+                   "meta": meta or {}, "rows": list(rows)}, f, indent=1, default=str)
     short = ["indicator", "status", "reason", "site_value", "reference_n", "reference_median", "benchmark", "score", "seconds"]
     with open(paths["md"], "w", encoding="utf-8") as f:
         f.write(f"# Audit trail: {rows[0]['zone'] if rows else ''}  ({rows[0]['realm'] if rows else ''})\n\n")
@@ -269,6 +276,11 @@ class EEProvider:
 
     # ---------------------------------------------------------------- evidence
     def evidence(self, zone: Zone) -> B.SiteEvidence:
+        """Everything the applicability rules need, measured once per zone. EVERYTHING measured is kept in
+        `diagnostics` and written to the audit trail (the first smoke test discarded it, so the Lake_Suman
+        classification could not be explained). A failed probe is recorded as an ERROR, never as 'no water'."""
+        import pyproj
+        from shapely.ops import transform
         import darukaa_reference.indicators as I
         from darukaa_reference import reference_builders_ee as RB
         ee, cfg = self.ee, self.config
@@ -276,42 +288,70 @@ class EEProvider:
         area = float(eg.area(1).getInfo())
         cen = zone.geometry.centroid
         crs = S.utm_crs_for(cen.x, cen.y)
-        ctx = {"eg": eg, "crs": crs, "area": area}
+        tr = pyproj.Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+        poly_utm = transform(tr.transform, zone.geometry)
+        centre_xy = tr.transform(cen.x, cen.y)
+        ctx = {"eg": eg, "crs": crs, "area": area, "centre_xy": centre_xy, "site_bounds_utm": poly_utm.bounds}
         self._ctx[zone.label] = ctx
+        diag: Dict[str, Any] = {"crs": crs, "site_area_m2": area, "site_area_utm_m2": poly_utm.area,
+                                "centre_xy_utm": centre_xy, "site_bounds_utm": poly_utm.bounds, "errors": {}}
         tags = set()
         try:
             dw = I._dw_mode(cfg)
             tf = dw.eq(K.DW_TREES).reduceRegion(ee.Reducer.mean(), eg, 10, maxPixels=1e9).getInfo()
             tree_frac = next((v for v in (tf or {}).values() if v is not None), None)
-            ctx["tree_fraction"] = tree_frac
+            diag["tree_fraction"] = tree_frac
             if tree_frac is not None and tree_frac >= K.WOODY_MIN_TREE_FRACTION:
                 tags.add("woody")
         except Exception as e:
-            self.log(f"  evidence: tree fraction failed ({e})")
+            diag["errors"]["tree_fraction"] = f"{type(e).__name__}: {e}"[:300]
         baseline = None
         try:
             baseline = float(I._forest_baseline_and_loss(eg, cfg)[2].getInfo())
         except Exception as e:
-            self.log(f"  evidence: forest baseline failed ({e})")
-        wb_valid, n_pure = False, None
+            diag["errors"]["forest_baseline"] = f"{type(e).__name__}: {e}"[:300]
+        diag["forest_baseline_m2"] = baseline
+        probe, probe_detail, invalid_reason, wb_valid, n_pure = "error", "", "", False, None
         try:
             wm = RB.water_mask_s2(I._s2_masked(cfg).median())
-            out = RB.water_body_reference_ee(ee, site_geometry=eg, water_mask=wm, metric_image=I._img_natural_veg(cfg),
-                                             kind="ring", native_scale_m=10.0, construct="probe", unit="u", temporal="t",
-                                             population="comparable_riparian_rings", radii_km=(2.0,), want_reference=False,
-                                             ring_width_m=float(getattr(cfg, "riparian_ring_width_m", K.RIPARIAN_RING_WIDTH_M)),
-                                             crs=crs)
-            # "valid water-body geometry" = a water body exists at the site; whether it has enough PURE-water pixels is a
-            # separate, explicitly-reasoned applicability rule (insufficient_pure_water)
-            wb_valid = bool(out["valid"]) or out.get("invalid_reason") == "insufficient_pure_water"
+            out = RB.water_body_reference_ee(
+                ee, site_geometry=eg, site_bounds_utm=poly_utm.bounds, centre_xy=centre_xy, water_mask=wm,
+                metric_image=ee.Image.constant(1), kind="water", native_scale_m=10.0, construct="probe", unit="u", temporal="t",
+                population="comparable_water_bodies", want_reference=False, crs=crs,
+                max_extent_m=float(getattr(cfg, "water_body_max_extent_m", K.MAX_WATER_BODY_EXTENT_M)), log=self.log)
+            t = out.get("target")
+            water_px = ee.Image.constant(1).updateMask(wm).reproject(S.ee_native_projection(ee, 10.0, crs)).reduceRegion(
+                ee.Reducer.sum(), eg, scale=10, crs=crs, maxPixels=1e9).getInfo()
+            wpx = next((v for v in (water_px or {}).values() if v is not None), None)
+            diag["water_mask"] = {"definition": "MNDWI(B3,B11) > 0 on the S2 annual median; pure water = mask eroded 1 px",
+                                  "water_px_in_site_coverage_weighted": wpx,
+                                  "water_area_in_site_m2": None if wpx is None else wpx * 100.0, "grid": f"{crs} @ 10 m"}
+            diag["water_body_probe"] = {"valid": out["valid"], "invalid_reason": out["invalid_reason"],
+                                        "target": (None if t is None else {k: t.get(k) for k in
+                                                   ("uid", "n_px", "area_m2", "geodesic_area_m2", "pure_px", "bbox", "cx", "cy", "interior")}),
+                                        "attempts": out["diagnostics"].get("probe"), "max_extent_m": out["diagnostics"].get("max_extent_m")}
+            invalid_reason = out["invalid_reason"]
             n_pure = out.get("n_pure_water_px")
-            ctx["wb_probe"] = {k: out.get(k) for k in ("valid", "invalid_reason", "n_pure_water_px")}
-            if wb_valid or out.get("invalid_reason") == "insufficient_pure_water":
-                tags.add("open_water")
+            if out["valid"] or invalid_reason == "insufficient_pure_water":
+                probe, wb_valid = "ok", True            # a complete water body exists; enough PURE water is a separate rule
+            elif invalid_reason == "no_water_body_in_site":
+                probe = "no_water_body"
+            elif invalid_reason == "target_exceeds_max_extent":
+                probe = "ok"                            # a body exists; it is outside the population rule (explicit reason)
+            else:
+                probe, probe_detail = "error", f"inconclusive: {invalid_reason}"
         except Exception as e:
-            self.log(f"  evidence: water-body probe failed ({e})")
-        return B.SiteEvidence(domain=zone.realm, site_area_m2=area, ecosystem_tags=frozenset(tags),
-                              forest_baseline_m2=baseline, water_body_valid=wb_valid, n_pure_water_px=n_pure)
+            probe, probe_detail = "error", f"{type(e).__name__}: {e}"[:400]
+            diag["errors"]["water_probe"] = probe_detail
+        diag["ecosystem_classification"] = {
+            "woody": "woody" in tags, "open_water": bool(wb_valid and (n_pure or 0) >= IC.MIN_PURE_WATER_PIXELS),
+            "rule_open_water": f"a complete water body touches the site with >= {IC.MIN_PURE_WATER_PIXELS} pure-water px",
+            "water_probe": probe, "water_probe_detail": probe_detail, "invalid_reason": invalid_reason}
+        if diag["ecosystem_classification"]["open_water"]:
+            tags.add("open_water")
+        return B.SiteEvidence(domain=zone.realm, site_area_m2=area, ecosystem_tags=frozenset(tags), forest_baseline_m2=baseline,
+                              water_body_valid=wb_valid, n_pure_water_px=n_pure, water_probe=probe, water_probe_detail=probe_detail,
+                              water_body_invalid_reason=invalid_reason, diagnostics=diag)
 
     # ---------------------------------------------------------------- site values
     def site(self, name: str, zone: Zone, ev: B.SiteEvidence) -> Optional[SiteResult]:
@@ -353,12 +393,14 @@ class EEProvider:
         metric = getattr(I, fn)(cfg)
         wm = RB.water_mask_s2(I._s2_masked(cfg).median())
         out = RB.water_body_reference_ee(
-            ee, site_geometry=ctx["eg"], water_mask=wm, metric_image=metric, kind=kind, native_scale_m=float(c.native_resolution_m),
-            construct=name, unit=self._unit(name), temporal=self._temporal(c), population=c.reference_population,
-            tier=c.reference_tier or "tier2", radii_km=tuple(getattr(cfg, "water_body_reference_radii_km", (10.0, 25.0, 50.0))),
+            ee, site_geometry=ctx["eg"], site_bounds_utm=ctx["site_bounds_utm"], centre_xy=ctx["centre_xy"], water_mask=wm,
+            metric_image=metric, kind=kind, native_scale_m=float(c.native_resolution_m), construct=name, unit=self._unit(name),
+            temporal=self._temporal(c), population=c.reference_population, tier=c.reference_tier or "tier2",
+            radii_km=tuple(getattr(cfg, "water_body_reference_radii_km", (10.0, 25.0, 50.0))),
             min_reference_n=c.min_reference_n or IC.MIN_COMPARABLE_WATER_BODIES, permanence_image=I._s1_water_occurrence(cfg),
             ring_width_m=float(getattr(cfg, "riparian_ring_width_m", K.RIPARIAN_RING_WIDTH_M)),
-            min_pure_px=IC.MIN_PURE_WATER_PIXELS, want_reference=want_reference, crs=ctx["crs"])
+            min_pure_px=IC.MIN_PURE_WATER_PIXELS, want_reference=want_reference, crs=ctx["crs"],
+            max_extent_m=float(getattr(cfg, "water_body_max_extent_m", K.MAX_WATER_BODY_EXTENT_M)), log=self.log)
         self._wb[key] = out
         return out
 
@@ -430,7 +472,8 @@ class EEProvider:
         ee, cfg, ctx = self.ee, self.config, self._c(zone)
         c = IC.CONTRACTS[name]
         native, crs, area = float(c.native_resolution_m), ctx["crs"], ev.site_area_m2
-        rz, mask, pdef, diag = self._population(zone, c.reference_population, self._radius_km(name))
+        radius_km = self._radius_km(name)
+        rz, mask, pdef, diag = self._population(zone, c.reference_population, radius_km)
         if mask is None and c.reference_population != "regional_all":
             self.log(f"  {name}: population could not be built ({diag.get('failed')})")
             return {}
@@ -439,18 +482,17 @@ class EEProvider:
             cell = S.ee_block_rate_image(ee, num, den, native, area, years, crs, IC.FOREST_BASELINE_MIN_M2)
             support, unit = "site_window_rate", "percent_per_year"
         else:
-            img = self._img(name)
-            cell = S.ee_block_mean_image(ee, img, native, area, crs)
+            cell = S.ee_block_mean_image(ee, self._img(name), native, area, crs)
             support, unit = c.reference_support, self._unit(name)
-        if mask is not None:
-            cell = cell.updateMask(mask)
-        definition = (f"{c.reference_population}: site-sized cells ({S.cell_size_px(area, native)} x {S.cell_size_px(area, native)} "
-                      f"native px of {native:g} m, centre pixel eligible) {pdef}")
-        ref = RB.cell_reference_ee(ee, cell_image=cell, region=rz, native_scale_m=native, site_area_m2=area, crs=crs,
-                                   n=int(getattr(cfg, "reference_sample_pixels", 5000)),
-                                   seed=int(getattr(cfg, "reference_sample_seed", 12345)), support=support, construct=name,
-                                   unit=unit, temporal=self._temporal(c), population=c.reference_population,
-                                   tier=c.reference_tier, population_definition=definition, extra=diag)
+        k = S.cell_size_px(area, native)
+        definition = (f"{c.reference_population}: site-sized cells ({k} x {k} native px of {native:g} m, centre pixel eligible) {pdef}")
+        ref = RB.cell_reference_tiled_ee(
+            ee, cell_image=cell, mask=mask, centre_xy=ctx["centre_xy"], radius_m=radius_km * 1000.0, native_scale_m=native,
+            site_area_m2=area, crs=crs, n=int(getattr(cfg, "reference_sample_pixels", 5000)),
+            seed=int(getattr(cfg, "reference_sample_seed", 12345)), support=support, construct=name, unit=unit,
+            temporal=self._temporal(c), population=c.reference_population, tier=c.reference_tier,
+            population_definition=definition, tile_native_px=int(getattr(cfg, "reference_tile_native_px", 3072)),
+            extra={**diag, "cell_area_ratio_to_site": (k * native) ** 2 / area}, log=self.log)
         return {c.reference_tier: ref}
 
 
@@ -469,13 +511,60 @@ def load_zone(config, registry, path: str, label: str, realm: str, validation_la
                 validation_label=validation_label)
 
 
+FOREST_VALIDATION_LABEL = "methodological_validation_forest_loss"
+FOREST_VALIDATION_PROJECTS = ("FCF_GV", "FCF_Soova")          # existing Darukaa forest-project assets (Odisha); NOT Tata, never in Tata scoring
+
+
+def find_candidate_tiles(repo_root: str, projects: Sequence[str] = FOREST_VALIDATION_PROJECTS, top: int = 6) -> List[Dict]:
+    """Existing tile files of the forest projects, largest first: [{label, path, area_ha, project}]. Nothing is invented; if the
+    assets are missing the list is empty and the caller must say so."""
+    import glob
+    import geopandas as gpd
+    rows = []
+    for proj in projects:
+        for path in glob.glob(os.path.join(repo_root, "**", "projects", proj, "outputs", "07_reference_handoff*", "tiles", "*.geojson"), recursive=True):
+            g = gpd.read_file(path)
+            rows.append({"label": os.path.basename(path)[:-len(".geojson")], "path": path, "project": proj,
+                         "area_ha": float(g.to_crs(6933).geometry.area.sum()) / 1e4})
+    return sorted(rows, key=lambda r: -r["area_ha"])[:top]
+
+
+def select_forest_validation_zone(provider, candidates: Sequence[Zone], min_baseline_ha: float = IC.FOREST_BASELINE_MIN_M2 / 1e4,
+                                  log=print) -> Tuple[Optional[Zone], List[Dict]]:
+    """Measure LIVE Hansen baseline forest and primary-window loss inside each existing candidate tile and pick the one that gives the
+    forest-loss parity check real power: baseline >= 5 ha (the applicability rule) AND non-zero loss; among those the largest loss.
+    Returns (zone relabelled as a methodological validation dataset | None, table of every candidate). Never invents a polygon."""
+    import dataclasses
+    import darukaa_reference.indicators as I
+    table: List[Dict] = []
+    for z in candidates:
+        row = {"label": z.label, "area_ha": None, "baseline_ha": None, "loss_ha_primary_window": None, "eligible": False, "error": ""}
+        try:
+            eg = I._to_ee(z.geometry)
+            row["area_ha"] = float(eg.area(1).getInfo()) / 1e4
+            out = I._forest_baseline_and_loss(eg, provider.config)
+            row["baseline_ha"] = float(out[2].getInfo()) / 1e4
+            row["loss_ha_primary_window"] = float(out[5][out[4]].getInfo()) / 1e4
+            row["eligible"] = row["baseline_ha"] >= min_baseline_ha and row["loss_ha_primary_window"] > 0
+        except Exception as e:
+            row["error"] = f"{type(e).__name__}: {e}"[:200]
+        table.append(row)
+        log(f"  validation candidate {z.label}: baseline {row['baseline_ha']} ha, loss {row['loss_ha_primary_window']} ha, eligible={row['eligible']} {row['error']}")
+    ok = [(r, z) for r, z in zip(table, candidates) if r["eligible"]]
+    if not ok:
+        return None, table
+    best_row, best = max(ok, key=lambda rz: (rz[0]["loss_ha_primary_window"], -rz[0]["area_ha"]))
+    return dataclasses.replace(best, validation_label=FOREST_VALIDATION_LABEL), table
+
+
 def run_smoke_test(config, registry, zone: Zone, out_dir: str = "outputs/smoke", provider=None, log=print,
                    only: Optional[Sequence[str]] = None) -> List[Dict]:
     """Assess one zone end to end and write the audit trail. Never touches headline aggregation."""
     provider = provider or EEProvider(config, registry, log=log)
     t0 = time.perf_counter()
-    rows = assess_zone(zone, provider, config=config, log=log, only=only)
-    paths = write_audit(rows, out_dir, f"{zone.label}")
+    meta: Dict = {}
+    rows = assess_zone(zone, provider, config=config, log=log, only=only, meta_out=meta)
+    paths = write_audit(rows, out_dir, f"{zone.label}", meta=meta)
     log(f"\n[{zone.label}] done in {(time.perf_counter() - t0) / 60:.1f} min. Status summary: {summarise(rows)}")
     log(f"Audit trail written: {paths}")
     return rows

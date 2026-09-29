@@ -373,3 +373,55 @@ def test_rename_is_complete_and_documented_as_a_tree_cover_proxy():
     assert "REMOTE-SENSING TREE-COVER PROXY" in spec.citation and "NOT direct forest-area gain/loss" in spec.citation
     assert "tree-cover proxy" in C["net_tree_cover_change_rate"].definition
     assert any("REMOTE-SENSING TREE-COVER PROXY" in x for x in C["net_tree_cover_change_rate"].limitations)
+
+
+# ================================================================== smoke-test review: applicability / evidence semantics
+def _aq(**kw):
+    base = dict(domain="aquatic", site_area_m2=8.47e4, ecosystem_tags=frozenset(), water_body_valid=True, n_pure_water_px=340, water_probe="ok")
+    base.update(kw)
+    return B.SiteEvidence(**base)
+
+
+def test_a_failed_water_probe_is_undetermined_never_not_applicable():
+    ev = _aq(water_body_valid=False, n_pure_water_px=None, water_probe="error", water_probe_detail="EEException: User memory limit exceeded.")
+    for n in ("tspi", "sabf", "wcpi", "sdi", "riparian_natural_veg_share"):
+        assert B.check_applicability(C[n], ev)[0] == "applicability_undetermined", n
+        a = B.evaluate_indicator(C[n], ev, None, None, {})
+        assert a.status == "applicable_but_no_site_value" and a.reason == "applicability_undetermined" and "memory limit" in a.detail
+
+
+def test_absent_water_is_target_feature_absent_not_an_ecosystem_mismatch():
+    ev = _aq(water_body_valid=False, n_pure_water_px=None, water_probe="no_water_body")
+    assert B.check_applicability(C["sabf"], ev)[0] == "target_feature_absent"
+    assert B.check_applicability(C["tspi"], ev)[0] == "target_feature_absent"        # v0.2.7 smoke test said ecosystem_type_mismatch
+    ev2 = _aq(water_body_valid=False, water_probe="ok", water_body_invalid_reason="target_exceeds_max_extent")
+    r, detail, _ = B.check_applicability(C["sabf"], ev2)
+    assert r == "target_feature_absent" and "target_exceeds_max_extent" in detail
+
+
+def test_water_body_present_but_too_little_pure_water_gets_its_own_reason():
+    assert B.check_applicability(C["sabf"], _aq(n_pure_water_px=9))[0] == "insufficient_pure_water"
+    assert B.check_applicability(C["sabf"], _aq(n_pure_water_px=10))[0] is None
+    assert B.check_applicability(C["riparian_natural_veg_share"], _aq(n_pure_water_px=3, domain="mixed"))[0] == "insufficient_pure_water"
+
+
+def test_ecosystem_type_mismatch_is_now_only_a_woody_rule():
+    for n, c in C.items():
+        if c.applicability.ecosystem == "open_water":
+            ev = B.SiteEvidence(domain=c.applicability.domains[0], site_area_m2=1e5, water_body_valid=False, water_probe="no_water_body")
+            assert B.check_applicability(c, ev)[0] in ("target_feature_absent", "domain_mismatch"), n
+    assert B.check_applicability(C["chm"], B.SiteEvidence("terrestrial", 4e5))[0] == "ecosystem_type_mismatch"
+
+
+def test_the_live_lake_suman_evidence_would_be_applicable():
+    """Parity found a 458-px body with 340 pure-water px at Lake_Suman: >= 10, so every water-body indicator applies."""
+    ev = _aq(n_pure_water_px=340)
+    for n in ("tspi", "sabf", "wcpi", "sdi", "riparian_natural_veg_share"):
+        assert B.check_applicability(C[n], ev)[0] is None, n
+
+
+def test_a_site_smaller_than_one_native_pixel_is_flagged():
+    _r, _d, flags = B.check_applicability(C["ghm"], B.SiteEvidence("terrestrial", 4.7e3))          # 0.47 ha vs a 90 m (0.81 ha) pixel
+    assert "site_smaller_than_one_native_pixel" in flags
+    _r, _d, flags = B.check_applicability(C["ghm"], B.SiteEvidence("terrestrial", 4.0e5))
+    assert "site_smaller_than_one_native_pixel" not in flags

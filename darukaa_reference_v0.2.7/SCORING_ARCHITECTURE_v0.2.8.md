@@ -115,7 +115,8 @@
 ## 5. Status model (per tile, per indicator)
 
 The statuses are:
-- `not_applicable`, with one of these reasons: `domain_mismatch`, `ecosystem_type_mismatch`, `target_feature_absent`, `site_below_product_resolution`, `insufficient_pure_water`;
+- `not_applicable`, with one of these reasons: `domain_mismatch`, `target_feature_absent`, `ecosystem_type_mismatch` (woody only), `site_below_product_resolution`, `insufficient_pure_water`;
+- an indicator whose applicability could not be *determined* (the water-body probe failed or was inconclusive) is **`applicable_but_no_site_value` with reason `applicability_undetermined`**, never `not_applicable` (§12.2);
 - `applicable_but_no_site_value`;
 - `applicable_but_no_reference`;
 - `reference_available_but_not_scoreable`;
@@ -128,7 +129,7 @@ The statuses are:
 `no_reference` is retired.
 
 **Order of evaluation** (this also determines which references are computed):
-1. Applicability (domain → ecosystem → feature → site support). If not applicable, no reference is computed.
+1. Applicability (domain → water-body feature and pure-water floor → woody ecosystem → forest baseline → site support). If not applicable, no reference is computed.
 2. Site value. If none, no reference is computed.
 3. Reference.
 4. Stability.
@@ -260,3 +261,118 @@ Parity checks (statuses MATCH / DISCREPANCY / INFO / HARNESS_ERROR): per-pixel c
 pixels (natural share, riparian natural cover, shoreline disturbance, net tree-cover change, raw wcpi, forest-loss numerator /
 denominator / year count); block cells (A1); cell sampling (A2); site aggregation (EE `reduceRegion` vs numpy coverage-weighted mean,
 with the boundary-pixel weighting effect reported separately); water-body records (area, pure-water pixels, unit value).
+
+
+## 12. Smoke-test review 1: findings and fixes (branch `v0.2.8-contract`, "smoke-test fixes 1")
+
+The first live run (Deccan forest and Lake_Suman, commit 7dac5aa) validated block-cell aggregation (A1: 49/49 cells), cell sampling (A2:
+3,451 cells), NDVI and HDI site parity, and scored `bii`, `ghm`, `hdi` on Deccan. It also exposed the problems below. **Everything in this
+section is verified offline (synthetic and fake-Earth-Engine tests) only; the live re-run is the verification.**
+
+### 12.1 Frozen site-support convention: coverage-weighted polygon mean
+
+Every polygon-level site metric is `Σ wᵢ·vᵢ / Σ wᵢ` over the valid native pixels the polygon touches, `wᵢ` = fraction of pixel *i* inside the
+polygon. `support.SITE_SUPPORT_CONVENTION = "polygon_coverage_weighted"`; the numpy definition is `support.polygon_coverage` +
+`support.weighted_mean` (used by `reference_builders.site_mean`) and, for rates, a ratio of coverage-weighted sums (`support.polygon_rate`).
+Earth Engine's `reduceRegion(mean)` is coverage-weighted by default and is what the provider uses; a site value must never use `.unweighted()`
+(a test enforces it). Reference cells are whole native-pixel blocks (coverage 1) and need no weights.
+
+Why not pixel-centre inclusion: on the live Deccan tile (corrected values; the review pasted the two columns the wrong way round)
+
+| metric | coverage-weighted (PRODUCTION) | centre-inclusion (rejected) | EE `reduceRegion` |
+|---|---|---|---|
+| natural_habitat (%) | 81.945 | 81.832 | 81.956 |
+| net_tree_cover_change (pp/yr) | −0.1231 | −0.1533 | −0.1237 |
+| ghm | 0.4464 | 0.5071 | 0.4448 |
+
+Centre-inclusion moves `ghm` by 13.6 % and net change by 24 %, because a coarse pixel is either in or out. Earth Engine already implements the
+production convention; its residual against the exact numpy weighting (0.014 %, 0.47 %, 0.36 %) is **unexplained and deliberately not
+investigated** (review decision). The parity harness now reports up to 0.1 % as MATCH, up to 1 % as INFO ("residual, not investigated") and above
+1 % as DISCREPANCY.
+
+**GHM (landscape pressure).** Its support is the same coverage-weighted polygon mean at native 90 m; its reference is site-sized cells of the same
+native pixels (7×7 px for 40 ha). A separate "landscape neighbourhood" support was considered and rejected: it would be a new construct with its
+own reference definition, and two supports for one metric would be the silent mixing the review forbids. **Known consequence:** when the site is
+smaller than one native pixel (0.47 ha vs 0.81 ha at 90 m; nearly every site vs 21.5 ha VIIRS pixels) the reference cell is one pixel while the
+site value is a weighted mean of up to four pixels, and the cell area can differ from the site area by up to (k±½)²/k². The audit records
+`cell_area_ratio_to_site` and the flag `site_smaller_than_one_native_pixel`; the exemption rule (`PRESSURE_SUPPORT_RULE`) is unchanged.
+
+### 12.2 Water bodies: area, edges, population, applicability
+
+**Root cause of the parity mismatch (2 EE bodies vs 1 numpy).** The two areas are exactly 458 px × 100 m² × 1.00354 and 42 px × 100 m² × 1.00354:
+EE's `polygon.area()` is *geodesic*; the numpy area is a pixel count. The 42-px component is real (the same pixels are on both sides). The harness
+applied the "interior" (edge) filter to numpy only; EE records had no interior flag and defaulted to True. So the discrepancy is an asymmetry in the
+comparison, not a different water mask. *Confidence: high, not proven live* (the live run did not record the body's location); the new harness prints
+the centroid, bounding box and distance to the region edge of every unmatched body, and the live synthetic fixture reproduces the pattern.
+
+Fixes: (1) unit **area = pixel count × native²** (sum of the water mask inside the unit), the geodesic area is kept as a diagnostic;
+(2) every record carries `interior` (bounding box clear of the region edge by erosion + 1 px, or ring width + 2 px for rings) and both the numpy
+definition and the Earth Engine builder apply it; (3) records carry UTM centroid, bounding box and `touches_site`; the bounding box is read as
+min/max of the ring, not by vertex order.
+
+**New explicit population rule: `MAX_WATER_BODY_EXTENT_M = 2000 m`** (`constructs`, `indicator_contract`, `Config.water_body_max_extent_m`).
+A target or comparable body must have a bounding-box extent ≤ 2 km. It is what makes tiling lossless: a body owned by a tile (centroid in its core)
+then lies wholly inside core + 2 km, so the tile margin is *derived* as `max_extent + interior margin + 1 px` and tiling can never drop an eligible
+body. An earlier draft used a fixed 200 m margin and silently dropped legitimate lakes that straddled a tile edge (found by the offline equivalence
+test); the rule replaces that hidden side effect with a stated one. Excluded bodies get explicit reasons (`target_exceeds_max_extent`,
+`target_truncated_at_region_edge`; funnel counters `n_rejected_extent`, `n_excluded_truncated_at_tile_edge`). **This is a Darukaa choice that
+needs your confirmation.**
+
+**Applicability order and the undetermined state.** Domain → water-body feature and pure-water floor → woody ecosystem → forest baseline → site
+support. An absent water body is `target_feature_absent` (v0.2.7 wrongly said `ecosystem_type_mismatch`); `ecosystem_type_mismatch` is now a woody
+rule only. If the water-body probe raises or is inconclusive the status is `applicable_but_no_site_value` / `applicability_undetermined` with the
+error text. The complete evidence (water-mask area inside the site, target body area / pixel count / pure pixels / bounding box / centroid,
+ecosystem classification, every probe attempt, every error) is written to the audit JSON under `meta.evidence`.
+
+**Lake_Suman.** The parity pull found a body of 458 px (4.58 ha; 340 pure-water px, mean wcpi 0.1467) inside the 700 m window around the tile, so
+the lake **does** satisfy the open-water definition (a complete body with ≥ 10 pure-water px). The v0.2.7 classification was wrong (option b), not
+the lake. Why the probe returned "no valid body" is **not** known: the evidence step discarded its diagnostics and swallowed exceptions. The
+likeliest cause is an Earth Engine error in the heavy 2 km vectorise-plus-ring probe. The probe is now a small region around the site (margin doubles
+until the body is interior), records every outcome, and Step A of the notebook prints it before anything is run.
+
+### 12.3 Memory-safe reference construction
+
+Five providers failed live for **three different reasons** (the review grouped them as memory):
+
+| indicator(s) | error | cause | fix |
+|---|---|---|---|
+| natural_habitat, net_tree_cover_change_rate, ndvi | `User memory limit exceeded` | one request covered a 100 km box of 10 m pixels (10,000 × 10,000 px) | tiled cell references |
+| chm | `Reprojection output too large (10017x10017 pixels)` | same region size, hit a different limit | tiled cell references |
+| light_pollution | `reduceResolution: Bad maxPixels arg` | **a bug in this code**: a cell of one native pixel gave `maxPixels=1` | a one-pixel cell skips `reduceResolution` |
+
+**Tiled cell references** (`reference_builders_ee.cell_reference_tiled_ee`, `tiling.py`). Resolution, cell definition, non-overlap, the n = 30 minimum
+and the population definitions are unchanged; only the *request* is bounded. (1) tile the reference circle into tiles of ≈ 3,072 native px per side
+with edges on the cell grid (no cell is cut, each cell in exactly one tile); (2) count the eligible cells per tile from the eligibility mask on the
+cell grid (`Reducer.count().unweighted()`); (3) allocate the n draws in proportion to those counts (largest remainder), so every eligible cell has
+inclusion probability n/N and the pooled sample is a self-weighting simple random sample, no weights needed; (4) sample each tile; a tile that raises a
+memory/size error is split in four and retried. If the population has ≤ n cells every cell is taken. Diagnostics: tile size, tiles, splits,
+eligible cells, allocation range, cells returned.
+
+**Tiled water-body references** (`water_body_reference_ee`): 10 km cores plus the derived margin, one owner tile per body (half-open centroid rule),
+adaptive split, an incremental radius ladder (10 → 25 → 50 km) that re-uses tiles and stops as soon as the minimum comparable count is reached.
+
+**Cost.** Bounded per request, not necessarily fast: a 100 km zone is ~16 tiles of 30 km at 10 m, and each cell reference is a count pass plus a
+sample pass. Quota was still restricted during run 1, so live timings are contaminated; `hdi` already took 251–380 s.
+
+### 12.4 Parity harness and validation zone
+
+Each check is isolated (one exception no longer discards the rest); a fully masked band (Earth Engine omits a masked pixel's property, the live
+`KeyError: 'lossyear'`) is filled with NaN and reported as a `band_coverage` row; water bodies are compared like-for-like with per-body area / pure px /
+value / bounding box and a diagnosis of every unmatched body; a **live synthetic fixture** paints known rectangles inside Earth Engine (lake, 42-px
+edge pond, two corner-touching bodies that must NOT merge, an island lake, an edge-cut body) and runs the real `unit_records_ee`; the INFO rows
+that compared the two site conventions no longer put numbers in the "EE" / "numpy" columns.
+
+The Deccan tile has 0.01 ha of Hansen baseline forest, so forest-loss parity there is trivially true. `select_forest_validation_zone` measures live
+baseline and primary-window loss inside the **existing** FCF_GV / FCF_Soova tiles and picks the one with ≥ 5 ha baseline and the largest loss; it is
+labelled `methodological_validation_forest_loss` and never enters Tata scoring. If none qualifies it reports the table and stops.
+
+### 12.5 Earth Engine assumptions still to be verified live
+
+A1 and A2 were verified live. New or changed, unverified until run 2: **A3'** water-body vectorisation on the native UTM grid, area as a pixel count
+via `reduceRegions(sum)`, pure water via `focal_min`; **A4** `Reducer.count().unweighted()` at the cell scale counts eligible cell centres and
+matches what `stratifiedSample` can draw; **A5** `geometry.bounds()` ring and `centroid` in UTM equal the numpy bounding box and pixel-mean centroid;
+**A6** `Image.paint` of grid-aligned rectangles rasterises by pixel centre (the synthetic fixture); **A7** a 3,072-px tile is small enough for the
+heaviest composites (the adaptive split is the safety net); **A8** proportional allocation from eligibility counts is close enough to the counts of
+cells that are also metric-valid (any shortfall is visible as `n_returned` < `sample_requested`).
+
+`tspi` remains `pending_methodology` (Phase 4). Headline aggregation is unchanged; the engine is not wired into the production pipeline.

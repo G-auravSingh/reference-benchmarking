@@ -177,13 +177,50 @@ def window_rate(numerator: np.ndarray, denominator: np.ndarray, radius_px: float
 
 def polygon_rate(numerator: np.ndarray, denominator: np.ndarray, polygon: np.ndarray, years: float,
                  pixel_area_m2: float = 1.0, min_denominator_area_m2: float = 0.0) -> Optional[float]:
-    """The SITE-side rate, computed by exactly the same aggregate rule as window_rate."""
-    p = np.asarray(polygon, bool)
-    den = float(np.sum(np.asarray(denominator, float)[p])) * pixel_area_m2
+    """The SITE-side rate: the same ratio of sums as the cell rate. `polygon` is a boolean mask OR a float array of
+    per-pixel COVERAGE fractions in [0, 1] (the production site-support convention, see polygon_coverage)."""
+    w = np.asarray(polygon, float)
+    den = float(np.sum(np.asarray(denominator, float) * w)) * pixel_area_m2
     if den <= 0 or den < min_denominator_area_m2:
         return None
-    num = float(np.sum(np.asarray(numerator, float)[p])) * pixel_area_m2
+    num = float(np.sum(np.asarray(numerator, float) * w)) * pixel_area_m2
     return num / den * 100.0 / years
+
+
+# ----------------------------------------------------------------------------------------
+# PRODUCTION SITE-SUPPORT CONVENTION (frozen at the smoke-test review)
+# ----------------------------------------------------------------------------------------
+# Every polygon-level site metric is the COVERAGE-WEIGHTED mean over the native pixels the polygon touches:
+#     value = sum_i w_i * v_i / sum_i w_i ,   w_i = fraction of pixel i inside the polygon (0..1), v_i valid only
+# This is what the polygon actually contains. The alternative (count only pixels whose CENTRE lies inside) was
+# rejected: on the live Deccan tile it moved ghm by 13.6 % (0.4464 vs 0.5071) and net tree-cover change by 24 %,
+# because a coarse pixel is either in or out. Earth Engine's reduceRegion(mean) is coverage-weighted by default,
+# so the Earth Engine side already implements this definition (and must never use .unweighted() for a site value).
+# Reference cells are whole native-pixel blocks (coverage 1), so they need no weights.
+SITE_SUPPORT_CONVENTION = "polygon_coverage_weighted"
+
+
+def polygon_coverage(polygon, x0: float, y_top: float, res: float, shape: Tuple[int, int]) -> np.ndarray:
+    """Exact fraction of every pixel of a north-up raster covered by `polygon` (shapely, same CRS in metres).
+    Pixel (i, j) spans x in [x0 + j*res, x0 + (j+1)*res] and y in [y_top - (i+1)*res, y_top - i*res]."""
+    from shapely.geometry import box
+    out = np.zeros(shape, float)
+    minx, miny, maxx, maxy = polygon.bounds
+    j0 = max(0, int((minx - x0) // res)); j1 = min(shape[1] - 1, int((maxx - x0) // res))
+    i0 = max(0, int((y_top - maxy) // res)); i1 = min(shape[0] - 1, int((y_top - miny) // res))
+    for i in range(i0, i1 + 1):
+        for j in range(j0, j1 + 1):
+            cell = box(x0 + j * res, y_top - (i + 1) * res, x0 + (j + 1) * res, y_top - i * res)
+            if cell.intersects(polygon):
+                out[i, j] = cell.intersection(polygon).area / cell.area
+    return out
+
+
+def weighted_mean(values: np.ndarray, weights: np.ndarray) -> Optional[float]:
+    """Coverage-weighted mean over valid (finite) pixels; None if no valid weight."""
+    v = np.asarray(values, float); w = np.asarray(weights, float)
+    ok = np.isfinite(v) & (w > 0)
+    return float((w[ok] * v[ok]).sum() / w[ok].sum()) if ok.any() else None
 
 
 def cell_size_px(site_area_m2: float, native_scale_m: float) -> int:
@@ -358,10 +395,14 @@ def ee_block_mean_image(ee, image, native_scale_m: float, site_area_m2: float, c
     reduceResolution(mean, maxPixels=cell_px^2).reproject(cell) is the exact mean of the native
     pixels in each cell (masked pixels ignored). Checked by the parity harness."""
     cell_px = cell_size_px(site_area_m2, native_scale_m)
-    max_px = cell_px * cell_px
     native = ee_native_projection(ee, native_scale_m, crs)
-    cell = ee_native_projection(ee, native_scale_m * cell_px, crs)
     v = image.select(0).rename("v").reproject(native)
+    if cell_px == 1:
+        # A cell of ONE native pixel (product coarser than the site, e.g. 463 m VIIRS): the cell value IS the pixel
+        # value. No aggregation is needed and reduceResolution rejects maxPixels=1 ("Bad maxPixels arg", seen live).
+        return v.rename("block_value")
+    max_px = cell_px * cell_px
+    cell = ee_native_projection(ee, native_scale_m * cell_px, crs)
     mean = v.reduceResolution(reducer=ee.Reducer.mean(), maxPixels=max_px).reproject(cell)
     cover = v.mask().reduceResolution(reducer=ee.Reducer.mean(), maxPixels=max_px).reproject(cell)
     return mean.updateMask(cover.gte(min_coverage)).rename("block_value")
@@ -371,14 +412,16 @@ def ee_block_rate_image(ee, numerator_bin, denominator_bin, native_scale_m: floa
                         years: float, crs: str, min_denominator_area_m2: float = 0.0):
     """Cell rate = sum(numerator area) / sum(denominator area) * 100 / years (ratio of sums)."""
     cell_px = cell_size_px(site_area_m2, native_scale_m)
-    max_px = cell_px * cell_px
+    max_px = max(cell_px * cell_px, 2)
     native = ee_native_projection(ee, native_scale_m, crs)
     cell = ee_native_projection(ee, native_scale_m * cell_px, crs)
     px_area = float(native_scale_m) ** 2
 
     def block_sum(b):
-        return (b.select(0).unmask(0).reproject(native)
-                .reduceResolution(reducer=ee.Reducer.sum(), maxPixels=max_px).reproject(cell).multiply(px_area))
+        img = b.select(0).unmask(0).reproject(native)
+        if cell_px == 1:                                   # one-pixel cell: the pixel itself (see ee_block_mean_image)
+            return img.multiply(px_area)
+        return img.reduceResolution(reducer=ee.Reducer.sum(), maxPixels=max_px).reproject(cell).multiply(px_area)
     num, den = block_sum(numerator_bin), block_sum(denominator_bin)
     rate = num.divide(den).multiply(100.0 / years)
     return rate.updateMask(den.gt(0).And(den.gte(min_denominator_area_m2))).rename("block_rate")

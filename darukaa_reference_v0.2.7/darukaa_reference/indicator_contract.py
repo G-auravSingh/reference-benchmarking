@@ -74,6 +74,9 @@ MIN_REFERENCE_WINDOWS = 30            # documented minimum reference windows (pr
 MIN_COMPARABLE_WATER_BODIES = 10      # documented minimum comparable reference water bodies (E2; proposal)
 WATER_BODY_AREA_RATIO = 3.0           # comparable if area within [1/3, 3] x target (E2)
 WATER_BODY_PERMANENCE_TOL = 0.25      # comparable if |permanence difference| <= 0.25 (E2)
+MAX_WATER_BODY_EXTENT_M = 2000.0      # POPULATION RULE (Darukaa choice, needs confirmation): a target or comparable water body has a bounding-box
+                                      # extent <= this. It is what lets Earth Engine tile the region without changing the population (see constructs).
+SITE_SUPPORT_CONVENTION = "polygon_coverage_weighted"   # frozen at the smoke-test review: every polygon site metric is the coverage-weighted mean
 # Decision 5: the percentile convention is defined ONCE, here, and implemented in benchmarking.percentile_benchmark.
 PERCENTILE_CONVENTION = ("mid-rank empirical CDF of the reference units, oriented so that a HIGHER score is always "
                          "BETTER: score = P(reference worse than site) + 0.5 * P(reference tied with site); "

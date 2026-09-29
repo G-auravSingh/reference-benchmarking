@@ -38,6 +38,11 @@ FAI_BLOOM_THRESHOLD = 0.005            # Darukaa choice (audit item 14)
 TSM_NECHAD_A, TSM_NECHAD_C = 228.1, 0.1641
 TSM_MAX = 1000.0
 PURE_WATER_ERODE_PX = 1                # one-pixel erosion removes mixed shoreline pixels
+# Explicit POPULATION rule shared by the numpy definition and the tiled Earth Engine builder: a water body (target or reference)
+# is eligible only if its bounding-box extent is <= this. It is what lets every Earth Engine request stay bounded WITHOUT silently
+# changing the population near tile edges (a body owned by a tile is then always fully inside that tile's region). A very
+# elongated body (channel / river reach) is not a comparable "water body" for these indicators. Darukaa choice; configurable.
+MAX_WATER_BODY_EXTENT_M = 2000.0
 RIPARIAN_RING_WIDTH_M = 100.0          # decision 7: current configurable methodology parameter (Darukaa choice)
 WOODY_MIN_TREE_FRACTION = 0.10         # site counts as a woody ecosystem when >= 10 % of it is DW trees (FLII precedent)
 
@@ -58,3 +63,7 @@ MSPL_WEIGHTS = {"nutrient": 0.35, "thermal": 0.30, "turbidity": 0.20, "water_per
 
 # Native scales (verified where noted in the audit)
 GHM_NATIVE_M = 90.0                    # TNC HM v3, verified
+
+
+# Polygon site-support convention (frozen at the smoke-test review): see support.SITE_SUPPORT_CONVENTION.
+SITE_SUPPORT_CONVENTION = "polygon_coverage_weighted"
