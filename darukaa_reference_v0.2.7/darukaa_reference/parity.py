@@ -383,8 +383,8 @@ def compare_water_records(check: str, ee_recs: Sequence[Dict], np_recs: Sequence
             continue
         edge_only = not e["interior"]
         bb = max(abs(a - b) for a, b in zip(e["bbox"], n["bbox"]))
-        out.append(ParityResult(check, f"{tag}: bounding box (max corner difference, m)", MATCH if bb <= 1.0 else DISCREPANCY, float(bb), 0.0, bb, None, 1.0,
-                                note="bbox decides the interior flag; Earth Engine's bounds() ring is read by min/max, not by vertex order"))
+        out.append(ParityResult(check, f"{tag}: bounding box (max corner difference, m)", MATCH if bb <= 5.0 else DISCREPANCY, float(bb), 0.0, bb, None, 5.0,
+                                note="bbox decides the interior flag; EE gives lon/lat, converted to UTM client-side (corner bbox: a few m looser than the pixel bbox)"))
         for nm, ev, nv, tol in (("area_m2 (pixel count)", e["area_m2"], n["area_m2"], 0.5), ("pure-water px", e["pure_px"], n["pure_px"], 0.5),
                                 ("unit metric value", e["value"], n["value"], value_tol)):
             if ev is None or nv is None:

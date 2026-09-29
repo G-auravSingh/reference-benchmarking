@@ -55,9 +55,9 @@ def test_the_tile_margin_is_derived_from_the_extent_rule_so_tiling_cannot_drop_a
 def test_unit_records_builds_a_pixel_count_area_an_interior_flag_and_reads_features():
     ee = MagicMock()
     counts = MagicMock(); counts.getInfo.return_value = {"features": [
-        {"properties": {"uid": "u1", "n": 458.0, "p": 340.0, "cx": 500100.0, "cy": 2000100.0, "x0": 500000.0, "y0": 2000000.0,
-                        "x1": 500220.0, "y1": 2000230.0, "geodesic_area_m2": 45962.0, "touches_site": 1}},
-        {"properties": {"uid": "u2", "n": 20.0, "p": 0.0, "cx": 0.0, "cy": 0.0, "x0": 0.0, "y0": 0.0, "x1": 10.0, "y1": 10.0}}]}
+        {"properties": {"uid": "u1", "n": 458.0, "p": 340.0, "clon": 75.00103960971117, "clat": 18.08974837431718, "lon0": 75.00000000000001, "lat0": 18.088708943127365,
+                        "lon1": 75.0020792316692, "lat1": 18.090787799792878, "geodesic_area_m2": 45962.0, "touches_site": 1}},
+        {"properties": {"uid": "u2", "n": 20.0, "p": 0.0, "clon": 75.00103960971117, "clat": 18.08974837431718, "lon0": 75.00000000000001, "lat0": 18.088708943127365, "lon1": 75.00000000000001, "lat1": 18.088708943127365}}]}
     vals = MagicMock(); vals.getInfo.return_value = {"features": [{"properties": {"uid": "u1", "v": 0.1467, "perm": 0.8}}]}
     img = MagicMock()
     img.select.return_value.rename.return_value.updateMask.return_value.addBands.return_value.reduceRegions.return_value = vals
@@ -70,6 +70,7 @@ def test_unit_records_builds_a_pixel_count_area_an_interior_flag_and_reads_featu
     assert [r["uid"] for r in out] == ["u1"]                                     # 2,000 m2 < min area 3,000 m2: dropped by the exact filter
     r = out[0]
     assert r["area_m2"] == 45800.0 and r["n_px"] == 458 and r["pure_px"] == 340 and r["geodesic_area_m2"] == 45962.0
+    assert abs(r["cx"] - 500110.0) < 5 and abs(r["cy"] - 2000115.0) < 5 and abs(r["bbox"][0] - 500000.0) < 5 and abs(r["bbox"][3] - 2000230.0) < 5   # lon/lat -> UTM
     assert r["interior"] is True and r["touches_site"] is True and r["value"] == 0.1467 and r["permanence"] == 0.8
     water.focal_min.assert_called_with(radius=K.PURE_WATER_ERODE_PX, kernelType="square", units="pixels")
     edge = RE.unit_records_ee(ee, region=MagicMock(), region_bounds=(500000.0, 2000000.0, 500240.0, 2000250.0), water_mask=water,
@@ -218,3 +219,13 @@ def test_tiled_default_count_and_sample_functions_call_earth_engine_with_bounded
     assert kw["scale"] == 630.0 and kw["crs"] == "EPSG:32643"                                      # counted on the cell grid
     assert ee.Reducer.count.return_value.unweighted.called                                          # pixel centres, not fractional weights
     assert ref.reference_n >= 2 and seen
+
+
+def test_uid_is_precise_and_coordinates_are_requested_in_lonlat_not_assumed_utm():
+    """Live bug: bbox came back in degrees (73.8, 18.6) and every uid was '73.8,18.6'. The uid keeps 1e-7 degrees and the transform is explicit."""
+    import inspect
+    src = inspect.getsource(RE._unit_geometry_properties)
+    assert '"EPSG:4326"' in src and "%.7f" in src and "%.1f" not in src
+    tr = RE._xy_transformer("EPSG:32643")
+    x, y, bb = RE._to_xy(tr, {"clon": 73.81, "clat": 18.643, "lon0": 73.8096, "lat0": 18.6417, "lon1": 73.8121, "lat1": 18.6448})
+    assert 300000 < x < 700000 and 2.0e6 < y < 2.1e6 and bb[0] < x < bb[2] and bb[1] < y < bb[3] and 200 < bb[2] - bb[0] < 400   # metres, a ~250 m body

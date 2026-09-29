@@ -100,24 +100,38 @@ def rect_geometry(ee, bounds, crs: str):
     return ee.Geometry.Rectangle([x0, y0, x1, y1], proj=crs, geodesic=False)
 
 
-def _unit_geometry_properties(ee, crs: str, site_geometry=None):
-    """Server-side: UTM centroid / bounding box / uid (and whether the body touches the site) for each unit."""
-    proj = ee.Projection(crs)
-
+def _unit_geometry_properties(ee, site_geometry=None):
+    """Server-side: lon/lat centroid and bounding box of each unit, a PRECISE uid, and whether it touches the site.
+    Earth Engine's coordinates() are ALWAYS lon/lat (the live run returned degrees even after transform(UTM)), so they are
+    requested explicitly in EPSG:4326 and converted to the UTM grid CLIENT-side (see _to_xy). uid = lon/lat to 1e-7 deg (~1 cm)."""
     def add(f):
-        g = f.geometry().transform(proj, 1)
+        g = f.geometry().transform("EPSG:4326", 1)
         ring = ee.List(g.bounds(1).coordinates().get(0))                 # min / max over the ring: no assumption about vertex order
         xs, ys = ring.map(lambda p: ee.List(p).get(0)), ring.map(lambda p: ee.List(p).get(1))
         c = ee.List(g.centroid(1).coordinates())
-        cx, cy = ee.Number(c.get(0)), ee.Number(c.get(1))
-        f = f.set({"cx": cx, "cy": cy, "x0": ee.List(xs).reduce(ee.Reducer.min()), "y0": ee.List(ys).reduce(ee.Reducer.min()),
-                   "x1": ee.List(xs).reduce(ee.Reducer.max()), "y1": ee.List(ys).reduce(ee.Reducer.max()),
+        lon, lat = ee.Number(c.get(0)), ee.Number(c.get(1))
+        f = f.set({"clon": lon, "clat": lat, "lon0": ee.List(xs).reduce(ee.Reducer.min()), "lat0": ee.List(ys).reduce(ee.Reducer.min()),
+                   "lon1": ee.List(xs).reduce(ee.Reducer.max()), "lat1": ee.List(ys).reduce(ee.Reducer.max()),
                    "geodesic_area_m2": f.geometry().area(1),
-                   "uid": ee.String(cx.format("%.1f")).cat(",").cat(cy.format("%.1f"))})
+                   "uid": ee.String(lon.format("%.7f")).cat(",").cat(lat.format("%.7f"))})
         if site_geometry is not None:
             f = f.set("touches_site", f.geometry().intersects(site_geometry, 1))
         return f
     return add
+
+
+def _xy_transformer(crs: str):
+    import pyproj
+    return pyproj.Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+
+
+def _to_xy(tr, p: Dict) -> Tuple[float, float, Tuple[float, float, float, float]]:
+    """lon/lat centroid + bbox (from Earth Engine) -> UTM centroid + bbox (bbox of the four transformed corners; the grid convergence
+    makes this larger than the true pixel bbox by a few metres at most, far below the interior margin)."""
+    cx, cy = tr.transform(p["clon"], p["clat"])
+    pts = [tr.transform(lo, la) for lo in (p["lon0"], p["lon1"]) for la in (p["lat0"], p["lat1"])]
+    xs, ys = [q[0] for q in pts], [q[1] for q in pts]
+    return cx, cy, (min(xs), min(ys), max(xs), max(ys))
 
 
 def unit_records_ee(ee, *, region, region_bounds, water_mask, metric_image, kind: str, native_scale_m: float,
@@ -135,7 +149,7 @@ def unit_records_ee(ee, *, region, region_bounds, water_mask, metric_image, kind
     pure = pure_water_mask(water_mask)
     loose = 0.9 * float(min_area_m2)                                    # geodesic pre-filter; the exact filter is below
     units = S.ee_water_body_units(ee, water_mask, region, native_scale_m, loose, crs=crs)
-    units = units.map(_unit_geometry_properties(ee, crs, site_geometry))
+    units = units.map(_unit_geometry_properties(ee, site_geometry))
     v = metric_image.select(0).rename("v")
     if kind == "water":
         val_fc, v = units, v.updateMask(pure)
@@ -151,6 +165,7 @@ def unit_records_ee(ee, *, region, region_bounds, water_mask, metric_image, kind
     vals = v.addBands(perm).reduceRegions(collection=val_fc, reducer=ee.Reducer.mean(), scale=native_scale_m,
                                           tileScale=tile_scale, **extra)
     vf = {f["properties"]["uid"]: f["properties"] for f in vals.getInfo()["features"]}
+    tr = _xy_transformer(crs)
     out = []
     for f in counts.getInfo()["features"]:
         p = f["properties"]
@@ -158,8 +173,8 @@ def unit_records_ee(ee, *, region, region_bounds, water_mask, metric_image, kind
         if n_px * native_scale_m ** 2 < min_area_m2:
             continue
         q = vf.get(p["uid"], {})
-        bbox = (p["x0"], p["y0"], p["x1"], p["y1"])
-        out.append({"uid": p["uid"], "cx": p["cx"], "cy": p["cy"], "bbox": bbox, "n_px": n_px,
+        cx, cy, bbox = _to_xy(tr, p)
+        out.append({"uid": p["uid"], "cx": cx, "cy": cy, "bbox": bbox, "n_px": n_px,
                     "area_m2": n_px * native_scale_m ** 2, "geodesic_area_m2": p.get("geodesic_area_m2"),
                     "pure_px": int(round(p.get("p") or 0)), "value": q.get("v"),
                     "permanence": (q.get("perm") if permanence_image is not None else None),
