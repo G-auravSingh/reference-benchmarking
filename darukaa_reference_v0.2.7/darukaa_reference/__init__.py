@@ -27,7 +27,9 @@ Methodology References
 Author: Darukaa.Earth
 """
 
-__version__ = "0.2.7"
+__version__ = "0.2.7"   # NOTE: not yet bumped on the v0.2.8 branch; the contract version is recorded separately (indicator_contract.CONTRACT_VERSION)
+
+from darukaa_reference import provenance as _provenance   # noqa: E402,F401  (captures the loaded code state at first import)
 
 from darukaa_reference.registry import IndicatorRegistry
 from darukaa_reference.site_loader import SiteLoader

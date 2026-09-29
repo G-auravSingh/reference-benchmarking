@@ -376,3 +376,55 @@ heaviest composites (the adaptive split is the safety net); **A8** proportional 
 cells that are also metric-valid (any shortfall is visible as `n_returned` < `sample_requested`).
 
 `tspi` remains `pending_methodology` (Phase 4). Headline aggregation is unchanged; the engine is not wired into the production pipeline.
+
+## 13. Run-2 review: permanence, provenance, and what is verified live
+
+Run 2 (commit 41496ed): parity 52 MATCH / 0 DISCREPANCY / 0 HARNESS_ERROR (38 INFO); Deccan scored 8 indicators, Lake_Suman 7.
+
+### 13.1 Canonical water-body permanence (one definition)
+
+**Definition (decision E2, `constructs.PERMANENCE_SCALE_M`).** Permanence of a water body = the mean of the continuous Sentinel-1 water
+occurrence (`indicators._s1_water_occurrence`, share of dates classified water) over **the water body's own pixels**, reduced on the S1 native
+10 m grid. It is used to match comparable bodies (|difference| <= 0.25) and is the same for every aquatic indicator, whatever the indicator's own
+native grid (sabf 20 m) or comparison unit (pure-water body, riparian ring).
+
+**Defect found in run 2 (not intentional).** `sdi` and `riparian_natural_veg_share` reported a target permanence of **0.031**, `wcpi` 0.910 and
+`sabf` 0.884, for the same lake. `unit_records_ee` reduced the permanence band over the *unit geometry*, which for ring indicators is the
+*land ring*, so ring permanence was the share of persistent-water pixels in a 100 m band of land. Consequence: the permanence criterion was
+effectively off for both ring indicators (`n_rejected_permanence` = 0 while `wcpi` rejected 16 and `sabf` 21), so their reference populations
+(n = 26) included bodies of any permanence. The run-2 `sdi` and `riparian_natural_veg_share` references and scores are **invalid** until re-run.
+The 0.884 vs 0.910 difference between `sabf` and `wcpi` was only the 20 m vs 10 m grid; permanence is now always reduced at 10 m.
+
+Fix: permanence is reduced over the body (`units`) by one code path for both kinds, at 10 m, and is never a band of the metric reduction.
+Guards: (1) a spy test that fails on the old code (permanence collection is the body geometry for both kinds, scale 10 m); (2) a provider test that
+all four aquatic indicators receive the same permanence image; (3) the audit records `meta.aquatic_permanence` (target permanence per indicator,
+spread, tolerance 0.05) and logs a warning on a spread; (4) a LIVE parity check runs the real `unit_records_ee` for both kinds and for the 10 m and
+20 m grids and reports any difference (`check_permanence_consistency`).
+
+### 13.2 Provenance
+
+Every audit and parity output now carries a `provenance` block (`provenance.py`): full commit, branch, dirty flag and files, commit time,
+remote (token masked), a SHA-256 fingerprint of every package `.py` file, package version, **contract version** (`IC.CONTRACT_VERSION = "0.2.8"`),
+`CODE_VERSION`, the complete configuration and its hash, and the Python / Earth Engine / numpy / shapely / pyproj versions. It is captured when the
+package is first **imported**, not when the file is written, and compared with the checkout at write time: a `git pull` after import, an edit of
+the source, or a dirty tree at import is written as a warning (`checkout_changed_since_import`, `source_changed_since_import`, `dirty`). Nothing is
+hard-coded, outside a git checkout the commit is `unknown` and the source fingerprint still identifies the code.
+
+What run 2 showed: every audit row said `41496ed`. That was the code that ran (the evidence bounding boxes are in UTM metres, which only exists in
+41496ed; 0d5839d produced degrees). The old `git_commit()` re-read HEAD when the file was written, which would have mislabelled a run whose kernel
+had loaded older modules; the import-time capture removes that failure mode. `darukaa_reference.__version__` still reads `0.2.7` on this branch: bump it at
+the freeze; the contract version is recorded separately.
+
+### 13.3 Verified live (run 2) vs open
+
+Verified live: block-cell aggregation (A1), cell sampling (A2), tiled cell references at 10 m for natural_habitat / net_tree_cover_change_rate / ndvi /
+chm / hdi / ghm / light_pollution (n = 5,000 except the least-disturbed strata: ndvi and chm n = 138, bii n = 537), water-body vectorisation and area (A3'),
+edge / interior rule and lon/lat bounding boxes (A5), the synthetic painted fixture (A6, 27 MATCH), coverage-weighted site values (MATCH or INFO < 1 %),
+Hansen bundle and site-rate parity on an external forest tile (site rate EE 1.6818 vs numpy 1.6947, 0.76 %, INFO).
+
+Open, stated plainly: (a) **forest_loss_rate reference construction is not validated**: on the external forest tile 43 cells were eligible by the
+population mask and 0 returned a valid value; the cause is not yet known (new `shortfall` diagnostics will say). Tata zones cannot reach it (Deccan
+baseline 0.01 ha, `not_applicable`); (b) the forest pixel-window check has only 5 loss pixels (low power); the site-rate comparison is the stronger
+evidence; (c) the forest polygon pull read 10.85 million pixels (the validation tile is a multi-part geometry with a ~99 km bounding box): a harness cost,
+not a correctness issue; (d) run time is long under restricted quota (ndvi 30 min, net change 22 min, each aquatic reference 14-18 min); (e) 0.4-0.8 %
+residuals between EE and numpy site values remain unexplained (by decision not investigated); (f) `tspi` is `pending_methodology`.

@@ -43,6 +43,12 @@ PURE_WATER_ERODE_PX = 1                # one-pixel erosion removes mixed shoreli
 # changing the population near tile edges (a body owned by a tile is then always fully inside that tile's region). A very
 # elongated body (channel / river reach) is not a comparable "water body" for these indicators. Darukaa choice; configurable.
 MAX_WATER_BODY_EXTENT_M = 2000.0
+# CANONICAL water-body PERMANENCE (used to match comparable bodies, decision E2): the mean of the continuous Sentinel-1 water OCCURRENCE
+# (share of dates classified water, indicators._s1_water_occurrence) over the water BODY'S OWN pixels, reduced on the S1 native 10 m grid.
+# ONE definition for every aquatic indicator, whatever the indicator's own native grid (sabf 20 m) or unit (water body / riparian ring):
+# a ring is matched on the permanence of the BODY it surrounds, never on the ring's land pixels (run 2: ring 0.031 vs body 0.91).
+PERMANENCE_SCALE_M = 10.0
+PERMANENCE_CONSISTENCY_TOL = 0.05     # a CHECK, not methodology: the same body's permanence measured on 10 m and 20 m grids must agree within this
 RIPARIAN_RING_WIDTH_M = 100.0          # decision 7: current configurable methodology parameter (Darukaa choice)
 WOODY_MIN_TREE_FRACTION = 0.10         # site counts as a woody ecosystem when >= 10 % of it is DW trees (FLII precedent)
 

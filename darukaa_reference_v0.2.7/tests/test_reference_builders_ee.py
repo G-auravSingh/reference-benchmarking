@@ -52,30 +52,73 @@ def test_the_tile_margin_is_derived_from_the_extent_rule_so_tiling_cannot_drop_a
     assert water == 2030.0 and ring == 2130.0
 
 
-def test_unit_records_builds_a_pixel_count_area_an_interior_flag_and_reads_features():
+def _spy_world(kind):
+    """A fake `ee` where every collection / image is a distinguishable mock, so we can see WHICH geometry each reduction ran over."""
+    import darukaa_reference.support as S_
     ee = MagicMock()
-    counts = MagicMock(); counts.getInfo.return_value = {"features": [
-        {"properties": {"uid": "u1", "n": 458.0, "p": 340.0, "clon": 75.00103960971117, "clat": 18.08974837431718, "lon0": 75.00000000000001, "lat0": 18.088708943127365,
-                        "lon1": 75.0020792316692, "lat1": 18.090787799792878, "geodesic_area_m2": 45962.0, "touches_site": 1}},
-        {"properties": {"uid": "u2", "n": 20.0, "p": 0.0, "clon": 75.00103960971117, "clat": 18.08974837431718, "lon0": 75.00000000000001, "lat0": 18.088708943127365, "lon1": 75.00000000000001, "lat1": 18.088708943127365}}]}
-    vals = MagicMock(); vals.getInfo.return_value = {"features": [{"properties": {"uid": "u1", "v": 0.1467, "perm": 0.8}}]}
-    img = MagicMock()
-    img.select.return_value.rename.return_value.updateMask.return_value.addBands.return_value.reduceRegions.return_value = vals
-    water = MagicMock()
-    water.focal_min.return_value = MagicMock()
+    ee.Projection.return_value.atScale.side_effect = lambda m: f"proj@{m}"
+    U, U2, RINGS = MagicMock(name="units_raw"), MagicMock(name="units_body"), MagicMock(name="rings")
+    U.map.return_value = U2                                   # geometry properties
+    U2.map.return_value = RINGS                               # rings of the bodies
+    S_orig = S_.ee_water_body_units
+    S_.ee_water_body_units = lambda *a, **k: U
+    lonlat = {"clon": 73.81, "clat": 18.643, "lon0": 73.8096, "lat0": 18.6417, "lon1": 73.8121, "lat1": 18.6448, "geodesic_area_m2": 45962.0, "touches_site": 1}
+    counts = MagicMock(); counts.getInfo.return_value = {"features": [{"properties": {"uid": "u1", "n": 458.0, "p": 340.0, **lonlat}}]}
     ee.Image.cat.return_value.reduceRegions.return_value = counts
-    out = RE.unit_records_ee(ee, region=MagicMock(), region_bounds=(499000.0, 1999000.0, 501000.0, 2001000.0), water_mask=water,
-                             metric_image=img, kind="water", native_scale_m=10.0, permanence_image=MagicMock(),
-                             min_area_m2=3000.0, crs="EPSG:32643", site_geometry=MagicMock())
-    assert [r["uid"] for r in out] == ["u1"]                                     # 2,000 m2 < min area 3,000 m2: dropped by the exact filter
-    r = out[0]
+    metric = MagicMock(name="metric"); vb = metric.select.return_value.rename.return_value.updateMask.return_value.addBands.return_value
+    vb.reduceRegions.return_value.getInfo.return_value = {"features": [{"properties": {"uid": "u1", "v": 0.1467}}]}
+    perm = MagicMock(name="perm"); pb = perm.select.return_value.rename.return_value.addBands.return_value
+    pb.reduceRegions.return_value.getInfo.return_value = {"features": [{"properties": {"uid": "u1", "perm": 0.91}}]}
+    return ee, U2, RINGS, metric, vb, perm, pb, S_, S_orig
+
+
+def _run_records(kind):
+    ee, U2, RINGS, metric, vb, perm, pb, S_, S_orig = _spy_world(kind)
+    try:
+        recs = RE.unit_records_ee(ee, region=MagicMock(), region_bounds=(370000.0, 2055000.0, 380000.0, 2068000.0), water_mask=MagicMock(), metric_image=metric,
+                                  kind=kind, native_scale_m=10.0, permanence_image=perm, min_area_m2=3000.0, crs="EPSG:32643", site_geometry=MagicMock())
+    finally:
+        S_.ee_water_body_units = S_orig
+    return recs, ee, U2, RINGS, vb, pb
+
+
+def test_unit_records_builds_a_pixel_count_area_an_interior_flag_and_reads_features():
+    recs, *_ = _run_records("water")
+    assert len(recs) == 1
+    r = recs[0]
     assert r["area_m2"] == 45800.0 and r["n_px"] == 458 and r["pure_px"] == 340 and r["geodesic_area_m2"] == 45962.0
-    assert abs(r["cx"] - 500110.0) < 5 and abs(r["cy"] - 2000115.0) < 5 and abs(r["bbox"][0] - 500000.0) < 5 and abs(r["bbox"][3] - 2000230.0) < 5   # lon/lat -> UTM
-    assert r["interior"] is True and r["touches_site"] is True and r["value"] == 0.1467 and r["permanence"] == 0.8
-    water.focal_min.assert_called_with(radius=K.PURE_WATER_ERODE_PX, kernelType="square", units="pixels")
-    edge = RE.unit_records_ee(ee, region=MagicMock(), region_bounds=(500000.0, 2000000.0, 500240.0, 2000250.0), water_mask=water,
-                              metric_image=img, kind="water", native_scale_m=10.0, min_area_m2=3000.0, crs="EPSG:32643")
-    assert edge[0]["interior"] is False                                          # touches the erosion margin of a tight region
+    assert r["value"] == 0.1467 and r["permanence"] == 0.91 and r["touches_site"] is True and r["interior"] is True
+    assert 300000 < r["cx"] < 700000 and r["bbox"][0] < r["cx"] < r["bbox"][2]                       # metres (UTM), converted from lon/lat
+
+
+def test_permanence_is_measured_over_the_water_BODY_for_both_kinds_never_over_the_ring():
+    """Run 2: ring indicators reported permanence 0.031 (the land ring) while water indicators reported 0.91 (the body), so the
+    permanence criterion was silently off for sdi / riparian_natural_veg_share. One definition, whatever the kind."""
+    for kind in ("water", "ring"):
+        recs, ee, U2, RINGS, vb, pb = _run_records(kind)
+        assert pb.reduceRegions.call_args.kwargs["collection"] is U2, kind                            # the body geometry
+        assert pb.reduceRegions.call_args.kwargs["scale"] == K.PERMANENCE_SCALE_M == 10.0            # canonical S1 grid
+        assert pb.reduceRegions.call_args.kwargs["crs"] == "proj@10.0"
+        metric_coll = vb.reduceRegions.call_args.kwargs["collection"]
+        assert metric_coll is (RINGS if kind == "ring" else U2), kind                                # metric: ring for rings, body otherwise
+        assert recs[0]["permanence"] == 0.91 and recs[0]["value"] == 0.1467
+
+
+def test_the_metric_reduction_never_carries_a_permanence_band():
+    import inspect
+    src = inspect.getsource(RE.unit_records_ee)
+    assert 'v.addBands(perm)' not in src and '.addBands(perm' not in src.replace("pperm.addBands", "")   # perm only via the body path
+    assert "K.PERMANENCE_SCALE_M" in src
+
+
+def test_records_without_a_permanence_image_report_none_not_zero():
+    ee, U2, RINGS, metric, vb, perm, pb, S_, S_orig = _spy_world("water")
+    try:
+        recs = RE.unit_records_ee(ee, region=MagicMock(), region_bounds=(370000.0, 2055000.0, 380000.0, 2068000.0), water_mask=MagicMock(), metric_image=metric,
+                                  kind="water", native_scale_m=10.0, permanence_image=None, min_area_m2=3000.0, crs="EPSG:32643")
+    finally:
+        S_.ee_water_body_units = S_orig
+    assert recs[0]["permanence"] is None
 
 
 def test_cell_reference_exposes_population_cell_size_and_reference_n():
@@ -229,3 +272,18 @@ def test_uid_is_precise_and_coordinates_are_requested_in_lonlat_not_assumed_utm(
     tr = RE._xy_transformer("EPSG:32643")
     x, y, bb = RE._to_xy(tr, {"clon": 73.81, "clat": 18.643, "lon0": 73.8096, "lat0": 18.6417, "lon1": 73.8121, "lat1": 18.6448})
     assert 300000 < x < 700000 and 2.0e6 < y < 2.1e6 and bb[0] < x < bb[2] and bb[1] < y < bb[3] and 200 < bb[2] - bb[0] < 400   # metres, a ~250 m body
+
+
+def test_a_shortfall_between_eligible_and_valid_cells_is_stated_in_the_diagnostics():
+    """Run 2 forest validation: 43 cells eligible by the population mask, 0 valid metric values, and nothing said why."""
+    z = Zone2D()
+    ref, _, _ = run_tiled(z, n=5000)
+    assert ref.diagnostics["shortfall"] == 0 and ref.diagnostics["shortfall_note"] == "" and ref.diagnostics["n_requested_total"] == 5000
+    ee = MagicMock()
+    ref0 = RE.cell_reference_tiled_ee(ee, cell_image=MagicMock(), mask=None, centre_xy=(500000.0, 2000000.0), radius_m=50000.0, native_scale_m=10.0,
+                                      site_area_m2=4.01e5, crs="EPSG:32643", n=5000, seed=1, support="site_window_rate", construct="c", unit="u",
+                                      temporal="t", population="p", tier="tier2", population_definition="pop", tile_native_px=3072,
+                                      count_fn=lambda t: 40 if t[0] < 500000 <= t[2] and t[1] < 2000000 <= t[3] else 0, sample_fn=lambda t, m: [])   # eligible, all masked
+    d = ref0.diagnostics
+    assert ref0.reference_n == 0 and d["shortfall"] == d["n_requested_total"] == 40 and "masked by the metric itself" in d["shortfall_note"]
+    assert d["leaf_summary"] and d["leaf_summary"][0]["asked"] == 40 and d["leaf_summary"][0]["got"] == 0

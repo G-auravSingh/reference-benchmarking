@@ -131,6 +131,20 @@ class FakeBackend:
                          "pure_px": 30, "value": 0.1, "interior": True})
         return recs
 
+    def permanence_records_ee(self, region, kind, native):
+        g = self.pull("water_bundle", region)
+        wa, x0, y0 = g.raster("water"); ma, _, _ = g.raster("metric")
+        recs = P.numpy_water_records(wa > 0, ma, 10.0, x0, y0, region["bounds"])
+        for r in recs:
+            r["permanence"] = 0.91
+            if self.bug == "ring_permanence" and kind == "ring":
+                r["permanence"] = 0.031                                                       # measured over the land ring (the run-2 defect)
+            if self.bug == "grid_permanence" and native == 20.0:
+                r["permanence"] = 0.60
+            if self.bug == "perm_missing":
+                r["permanence"] = None
+        return recs
+
     def synthetic_water_ee(self, bounds, crs, n, res):
         water, metric = P.synthetic_water_raster(n)
         recs = P.numpy_water_records(water, metric, res, bounds[0] + res / 2, bounds[1] + n * res - res / 2, bounds, min_px=1,
@@ -380,3 +394,22 @@ def test_ee_pull_fills_a_masked_band_with_nan_and_reports_zero_coverage():
     be = P.EEBackend(MagicMock(), MagicMock(), ee=ee, provider=MagicMock())
     g = be._pull(img, (500000.0, 2000000.0, 500120.0, 2000030.0), 30.0, "EPSG:32643", ["lossyear", "ee_loss", "ee_years"])
     assert "lossyear" in g.values and np.isnan(g.values["lossyear"]).all() and g.coverage["lossyear"] == 0 and g.coverage["ee_loss"] == 4
+
+
+# ================================================================== aquatic permanence consistency (run-2 defect)
+def test_consistent_permanence_gives_only_matches():
+    res = P.run_checks(FakeBackend(), None, ZONE)
+    perm = [r for r in res if r.check == "permanence"]
+    assert perm and all(r.status == P.MATCH for r in perm), [(r.item, r.status) for r in perm if r.status != P.MATCH]
+    assert any("ring vs water kind" in r.item for r in perm) and any("10 m vs 20 m" in r.item for r in perm)
+
+
+def test_the_run2_ring_permanence_defect_is_detected_live():
+    res = P.run_checks(FakeBackend("ring_permanence"), None, ZONE)
+    bad = [r for r in res if r.check == "permanence" and r.status == P.DISCREPANCY and "ring vs water kind" in r.item]
+    assert bad and all(r.ee == 0.031 and r.numpy == 0.91 for r in bad if r.ee is not None)
+
+
+def test_a_grid_dependent_permanence_and_a_missing_permanence_are_detected():
+    assert [r for r in P.run_checks(FakeBackend("grid_permanence"), None, ZONE) if r.check == "permanence" and r.status == P.DISCREPANCY and "10 m vs 20 m" in r.item]
+    assert [r for r in P.run_checks(FakeBackend("perm_missing"), None, ZONE) if r.check == "permanence" and r.status == P.DISCREPANCY]

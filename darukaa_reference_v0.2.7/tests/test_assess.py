@@ -306,3 +306,50 @@ def test_find_candidate_tiles_reads_only_existing_assets(tmp_path):
     rows = A.find_candidate_tiles(str(tmp_path))
     assert [r["label"] for r in rows] == ["FCF_GV_EMU_Ganjam_1"] and rows[0]["area_ha"] > 0
     assert A.find_candidate_tiles(str(tmp_path / "nothing")) == []
+
+
+# ================================================================== aquatic permanence: one definition for every aquatic indicator
+def test_every_aquatic_indicator_matches_on_the_same_permanence_source(monkeypatch):
+    """Run 2 unintended mismatch: ring indicators 0.031 vs water indicators ~0.9. All four must receive the SAME canonical permanence image."""
+    import darukaa_reference.indicators as I
+    from darukaa_reference import reference_builders_ee as RB
+    from shapely.geometry import box as sbox
+    from darukaa_reference.config import Config
+    sentinel = object()
+    monkeypatch.setattr(I, "_s1_water_occurrence", lambda c: sentinel)
+    for fn in ("_img_sabf", "_img_wcpi", "_img_sdi", "_img_natural_veg", "_s2_masked"):
+        monkeypatch.setattr(I, fn, lambda c: MagicMock())
+    monkeypatch.setattr(RB, "water_mask_s2", lambda comp: MagicMock())
+    seen = {}
+    def fake(*a, **k):
+        seen[k["construct"]] = k
+        return {"valid": True, "invalid_reason": "", "target": {"permanence": 0.9}, "diagnostics": {}}
+    monkeypatch.setattr(RB, "water_body_reference_ee", fake)
+    prov = A.EEProvider(Config(), create_default_registry(), ee=MagicMock(), selector=MagicMock(), log=lambda *a: None)
+    zone = A.Zone("Z", sbox(73.8, 18.6, 73.81, 18.61), "aquatic", 296)
+    prov._ctx[zone.label] = {"eg": MagicMock(), "crs": "EPSG:32643", "area": 1e5, "centre_xy": (0.0, 0.0), "site_bounds_utm": (0, 0, 1, 1)}
+    for n in ("sabf", "wcpi", "sdi", "riparian_natural_veg_share"):
+        prov._water_body(n, zone, True)
+    assert set(seen) == {"sabf", "wcpi", "sdi", "riparian_natural_veg_share"}
+    assert all(k["permanence_image"] is sentinel for k in seen.values())                                # one source for all four
+    assert seen["sdi"]["kind"] == seen["riparian_natural_veg_share"]["kind"] == "ring" and seen["sabf"]["kind"] == "water"
+    assert prov.aquatic_permanence(zone) == {n: 0.9 for n in seen}
+
+
+def test_the_audit_meta_records_target_permanence_per_indicator_and_flags_a_spread():
+    class P:
+        def __init__(self, perm): self.perm = perm
+        def aquatic_permanence(self, zone): return self.perm
+        # minimal provider surface used by assess_zone with only=[] (no indicators run)
+        def evidence(self, zone): return B.SiteEvidence("aquatic", 1e5, water_body_valid=True, n_pure_water_px=100, water_probe="ok")
+    logs = []
+    for perm, ok in (({"sabf": 0.884, "wcpi": 0.910, "sdi": 0.905, "riparian_natural_veg_share": 0.91}, True),
+                     ({"sabf": 0.884, "wcpi": 0.910, "sdi": 0.031, "riparian_natural_veg_share": 0.031}, False)):        # the run-2 pattern
+        meta = {}
+        A.assess_zone(A.Zone("Z", None, "aquatic"), P(perm), only=[], log=logs.append, meta_out=meta)
+        m = meta["aquatic_permanence"]
+        assert m["consistent"] is ok and m["target_permanence_by_indicator"] == perm and abs(m["spread"] - (max(perm.values()) - min(perm.values()))) < 1e-12
+    assert any("WARNING: aquatic target permanence differs" in l for l in logs)
+
+
+from darukaa_reference import benchmarking as B   # noqa: E402  (used by the fake provider above)

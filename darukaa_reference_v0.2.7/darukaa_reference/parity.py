@@ -421,6 +421,35 @@ def check_water_bodies(be, region) -> List[ParityResult]:
     return out
 
 
+def check_permanence_consistency(be, region) -> List[ParityResult]:
+    """Run 2 defect guard, LIVE: the same water body must report ONE permanence whatever the unit kind (pure-water body vs riparian ring)
+    and whatever the indicator's native grid (10 m vs sabf's 20 m). Uses the real unit_records_ee with the canonical S1 permanence image."""
+    out: List[ParityResult] = []
+    tol = K.PERMANENCE_CONSISTENCY_TOL
+    w10 = [r for r in be.permanence_records_ee(region, "water", 10.0) if r["interior"]]
+    r10 = [r for r in be.permanence_records_ee(region, "ring", 10.0) if r["interior"]]
+    w20 = [r for r in be.permanence_records_ee(region, "water", 20.0) if r["interior"]]
+    if not w10:
+        return [ParityResult("permanence", "no interior water body in the region", INFO, 0, 0, note="nothing to compare")]
+    pairs, _, _ = match_records(r10, w10, 15.0)
+    for r, w in pairs:
+        d = abs(r["permanence"] - w["permanence"]) if r["permanence"] is not None and w["permanence"] is not None else None
+        out.append(ParityResult("permanence", f"ring vs water kind, body at ({w['cx']:.0f}, {w['cy']:.0f}), {w['n_px']} px", MATCH if d is not None and d <= 1e-9 else DISCREPANCY,
+                                r["permanence"], w["permanence"], d, None, 1e-9,
+                                note="permanence must be measured over the water BODY for both kinds (run 2: ring 0.031 vs body 0.91)"))
+    out.append(ParityResult("permanence", "bodies compared, ring vs water kind", MATCH if pairs and len(pairs) == len(w10) else DISCREPANCY, len(pairs), len(w10)))
+    pairs20, _, _ = match_records(w20, w10, 30.0)
+    for a, b in pairs20:
+        d = abs(a["permanence"] - b["permanence"]) if a["permanence"] is not None and b["permanence"] is not None else None
+        out.append(ParityResult("permanence", f"10 m vs 20 m grid, body at ({b['cx']:.0f}, {b['cy']:.0f})", MATCH if d is not None and d <= tol else DISCREPANCY,
+                                a["permanence"], b["permanence"], d, None, tol, note="the same body on sabf's 20 m grid vs the 10 m grid (run 2: 0.884 vs 0.910)"))
+    for r in w10 + r10 + w20:
+        if r["permanence"] is None or not (0.0 <= r["permanence"] <= 1.0):
+            out.append(ParityResult("permanence", "permanence outside [0, 1] or missing", DISCREPANCY, r["permanence"], None))
+            break
+    return out
+
+
 SYNTHETIC_WATER = {                                            # (row0, col0, height, width, metric value) on a 60 x 60 px, 10 m window
     "lake": (10, 10, 20, 20, 0.20),                            # 400 px; pure 18 x 18 = 324; interior
     "edge_pond": (1, 40, 6, 7, 0.13),                          # 42 px, 10 m from the window edge: the live 'extra component' pattern
@@ -480,6 +509,7 @@ def run_checks(be, zone_terrestrial=None, zone_aquatic=None, parity_area_m2: flo
         region = be.region(zone_aquatic, side_m=700.0, cell_m=10.0)
         res += _safe("water bodies", lambda: check_water_bodies(be, region))
         res += _safe("water bodies (live synthetic fixture)", lambda: check_water_body_synthetic(be, crs=be._crs_for(zone_aquatic)))
+        res += _safe("aquatic permanence consistency", lambda: check_permanence_consistency(be, region))
     if zone_forest is not None:                       # an EXTERNAL forested validation zone: the terrestrial tile has ~no Hansen baseline
         region = be.region(zone_forest, side_m=1800.0, cell_m=30.0)
         res += _safe("hansen constructs (forest validation zone)", lambda: check_hansen_constructs(be, region))
@@ -487,14 +517,16 @@ def run_checks(be, zone_terrestrial=None, zone_aquatic=None, parity_area_m2: flo
     return res
 
 
-def write_parity(results: Sequence[ParityResult], out_dir: str, stem: str = "parity") -> Dict[str, str]:
+def write_parity(results: Sequence[ParityResult], out_dir: str, stem: str = "parity", provenance: Optional[Dict] = None) -> Dict[str, str]:
+    from darukaa_reference import provenance as PV
+    provenance = provenance or PV.run_provenance(None)
     os.makedirs(out_dir, exist_ok=True)
     cnt = {s: sum(r.status == s for r in results) for s in (MATCH, DISCREPANCY, INFO, HARNESS_ERROR)}
     pj, pm = os.path.join(out_dir, f"{stem}.json"), os.path.join(out_dir, f"{stem}.md")
     with open(pj, "w", encoding="utf-8") as f:
-        json.dump({"summary": cnt, "results": [asdict(r) for r in results]}, f, indent=1, default=str)
+        json.dump({"summary": cnt, "provenance": provenance, "results": [asdict(r) for r in results]}, f, indent=1, default=str)
     with open(pm, "w", encoding="utf-8") as f:
-        f.write(f"# EE vs numpy parity\n\nSummary: {cnt}\n\n| status | check | item | EE | numpy | max abs diff | note |\n|---|---|---|---|---|---|---|\n")
+        f.write(f"# EE vs numpy parity\n\nProvenance: {PV.brief(provenance)}\n\nSummary: {cnt}\n\n| status | check | item | EE | numpy | max abs diff | note |\n|---|---|---|---|---|---|---|\n")
         for r in sorted(results, key=lambda r: (r.status != DISCREPANCY, r.status != HARNESS_ERROR, r.check)):
             f.write(f"| {r.status} | {r.check} | {r.item} | {r.ee if not isinstance(r.ee, float) else f'{r.ee:.6g}'} | "
                     f"{r.numpy if not isinstance(r.numpy, float) else f'{r.numpy:.6g}'} | "
@@ -664,6 +696,16 @@ class EEBackend:
         return RB.unit_records_ee(ee, region=rect, region_bounds=region["bounds"], water_mask=wm, metric_image=I._img_wcpi(cfg), kind="water",
                                   native_scale_m=10.0, permanence_image=None, min_area_m2=WATER_MIN_PX * 100.0, crs=crs)
 
+    def permanence_records_ee(self, region, kind: str, native: float) -> List[Dict]:
+        """Real unit_records_ee with the CANONICAL permanence image, for a given unit kind and native grid."""
+        import darukaa_reference.indicators as I
+        from darukaa_reference import reference_builders_ee as RB
+        ee, cfg, crs = self.ee, self.config, region["crs"]
+        wm = RB.water_mask_s2(I._s2_masked(cfg).median())
+        return RB.unit_records_ee(ee, region=RB.rect_geometry(ee, region["bounds"], crs), region_bounds=region["bounds"], water_mask=wm,
+                                  metric_image=ee.Image.constant(1), kind=kind, native_scale_m=native, permanence_image=I._s1_water_occurrence(cfg),
+                                  min_area_m2=WATER_MIN_PX * 100.0, crs=crs)                  # 3,000 m2 on every grid: the same bodies are compared
+
     def synthetic_water_ee(self, bounds, crs: str, n: int, res: float) -> List[Dict]:
         """Paint the SYNTHETIC_WATER rectangles (and the island hole) into Earth Engine images and run the real unit_records_ee."""
         from darukaa_reference import reference_builders_ee as RB
@@ -688,7 +730,9 @@ def run_parity(config, registry, zone_terrestrial, zone_aquatic=None, out_dir: s
                backend=None, log=print, zone_forest=None) -> List[ParityResult]:
     be = backend or EEBackend(config, registry, log=log)
     results = run_checks(be, zone_terrestrial, zone_aquatic, parity_area_m2, zone_forest=zone_forest)
-    paths = write_parity(results, out_dir)
+    from darukaa_reference import provenance as PV
+    from darukaa_reference import assess as _A
+    paths = write_parity(results, out_dir, provenance=PV.run_provenance(config, _A.CODE_VERSION))
     cnt = {s: sum(r.status == s for r in results) for s in (MATCH, DISCREPANCY, INFO, HARNESS_ERROR)}
     log(f"Parity summary: {cnt}\nWritten: {paths}")
     for r in results:

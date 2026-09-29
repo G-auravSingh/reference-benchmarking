@@ -157,14 +157,21 @@ def unit_records_ee(ee, *, region, region_bounds, water_mask, metric_image, kind
     else:
         val_fc, v = units.map(lambda f: S.ee_ring(ee, f, ring_width_m)), v.updateMask(water_mask.Not())
         margin = ring_width_m + 2 * native_scale_m
-    perm = (permanence_image.select(0).rename("perm") if permanence_image is not None
-            else ee.Image.constant(0).rename("perm"))
     extra = {"crs": proj}
     counts = ee.Image.cat([water_mask.rename("n"), pure.rename("p")]).reduceRegions(
         collection=units, reducer=ee.Reducer.sum(), scale=native_scale_m, tileScale=tile_scale, **extra)
-    vals = v.addBands(perm).reduceRegions(collection=val_fc, reducer=ee.Reducer.mean(), scale=native_scale_m,
-                                          tileScale=tile_scale, **extra)
+    # the METRIC is reduced over the unit's own geometry (pure-water body, or the ring): v only, no permanence band
+    vals = v.addBands(ee.Image.constant(1).rename("one")).reduceRegions(
+        collection=val_fc, reducer=ee.Reducer.mean(), scale=native_scale_m, tileScale=tile_scale, **extra)
     vf = {f["properties"]["uid"]: f["properties"] for f in vals.getInfo()["features"]}
+    # PERMANENCE: ALWAYS over the water BODY (`units`), never over the ring, on the canonical S1 grid, by one code path for both kinds
+    pf = {}
+    if permanence_image is not None:
+        pperm = permanence_image.select(0).rename("perm")
+        pres = pperm.addBands(ee.Image.constant(1).rename("one")).reduceRegions(
+            collection=units, reducer=ee.Reducer.mean(), scale=K.PERMANENCE_SCALE_M, tileScale=tile_scale,
+            crs=S.ee_native_projection(ee, K.PERMANENCE_SCALE_M, crs))
+        pf = {f["properties"]["uid"]: f["properties"].get("perm") for f in pres.getInfo()["features"]}
     tr = _xy_transformer(crs)
     out = []
     for f in counts.getInfo()["features"]:
@@ -177,7 +184,7 @@ def unit_records_ee(ee, *, region, region_bounds, water_mask, metric_image, kind
         out.append({"uid": p["uid"], "cx": cx, "cy": cy, "bbox": bbox, "n_px": n_px,
                     "area_m2": n_px * native_scale_m ** 2, "geodesic_area_m2": p.get("geodesic_area_m2"),
                     "pure_px": int(round(p.get("p") or 0)), "value": q.get("v"),
-                    "permanence": (q.get("perm") if permanence_image is not None else None),
+                    "permanence": (pf.get(p["uid"]) if permanence_image is not None else None),
                     "interior": T.is_interior(bbox, region_bounds, margin), "touches_site": bool(p.get("touches_site", False))})
     return out
 
@@ -392,9 +399,12 @@ def cell_reference_tiled_ee(ee, *, cell_image, mask, centre_xy, radius_m: float,
     total = sum(counts.values())
     alloc = T.allocate(counts, n)
     values: List[float] = []
+    leaf_summary: List[Dict] = []
     for i, (lt, _c) in enumerate(leaves):
         vals = T.sample_adaptive(lt, alloc.get(lt, 0), sample_fn, count_fn, cell_m, stats)
-        values += [v for v in vals if v is not None]
+        got = [v for v in vals if v is not None]
+        values += got
+        leaf_summary.append({"tile": tuple(round(x, 1) for x in lt), "eligible": counts[lt], "asked": alloc.get(lt, 0), "got": len(got)})
         log(f"    cell sample leaf {i + 1}/{len(leaves)}: asked {alloc.get(lt, 0)}, got {len(vals)}")
     arr = np.array(values, dtype=float)
     spec = MetricSpec(construct, unit, temporal, support, population,
@@ -405,6 +415,13 @@ def cell_reference_tiled_ee(ee, *, cell_image, mask, centre_xy, radius_m: float,
             "tile_native_px": tile_native_px, "tile_side_m": tile_m, "n_tiles": len(tiles), "n_leaf_tiles": len(leaves),
             "n_tile_splits": stats["splits"], "split_errors": stats.get("split_errors", [])[:5],
             "allocation_min": min(alloc.values()) if alloc else 0, "allocation_max": max(alloc.values()) if alloc else 0,
-            "n_returned": int(arr.size), "population_taken": "all cells" if total <= n else f"{n} of {total} eligible cells"}
+            "n_returned": int(arr.size), "population_taken": "all cells" if total <= n else f"{n} of {total} eligible cells",
+            "n_requested_total": int(sum(alloc.values())), "leaf_summary": leaf_summary[:20],
+            # Eligibility is counted from the POPULATION mask only; a cell can still be masked by the METRIC (e.g. the 5 ha baseline
+            # floor of a forest-loss rate cell, or < 90 % valid coverage). Any shortfall is stated, never hidden (assumption A8).
+            "shortfall": int(sum(alloc.values())) - int(arr.size),
+            "shortfall_note": ("" if int(arr.size) >= int(sum(alloc.values())) else
+                               f"{int(sum(alloc.values())) - int(arr.size)} of {int(sum(alloc.values()))} requested cells were eligible by the population mask but returned no valid "
+                               "metric value (masked by the metric itself: denominator floor, coverage < 90 %, or no data)")}
     diag.update(extra or {})
     return ReferenceData(arr, spec, tier, f"{population_definition}; {diag['population_taken']}", diag)

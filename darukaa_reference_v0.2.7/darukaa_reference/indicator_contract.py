@@ -67,6 +67,7 @@ NOT_APPLICABLE_REASONS = (
 )
 
 # ---- Explicit, documented thresholds (v0.2.8 decisions D3, E2; the values are configurable per contract)
+CONTRACT_VERSION = "0.2.8"           # the frozen indicator contract this module encodes (recorded in every audit)
 GENERIC_MIN_NATIVE_PIXELS = 10        # hard applicability floor (D3). NOT a statistical-sufficiency claim.
 MIN_PURE_WATER_PIXELS = 10            # aquatic: >= 10 pure-water pixels AND a valid water-body geometry (D3)
 FOREST_BASELINE_MIN_M2 = 50_000.0     # 5 ha of >=30 % canopy baseline forest (forest_loss_rate applicability)

@@ -67,12 +67,10 @@ class SiteResult:
 
 
 def git_commit(default: str = "unknown") -> str:
-    try:
-        here = os.path.dirname(os.path.abspath(__file__))
-        return subprocess.check_output(["git", "-C", here, "rev-parse", "--short", "HEAD"],
-                                       stderr=subprocess.DEVNULL, timeout=5).decode().strip()
-    except Exception:
-        return default
+    """Short commit of the code THIS process loaded (captured at import by provenance.py; not re-read at write time, not hard-coded)."""
+    from darukaa_reference import provenance as PV
+    c = PV.LOADED.get("commit_short")
+    return default if not c or c == "unknown" else c
 
 
 # ----------------------------------------------------------------------------------------
@@ -185,6 +183,15 @@ def assess_zone(zone: Zone, provider, contracts: Optional[Dict[str, IC.Indicator
         rows.append(_row(c, a, zone, site, ref, time.perf_counter() - t1, prov))
         log(f"  {name:28s} {a.status:38s} site={rows[-1]['site_value']!s:>12.12s} n={a.reference_n!s:>5s} "
             f"bench={a.benchmark if a.benchmark is None else round(a.benchmark, 4)!s:>8.8s} {rows[-1]['seconds']:>6.1f}s {a.reason}")
+    if meta_out is not None and hasattr(provider, "aquatic_permanence"):
+        perm = {k: v for k, v in provider.aquatic_permanence(zone).items() if v is not None}
+        if perm:
+            spread = max(perm.values()) - min(perm.values())
+            meta_out["aquatic_permanence"] = {"target_permanence_by_indicator": perm, "spread": spread, "tolerance": K.PERMANENCE_CONSISTENCY_TOL,
+                                              "consistent": spread <= K.PERMANENCE_CONSISTENCY_TOL,
+                                              "definition": "mean continuous Sentinel-1 water occurrence over the water BODY's own pixels, 10 m grid (constructs.PERMANENCE_SCALE_M)"}
+            if spread > K.PERMANENCE_CONSISTENCY_TOL:
+                log(f"  WARNING: aquatic target permanence differs across indicators by {spread:.3f} (> {K.PERMANENCE_CONSISTENCY_TOL}): {perm}")
     return rows
 
 
@@ -198,7 +205,9 @@ def summarise(rows: Sequence[Dict]) -> Dict[str, int]:
 # ----------------------------------------------------------------------------------------
 # Writers
 # ----------------------------------------------------------------------------------------
-def write_audit(rows: Sequence[Dict], out_dir: str, stem: str, meta: Optional[Dict] = None) -> Dict[str, str]:
+def write_audit(rows: Sequence[Dict], out_dir: str, stem: str, meta: Optional[Dict] = None, config=None) -> Dict[str, str]:
+    from darukaa_reference import provenance as PV
+    prov = PV.run_provenance(config, CODE_VERSION)
     os.makedirs(out_dir, exist_ok=True)
     cols = AUDIT_COLUMNS + EXTRA_COLUMNS
     paths = {"csv": os.path.join(out_dir, f"{stem}_audit.csv"), "json": os.path.join(out_dir, f"{stem}_audit.json"),
@@ -209,11 +218,11 @@ def write_audit(rows: Sequence[Dict], out_dir: str, stem: str, meta: Optional[Di
         for r in rows:
             w.writerow(r)
     with open(paths["json"], "w", encoding="utf-8") as f:
-        json.dump({"code_version": CODE_VERSION, "git_commit": git_commit(), "summary": summarise(rows),
+        json.dump({"code_version": CODE_VERSION, "git_commit": prov["git_commit"], "provenance": prov, "summary": summarise(rows),
                    "meta": meta or {}, "rows": list(rows)}, f, indent=1, default=str)
     short = ["indicator", "status", "reason", "site_value", "reference_n", "reference_median", "benchmark", "score", "seconds"]
     with open(paths["md"], "w", encoding="utf-8") as f:
-        f.write(f"# Audit trail: {rows[0]['zone'] if rows else ''}  ({rows[0]['realm'] if rows else ''})\n\n")
+        f.write(f"# Audit trail: {rows[0]['zone'] if rows else ''}  ({rows[0]['realm'] if rows else ''})\n\nProvenance: {PV.brief(prov)}\n\n")
         f.write(f"Summary: {summarise(rows)}\n\n| " + " | ".join(short) + " |\n|" + "---|" * len(short) + "\n")
         for r in rows:
             f.write("| " + " | ".join("" if r.get(k) is None else (f"{r[k]:.4g}" if isinstance(r[k], float) else str(r[k])) for k in short) + " |\n")
@@ -245,6 +254,7 @@ class EEProvider:
         self.sel = selector
         self._ctx: Dict[str, Dict] = {}
         self._wb: Dict[tuple, Dict] = {}
+        self._perm: Dict[tuple, Optional[float]] = {}          # (zone, indicator) -> target permanence actually used for matching
 
     # ---------------------------------------------------------------- basics
     def implemented(self, name: str) -> bool:
@@ -402,7 +412,12 @@ class EEProvider:
             min_pure_px=IC.MIN_PURE_WATER_PIXELS, want_reference=want_reference, crs=ctx["crs"],
             max_extent_m=float(getattr(cfg, "water_body_max_extent_m", K.MAX_WATER_BODY_EXTENT_M)), log=self.log)
         self._wb[key] = out
+        self._perm[key] = (out.get("target") or {}).get("permanence")
         return out
+
+    def aquatic_permanence(self, zone: Zone) -> Dict[str, Optional[float]]:
+        """The target permanence each aquatic indicator matched on. All must agree (one canonical definition)."""
+        return {n: v for (z, n), v in self._perm.items() if z == zone.label}
 
     # ---------------------------------------------------------------- references
     def references(self, name: str, zone: Zone, ev: B.SiteEvidence, site: SiteResult) -> Dict[str, B.ReferenceData]:
@@ -564,7 +579,7 @@ def run_smoke_test(config, registry, zone: Zone, out_dir: str = "outputs/smoke",
     t0 = time.perf_counter()
     meta: Dict = {}
     rows = assess_zone(zone, provider, config=config, log=log, only=only, meta_out=meta)
-    paths = write_audit(rows, out_dir, f"{zone.label}", meta=meta)
+    paths = write_audit(rows, out_dir, f"{zone.label}", meta=meta, config=config)
     log(f"\n[{zone.label}] done in {(time.perf_counter() - t0) / 60:.1f} min. Status summary: {summarise(rows)}")
     log(f"Audit trail written: {paths}")
     return rows
