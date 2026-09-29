@@ -122,3 +122,62 @@ def brief(p: Dict[str, Any]) -> str:
     return (f"commit {p['git_commit_short']} on {p['branch']}{' (DIRTY)' if p.get('dirty') else ''} | code {p.get('code_version')} | "
             f"contract {p.get('contract_version')} | package {p.get('package_version')} | config sha {p['config_sha256'][:10]} | "
             f"source sha {p['source_sha256_at_import'][:10]}{w}")
+
+
+def verify_outputs(out_dir: str, expected_commit: Optional[str] = None, expected_contract: Optional[str] = None,
+                   check_session: bool = True, only=None) -> Dict[str, Any]:
+    """Gate before shipping results: every `*_audit.json` and `parity.json` in `out_dir` must carry a provenance block whose commit is the code
+    THIS process loaded, that was written after this process imported the code (so it cannot be a leftover from an earlier session), that is
+    not dirty, has no warnings, and records the contract version. A legacy file without a provenance block, or with another commit, is an
+    ISSUE, never silently accepted. Returns {'ok', 'files', 'issues'}; nothing is hard-coded.
+
+    check_session=False (with an explicit `expected_commit`) verifies outputs produced by an EARLIER commit in an EARLIER session against that
+    commit: it drops the "written after this process imported the code" and "source fingerprint equals the code loaded now" tests, nothing else.
+    `only` restricts the check to those file names."""
+    import glob
+    expected_commit = expected_commit or LOADED["commit"]
+    if expected_contract is None:
+        from darukaa_reference import indicator_contract as IC
+        expected_contract = getattr(IC, "CONTRACT_VERSION", None)
+    files, issues = [], []
+    paths = sorted(glob.glob(os.path.join(out_dir, "*_audit.json")) + glob.glob(os.path.join(out_dir, "parity.json")))
+    if only is not None:
+        paths = [q for q in paths if os.path.basename(q) in set(only)]
+    if not paths:
+        issues.append(f"no audit or parity json found in {out_dir}")
+    for path in paths:
+        name, problems = os.path.basename(path), []
+        try:
+            with open(path, encoding="utf-8") as fh:
+                d = json.load(fh)
+        except Exception as e:
+            issues.append(f"{name}: unreadable ({type(e).__name__})"); continue
+        pv = d.get("provenance")
+        if not pv:
+            problems.append(f"NO provenance block (legacy or stale file; top-level git_commit={d.get('git_commit')!r})")
+        else:
+            c = pv.get("git_commit") or ""
+            if not c or not (expected_commit.startswith(c) or c.startswith(expected_commit)):
+                problems.append(f"commit {c[:7] or None} is not the loaded commit {expected_commit[:7]}")
+            if pv.get("dirty"):
+                problems.append("dirty working tree")
+            if pv.get("warnings"):
+                problems.append("warnings: " + "; ".join(pv["warnings"]))
+            if expected_contract and pv.get("contract_version") != expected_contract:
+                problems.append(f"contract_version {pv.get('contract_version')!r} != {expected_contract!r}")
+            if not pv.get("config_sha256") or not pv.get("source_sha256_at_import"):
+                problems.append("config/source provenance missing")
+            if check_session and (pv.get("written_utc") or "") < LOADED["captured_utc"]:
+                problems.append(f"written {pv.get('written_utc')} before this process imported the code {LOADED['captured_utc']}: a leftover from an earlier session")
+            if check_session and pv.get("source_sha256_at_import") != LOADED["source_sha256"]:
+                problems.append("source fingerprint differs from the code loaded now")
+        for r in d.get("rows", []):                                      # per-row provenance must agree with the file's
+            rp = r.get("provenance")
+            rp = json.loads(rp) if isinstance(rp, str) else (rp or {})
+            rc = rp.get("git_commit") or ""
+            if rc and not (expected_commit.startswith(rc) or rc.startswith(expected_commit)):
+                problems.append(f"row {r.get('indicator')} carries commit {rc[:7]}")
+                break
+        files.append({"file": name, "ok": not problems, "commit": (pv or {}).get("git_commit_short"), "problems": problems})
+        issues += [f"{name}: {p}" for p in problems]
+    return {"ok": not issues, "expected_commit": expected_commit, "files": files, "issues": issues}
