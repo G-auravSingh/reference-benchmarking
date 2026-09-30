@@ -1,20 +1,15 @@
 # Release checklist
 
-- [x] Generalized profile supports aquatic, terrestrial and mixed assessments.
-- [x] Fixed C1 Extent, C2 Vegetation/ecosystem condition, C3 Fauna, C4 Pressure pillars.
-- [x] Standard workflow requires only the master site KML/KMZ plus optional evidence files.
-- [x] Automatic ecoregion-based terrestrial reference construction.
-- [x] Automatic comparable-waterbody aquatic reference construction.
-- [x] No context-ring reference promotion in the standard workflow.
-- [x] Reference uncertainty gate uses bootstrap median standard error.
-- [x] Direction-aware responsive benchmarking and 0–100 normalization.
-- [x] Five equal-width Darukaa concern bands declared as product convention.
-- [x] Geometric-mean aggregation of continuous scores; labels never averaged.
-- [x] Overall C1–C3 condition and separate C4 pressure axis.
-- [x] Four-pillar SoN exposed when all four pillars have valid scored data.
-- [x] Limiting pillar/indicator chain exposed for transparency.
-- [x] Field/acoustic/eDNA observation contract available.
-- [x] Conservative eDNA/metagenomic evidence treatment aligned to the supplied Nandoshi Phase-1 report.
-- [x] Final Colab cell generates the client-facing HTML Year-0 report.
-- [x] Unit tests, notebook compile and package compile pass.
-- [x] Frozen legacy package remains unchanged.
+Before using a build for a client run:
+
+- confirm the repository commit shown by the Colab notebook;
+- confirm the master KML hash is recorded in `assessment_manifest.json`;
+- inspect master boundary area and map domains;
+- confirm Year-0 dates are the intended seasonal window;
+- confirm Dynamic World/Sentinel-2/Sentinel-1 assets are accessible;
+- inspect monthly water extent diagnostics;
+- inspect all metric statuses and valid-pixel counts;
+- inspect Tier-1/Tier-2 benchmark availability and provenance;
+- confirm score eligibility and pillar coverage;
+- confirm that the selected reference tiers are explicitly approved for scoring; apply the fixed Darukaa 0–100 intactness concern bands;
+- retain the complete output directory and Year-0 `baseline_metric_scorecard.csv`.

@@ -1,4 +1,4 @@
-"""Site geometry ingestion, domain derivation and QA."""
+"""Site geometry ingestion, validation and canonical spatial domains."""
 from __future__ import annotations
 
 import hashlib
@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 from typing import Dict, Tuple
 
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform, unary_union
 
@@ -21,6 +21,8 @@ def _normalise_geometry(geom: BaseGeometry) -> BaseGeometry:
         return geom
     if not geom.is_valid:
         geom = geom.buffer(0)
+    if geom.is_empty:
+        return geom
     return geom
 
 
@@ -43,19 +45,21 @@ def _iter_lxml_placemarks(root):
 
 def _extract_with_fastkml(data: bytes) -> Dict[str, BaseGeometry]:
     from fastkml import kml
-    from shapely.geometry import shape
 
     doc = kml.KML()
     doc.from_string(data)
+
     geoms: Dict[str, BaseGeometry] = {}
 
     def walk(items):
         for item in items:
+            children = []
             features = getattr(item, "features", None)
-            try:
-                children = list(features()) if callable(features) else list(features or [])
-            except Exception:
-                children = []
+            if callable(features):
+                try:
+                    children = list(features())
+                except TypeError:
+                    children = list(features)
             if children:
                 yield from walk(children)
             geom = getattr(item, "geometry", None)
@@ -63,21 +67,27 @@ def _extract_with_fastkml(data: bytes) -> Dict[str, BaseGeometry]:
                 try:
                     yield str(getattr(item, "name", None) or "site"), shape(geom.__geo_interface__)
                 except Exception:
-                    pass
+                    continue
 
-    features = getattr(doc, "features", None)
-    roots = list(features()) if callable(features) else list(features or [])
-    for name, geom in walk(roots):
+    root_features = getattr(doc, "features", None)
+    if callable(root_features):
+        containers = list(root_features())
+    else:
+        containers = list(root_features or [])
+
+    for name, geom in walk(containers):
         geom = _normalise_geometry(geom)
-        if not geom.is_empty and geom.geom_type in {"Polygon", "MultiPolygon"}:
+        if not geom.is_empty:
             geoms[name] = geom
     return geoms
 
 
 def read_kml(path: str | Path) -> Tuple[BaseGeometry, Dict[str, BaseGeometry]]:
+    """Read KML/KMZ and return union geometry plus individual named geometries."""
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
+
     if path.suffix.lower() == ".kmz":
         with zipfile.ZipFile(path, "r") as z:
             names = [n for n in z.namelist() if n.lower().endswith(".kml")]
@@ -87,13 +97,17 @@ def read_kml(path: str | Path) -> Tuple[BaseGeometry, Dict[str, BaseGeometry]]:
     elif path.suffix.lower() == ".kml":
         data = path.read_bytes()
     else:
-        raise ValueError("Expected .kml or .kmz")
+        raise ValueError("Expected a .kml or .kmz file")
 
     geoms: Dict[str, BaseGeometry] = {}
     try:
         geoms = _extract_with_fastkml(data)
     except Exception:
         geoms = {}
+
+    # fastkml can successfully parse a KML document but return no geometry
+    # for otherwise valid Polygon placemarks (API/version differences).
+    # Always fall back to the namespace-aware XML parser when that happens.
     if not geoms:
         from lxml import etree
         root = etree.fromstring(data)
@@ -101,15 +115,18 @@ def read_kml(path: str | Path) -> Tuple[BaseGeometry, Dict[str, BaseGeometry]]:
             geom = _normalise_geometry(geom)
             if not geom.is_empty:
                 geoms[name] = geom
+
     if not geoms:
         raise ValueError(f"No usable polygon geometries found in {path}")
+
     union = _normalise_geometry(unary_union(list(geoms.values())))
     if union.is_empty or not union.is_valid:
-        raise ValueError("Unioned site geometry is empty or invalid")
+        raise ValueError("The unioned site geometry is empty or invalid")
     return union, geoms
 
 
 def geometry_hash(path: str | Path) -> str:
+    """SHA-256 of the exact input file bytes."""
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
@@ -120,14 +137,19 @@ def _utm_epsg(geom: BaseGeometry) -> int:
 
 
 def area_ha(geom: BaseGeometry) -> float:
+    """Area in hectares using an auto-selected local UTM projection."""
     from pyproj import Transformer
+
     epsg = _utm_epsg(geom)
     transformer = Transformer.from_crs("EPSG:4326", epsg, always_xy=True)
-    return float(transform(transformer.transform, geom).area / 10_000.0)
+    projected = transform(transformer.transform, geom)
+    return float(projected.area / 10_000.0)
 
 
 def projected_buffer(geom: BaseGeometry, distance_m: float) -> BaseGeometry:
+    """Buffer a WGS84 geometry in metres using its local UTM zone."""
     from pyproj import Transformer
+
     epsg = _utm_epsg(geom)
     fwd = Transformer.from_crs("EPSG:4326", epsg, always_xy=True).transform
     inv = Transformer.from_crs(epsg, "EPSG:4326", always_xy=True).transform
@@ -135,27 +157,28 @@ def projected_buffer(geom: BaseGeometry, distance_m: float) -> BaseGeometry:
     return _normalise_geometry(transform(inv, projected.buffer(distance_m)))
 
 
-def make_shapely_domains(geom: BaseGeometry, riparian_buffer_m: float, context_buffer_km: float, littoral_band_m: float = 50.0) -> Dict[str, BaseGeometry]:
+def make_shapely_domains(geom: BaseGeometry, riparian_buffer_m: float, context_buffer_km: float) -> Dict[str, BaseGeometry]:
+    """Create deterministic fixed spatial domains without requiring Earth Engine."""
     riparian_outer = projected_buffer(geom, riparian_buffer_m)
     context_outer = projected_buffer(geom, context_buffer_km * 1000.0)
-    littoral_outer = projected_buffer(geom, littoral_band_m)
     return {
         "master": geom,
         "riparian_fixed": _normalise_geometry(riparian_outer.difference(geom)),
-        "littoral_band": _normalise_geometry(littoral_outer.difference(geom)),
         "context": _normalise_geometry(context_outer.difference(geom)),
-        "terrestrial_context": _normalise_geometry(context_outer.difference(geom)),
     }
 
 
-def make_domains(geom: BaseGeometry, riparian_buffer_m: float, context_buffer_km: float, littoral_band_m: float = 50.0):
-    shp = make_shapely_domains(geom, riparian_buffer_m, context_buffer_km, littoral_band_m)
+def make_domains(geom: BaseGeometry, riparian_buffer_m: float, context_buffer_km: float):
+    """Return EE fixed domains; dynamic water is generated separately."""
+    from .site import ee_geometry  # local import keeps this module testable without EE
+
+    shp = make_shapely_domains(geom, riparian_buffer_m, context_buffer_km)
     return {
         "boundary": ee_geometry(shp["master"]),
         "riparian_fixed": ee_geometry(shp["riparian_fixed"]),
-        "littoral_band": ee_geometry(shp["littoral_band"]),
         "context": ee_geometry(shp["context"]),
-        "terrestrial_context": ee_geometry(shp["terrestrial_context"]),
+        "water_dynamic": None,
+        "littoral_dynamic": None,
         "shapely": shp,
     }
 
@@ -166,6 +189,7 @@ def ee_geometry(geom: BaseGeometry):
 
 
 def validate_site_geometry(geom: BaseGeometry) -> Dict[str, object]:
+    """Return deterministic geometry QA information."""
     return {
         "valid": bool(geom.is_valid and not geom.is_empty),
         "geometry_type": geom.geom_type,

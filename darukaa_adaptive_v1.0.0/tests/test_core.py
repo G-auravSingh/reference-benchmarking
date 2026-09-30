@@ -1,104 +1,62 @@
 import tempfile
 from pathlib import Path
-
+from types import SimpleNamespace
 import pandas as pd
 from shapely.geometry import Polygon
-
-from darukaa_adaptive.benchmark import benchmark_from_values
+from darukaa_adaptive.benchmark import benchmark_metric, benchmark_observation, intactness_ratio, percent_change
 from darukaa_adaptive.config import AssessmentConfig
-from darukaa_adaptive.metrics import MetricResult
-from darukaa_adaptive.periods import month_periods
-from darukaa_adaptive.registry import PILLARS, get_indicator_spec
-from darukaa_adaptive.scoring import aggregate_overall, aggregate_pillars, concern_label, geometric_mean
+from darukaa_adaptive.evidence import load_evidence_csv
+from darukaa_adaptive.periods import annual_periods, month_periods
+from darukaa_adaptive.registry import AQUATIC_INDICATORS, PILLARS, indicator_table
 from darukaa_adaptive.site import area_ha, make_shapely_domains, read_kml, validate_site_geometry
+from darukaa_adaptive.scoring import aggregate_overall, aggregate_pillars, concern_label, geometric_mean, build_scorecard, score_external_observations
+from darukaa_adaptive.trajectory import compare
 
+def test_ratio_and_percent_change():
+    assert intactness_ratio(80,100,True)==0.8
+    assert round(percent_change(110,100),6)==10.0
 
-def test_four_pillars():
-    assert list(PILLARS) == ["C1_extent", "C2_vegetation", "C3_fauna", "C4_pressure"]
+def test_reference_target():
+    r=benchmark_observation('water_extent',40,50,'reference_target'); assert r.intactness_score_0_100==80
 
+def test_fixed_bands():
+    assert concern_label(0)=='Very High'; assert concern_label(20)=='High'; assert concern_label(40)=='Moderate'; assert concern_label(60)=='Low'; assert concern_label(80)=='Very Low'
 
-def test_concern_bands_and_geomean():
-    assert concern_label(80) == "Very Low"
-    assert concern_label(60) == "Low"
-    assert concern_label(40) == "Moderate"
-    assert concern_label(20) == "High"
-    assert concern_label(19.999) == "Very High"
-    assert round(geometric_mean([25, 50, 100]), 6) == round(50, 6)
+def test_geomean(): assert abs(geometric_mean([25,100])-50.0)<1e-9
 
+def test_condition_pressure_are_separate():
+    cfg=AssessmentConfig(); scored=pd.DataFrame([
+      {'metric':'a','pillar':'C1_extent','intactness_score_0_100':90,'score_eligible':True},
+      {'metric':'b','pillar':'C2_vegetation','intactness_score_0_100':80,'score_eligible':True},
+      {'metric':'c','pillar':'C3_fauna','intactness_score_0_100':70,'score_eligible':True},
+      {'metric':'p','pillar':'C4_pressure','intactness_score_0_100':20,'score_eligible':True}])
+    p=aggregate_pillars(scored,cfg); o=aggregate_overall(p,cfg)
+    assert abs(o['condition_score_0_to_100']-geometric_mean([90,80,70]))<1e-9; assert abs(o['pressure_score_0_to_100']-20)<1e-9
+    assert o['son_score_0_to_100'] is None
 
-def test_reference_benchmark_is_centered_at_50():
-    cfg=AssessmentConfig()
-    b=benchmark_from_values("water_persistence", 0.5, [0.5]*8, cfg, "regional_aquatic", "test")
-    # Zero dispersion makes robust estimator undefined for bounded metrics, but ratio scale is valid.
-    assert b.intactness_score_0_100 is not None
-    assert abs(b.intactness_score_0_100 - 50) < 1e-9
-    assert b.reference_approved_for_scoring is False or b.reference_n == 8
+def test_external_evidence_same_path():
+    cfg=AssessmentConfig(); df=pd.DataFrame([{'metric':'edna_fish_richness','pillar':'C3_fauna','raw_value':8,'direction':'higher_is_better','reference_value':10,'reference_approved_for_scoring':True,'evidence_type':'eDNA'}])
+    m,p,o=score_external_observations(df,cfg); assert float(m.iloc[0].intactness_score_0_100)==80; assert m.iloc[0].evidence_type=='eDNA'
 
-
-def test_bounded_reference_can_score_with_dispersion():
-    cfg=AssessmentConfig()
-    vals=[0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10]
-    b=benchmark_from_values("ndci_proxy", 0.05, vals, cfg, "regional_aquatic", "test")
-    assert b.signed_benchmark is not None
-    assert 0 <= b.intactness_score_0_100 <= 100
-
-
-def test_pillar_and_overall_geomean():
-    cfg=AssessmentConfig()
-    df=pd.DataFrame([
-        {"metric":"a","pillar":"C1_extent","intactness_score_0_100":60,"score_eligible":True},
-        {"metric":"b","pillar":"C2_vegetation","intactness_score_0_100":60,"score_eligible":True},
-        {"metric":"c","pillar":"C3_fauna","intactness_score_0_100":60,"score_eligible":True},
-        {"metric":"d","pillar":"C4_pressure","intactness_score_0_100":60,"score_eligible":True},
-    ])
-    p=aggregate_pillars(df,cfg)
-    o=aggregate_overall(p,cfg)
-    assert (p["score_0_to_100"].sub(60).abs() < 1e-9).all()
-    assert abs(o["overall_son_score_0_to_100"]-60)<1e-9
-    assert o["overall_son_concern"]=="Low"
-
-
-def test_config_and_periods():
-    cfg=AssessmentConfig.from_yaml("profiles/mixed_lake.yaml")
-    assert cfg.validate()==[]
-    assert cfg.reference.strategy=="auto_ecoregion_stratum"
-    assert cfg.profile.aquatic_enabled and cfg.profile.terrestrial_enabled
-    assert len(month_periods(*cfg.temporal.baseline_inclusive_window()))==13
-
-
-def test_domains():
+def test_geometry_and_kml():
     poly=Polygon([(74,17.5),(74.001,17.5),(74.001,17.501),(74,17.501)])
-    assert validate_site_geometry(poly)["valid"]
-    d=make_shapely_domains(poly,100,5,50)
-    assert d["riparian_fixed"].area>0 and d["littoral_band"].area>0 and d["context"].area>d["riparian_fixed"].area
-    assert area_ha(poly)>0
+    assert area_ha(poly)>0; assert validate_site_geometry(poly)['valid']; d=make_shapely_domains(poly,100,1); assert d['context'].area>d['riparian_fixed'].area
+    text='<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>N</name><Polygon><outerBoundaryIs><LinearRing><coordinates>74,17,0 74.001,17,0 74.001,17.001,0 74,17,0 74,17,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>'
+    with tempfile.TemporaryDirectory() as td:
+      p=Path(td)/'x.kml'; p.write_text(text); g,parts=read_kml(p); assert g.area>0 and parts
 
+def test_config_dates_and_validation():
+    c=AssessmentConfig(); assert c.temporal.baseline_dates()==('2025-08-01','2026-09-01'); assert c.validate()==[]
 
-def test_kml_fallback():
-    text='''<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>Nandoshi</name><Polygon><outerBoundaryIs><LinearRing><coordinates>74,17,0 74.001,17,0 74.001,17.001,0 74,17.001,0 74,17,0</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark></Document></kml>'''
-    with tempfile.TemporaryDirectory() as d:
-        p=Path(d)/"x.kml"; p.write_text(text)
-        geom,parts=read_kml(p)
-        assert geom.area>0 and parts
+def test_periods():
+    assert len(month_periods('2025-08-01','2026-08-31'))==13; assert len(annual_periods(2018,2026))==9
 
+def test_registry_and_legacy_count():
+    assert set(PILLARS)=={'C1_extent','C2_vegetation','C3_fauna','C4_pressure'}; assert {'water_extent','edna_fish_richness','built_fraction'}.issubset({x.name for x in AQUATIC_INDICATORS}); assert len(indicator_table())==len(AQUATIC_INDICATORS)
 
-def test_registry_assignment():
-    assert get_indicator_spec("water_extent").pillar=="C1_extent"
-    assert get_indicator_spec("ndci_proxy").pillar=="C2_vegetation"
-    assert get_indicator_spec("red_reflectance_turbidity_proxy").pillar=="C2_vegetation"
-    assert get_indicator_spec("surface_algal_bloom_frequency").pillar=="C2_vegetation"
-    assert get_indicator_spec("shoreline_disturbance_fraction").pillar=="C4_pressure"
-    assert get_indicator_spec("species_richness").pillar=="C3_fauna"
+def test_evidence_csv(tmp_path):
+    p=tmp_path/'e.csv'; pd.DataFrame([{'metric':'edna_fish_richness','raw_value':8,'pillar':'C3_fauna','direction':'higher_is_better'}]).to_csv(p,index=False); d=load_evidence_csv(p); assert d.iloc[0]['evidence_type']=='external'
 
-
-def test_external_boolean_parsing(tmp_path):
-    from darukaa_adaptive.observations import load_observations
-    f=tmp_path/"obs.csv"
-    f.write_text("metric,value,pillar,direction,reference_approved\nspecies_richness,10,C3_fauna,higher_is_better,False\n")
-    rec=load_observations(f,"field")[0]
-    assert rec.reference_approved is False
-
-
-def test_edna_broad_assignment_is_not_fauna_pillar():
-    assert get_indicator_spec("edna_taxonomic_richness").pillar == "C2_vegetation"
-    assert get_indicator_spec("edna_fauna_taxonomic_richness").pillar == "C3_fauna"
+def test_trajectory(tmp_path):
+    base=pd.DataFrame([{'metric':'x','value':10,'units':'u','direction':'higher_is_better','temporal_window':'same','status':'ok'}]); cur=base.copy(); cur.loc[0,'value']=12
+    bp=tmp_path/'b.csv'; cp=tmp_path/'c.csv'; base.to_csv(bp,index=False); cur.to_csv(cp,index=False); r=compare(cp,bp); assert r.loc[0,'delta']==2

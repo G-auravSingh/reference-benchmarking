@@ -1,9 +1,16 @@
-# Colab Runbook
+# Colab runbook
 
-The notebook is designed to be run one cell at a time.
+1. Open `notebooks/Nandoshi_Lake_Aquatic_Assessment_Colab.ipynb`.
+2. Run cells in order.
+3. Cell 1 pulls the current GitHub repository and installs only `darukaa_adaptive_v1.0.0`.
+4. Upload one master KML/KMZ.
+5. Leave optional external/eDNA evidence disabled when it is unavailable.
+6. Authenticate Earth Engine.
+7. Inspect the monthly water trajectory before running the full assessment.
+8. Run the profile-driven pipeline.
+9. Inspect raw metrics, QA, references and scorecards separately.
+10. Open the generated `Year0_Biodiversity_Baseline_Report.html`.
+11. Freeze the Year-0 scorecard for future comparison.
+12. Zip the outputs.
 
-The first code cell pulls `darukaa_adaptive_v1.0.0` with `git pull --ff-only` when the repository already exists, then reinstalls the package and clears cached imports.
-
-Only the master project KML/KMZ is required for the spatial/EO workflow. Field, acoustic and eDNA CSVs are optional. eDNA PDF/HTML/Krona files can be supplied as evidence artefacts for the final report.
-
-The final cell alone builds and displays `year0_biodiversity_baseline.html`.
+If GitHub changes are made later, rerunning cell 1 on a clean runtime pulls them before installation. The notebook does not modify any other repository folder.

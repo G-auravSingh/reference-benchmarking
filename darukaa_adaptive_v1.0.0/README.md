@@ -1,27 +1,54 @@
-# Darukaa Adaptive Biodiversity Assessment — v1.2.0
+# Darukaa Adaptive Biodiversity Baseline Engine v1.0.0
 
-A generalized, profile-driven Year-0 biodiversity baseline engine for **terrestrial, aquatic and mixed sites**.
+This is the generalized, profile-driven biodiversity baseline engine. The package name and release version are intentionally fixed at **v1.0.0** for repository continuity.
 
-## What changed in v1.2.0
+## Architecture
 
-This release replaces the provisional reference-input/context-ring logic with an **automated reference framework**. A project normally supplies only its master KML/KMZ boundary and optional field/acoustic/eDNA data. The engine automatically resolves ecological context and constructs reference populations.
+```text
+Project boundary
+      ↓
+Ecological domains
+      ↓
+EO / acoustic / field / eDNA / modelled evidence
+      ↓
+Automatic reference population
+      ↓
+Reference comparison + uncertainty
+      ↓
+Intactness 0–100
+      ↓
+C1 Extent / C2 Vegetation / C3 Fauna / C4 Pressure
+      ↓
+Condition + Pressure outputs
+      ↓
+Professional Year-0 HTML report
+```
 
-The four fixed pillars are:
+The same downstream evidence contract is used for different evidence sources. A project may be terrestrial, aquatic or mixed. `aquatic_lake` is the first production profile; `terrestrial` and `mixed` are supported profile entry points.
 
-- **C1 — Extent**
-- **C2 — Vegetation / ecosystem condition**
-- **C3 — Fauna**
-- **C4 — Pressure**
+## Spatial model
 
-Every scoreable indicator follows:
+The supplied KML/KMZ is always the **master assessment boundary**. For aquatic projects, water is derived dynamically for each analysis period. The littoral/shoreline interface is kept distinct from the fixed riparian/terrestrial buffer. A broader landscape context is derived using standardized rules and is not a user-drawn Tier-2 reference polygon.
 
-`raw value → comparable reference → signed benchmark → normalized intactness (0–100) → concern`
+## Reference model
 
-Pillar and overall aggregation are performed on the continuous 0–100 values using the **geometric mean**. Concern labels are applied only after aggregation; labels are never averaged.
+A reference KML/CSV is **optional**, not required. By default the engine constructs a candidate reference population from spatial/ecological rules:
 
-### Declared concern convention
+- aquatic: comparable water pixels/water bodies in the standardized external context, filtered by water occurrence and minimum candidate size;
+- terrestrial: standardized natural/semi-natural land-cover candidates in the external context;
+- mixed: domain-specific reference populations are kept separate.
 
-| Normalized intactness | Concern |
+Candidate diagnostics and approval status are retained. A reference is not described as pristine merely because it is outside the project boundary.
+
+## Scoring
+
+Raw measurements are never silently converted into scores. The explicit chain is:
+
+`raw value → comparable reference → intactness (0–100) → concern band → pillar score`
+
+The five concern bands are a **declared product convention**, not universal ecological thresholds:
+
+| Intactness | Concern |
 |---:|---|
 | 80–100 | Very Low |
 | 60–<80 | Low |
@@ -29,77 +56,41 @@ Pillar and overall aggregation are performed on the continuous 0–100 values us
 | 20–<40 | High |
 | 0–<20 | Very High |
 
-These equal-width bands are a declared Darukaa product convention. They are not presented as universal ecological thresholds. The normalized score is centered at **50% at the reference condition**, matching the reference-relative classification architecture.
+Pillar aggregation uses a geometric mean of score-eligible indicators. **C1–C3 are condition components; C4 pressure is reported separately.** The default Year-0 aquatic profile does not force an overall four-pillar composite when fauna evidence is missing.
 
-## Automatic references
+## Multi-source evidence and eDNA
 
-No reference KML or reference CSV is required in the standard workflow.
+eDNA is optional. When validated eDNA observations are available, they can be supplied through the generic evidence CSV and scored in C3 using the same reference/intactness pathway as field or acoustic evidence. The package also recognizes an eDNA persistence-potential metric as contextual: an environmental persistence proxy is not treated as direct evidence of species occurrence or population size without appropriate validation/reference evidence.
 
-**Terrestrial references** use the site ecoregion, a least-modified Human Modification filter, natural/modified land-cover stratification and a sampled reference distribution.
+Input template can be generated with:
 
-**Aquatic references** use the site ecoregion plus comparable waterbody candidates from HydroLAKES, approximate lake-area similarity, spatial exclusion from the project and a least-modified Human Modification filter. Candidate reference populations are evaluated under consistent metric definitions.
+```python
+from darukaa_adaptive import edna_template
+edna_template("edna_input.csv")
+```
 
-Each reference records `n`, standard error, percentiles, selection diagnostics and an approval flag. A metric is not scored when the reference population is too small, unstable or otherwise unsuitable.
+## Nandoshi Year-0 defaults
 
-## Spatial domains
+The aquatic profile is configured for **1 Aug 2025–31 Aug 2026** as Year-0 and **2018–2026** as historical context. The notebook is designed to run cell-by-cell in Google Colab and always pulls the current `darukaa_adaptive_v1.0.0` folder from the repository before installing it.
 
-The project KML is the master spatial frame. The engine derives:
+## Outputs
 
-- dynamic water domain
-- 50 m littoral/nearshore band
-- fixed 100 m riparian band
-- 5 km terrestrial/context domain
+The final assessment writes:
 
-The same site frame is retained, but individual metrics use the domain/mask appropriate to their ecological question.
+- `metric_scorecard.csv`
+- `metric_qa_scorecard.csv`
+- `benchmark_scorecard.csv`
+- `metric_concern_scorecard.csv`
+- `pillar_scorecard.csv`
+- `water_periods.csv`
+- `external_evidence.csv`
+- `readiness.json`
+- `overall_scorecard.json`
+- `assessment_manifest.json`
+- `Year0_Biodiversity_Baseline_Report.html`
 
-## Evidence streams
+The HTML report is generated from the same outputs and includes assessment overview, architecture, reference framework, indicator results, pillar results, separate condition/pressure interpretation, spatial/temporal context, evidence/eDNA section, data gaps and technical appendix.
 
-The same downstream scorer accepts:
+## Legacy reproducibility
 
-- Earth observation
-- field ecology
-- bioacoustics
-- shotgun eDNA/metagenomics
-- later eDNA/targeted molecular measurements
-
-External field/acoustic/eDNA observations carry their own sampling/reference metadata. The automatic spatial reference engine is used for EO-derived terrestrial and aquatic metrics; external observations enter the same scoring layer once an appropriate matched reference is supplied and approved.
-
-External metrics can be introduced through CSV metadata without writing new metric-extraction code. An evidence-only record can remain visible in the report without becoming a score until a defensible reference is supplied.
-
-## eDNA integration
-
-The eDNA layer is deliberately conservative. The current Nandoshi Phase-1 workflow can be represented through structured metrics such as taxonomic assignment richness, cyanobacterial fraction, human-associated fraction and reducing-microbe fraction. The report distinguishes **measured, indicated, inferred and unresolved** evidence and retains source HTML/PDF/Krona artefacts when supplied.
-
-Taxonomic assignments are treated as database matches rather than automatically as independently confirmed species observations. Hazard/functional interpretations require their stated validation data.
-
-## Final report
-
-The final Colab cell creates a professional, self-contained HTML Year-0 report covering:
-
-- executive summary
-- assessment boundary and domains
-- methodology and automatic reference framework
-- automated QA/QC
-- C1–C4 pillar results
-- indicator scorecard
-- overall condition, pressure and four-pillar SoN where coverage permits
-- limiting pillar/indicator chain
-- seasonal water dynamics
-- eDNA evidence
-- interpretation, recommendations and next-cycle data gaps
-- technical appendix and provenance
-
-A Nandoshi-specific structured eDNA evidence example is included at `examples/nandoshi_edna_phase1.csv`; it is evidence-only by default and does not carry approved reference values. The report is a projection of pipeline outputs; it does not silently invent scores for missing references or missing evidence.
-
-## Colab workflow
-
-1. Open `notebooks/Nandoshi_Lake_Aquatic_Assessment_Colab.ipynb`.
-2. Run cell-by-cell. The notebook pulls the latest `darukaa_adaptive_v1.0.0` folder from GitHub with `git pull --ff-only` before installing it.
-3. Upload a site KML/KMZ. Field/acoustic/eDNA files are optional.
-4. Authenticate to Earth Engine.
-5. Run metric extraction, QA, reference selection, benchmarking and scoring.
-6. The **last cell only** generates and displays `year0_biodiversity_baseline.html`.
-
-## Legacy boundary
-
-The frozen `legacy/darukaa_reference_v0.1.0/` directory is retained for auditability and is not modified by this adaptive release.
+`legacy/darukaa_reference_v0.1.0/` is frozen and is not modified by the adaptive engine.

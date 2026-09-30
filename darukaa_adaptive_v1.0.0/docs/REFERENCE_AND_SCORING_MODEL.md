@@ -1,58 +1,37 @@
-# Reference, Intactness and Scoring Model
+# Reference and scoring model
 
-## Scope
+## Reference population
 
-The standard adaptive workflow is automated. A project does **not** require a client-supplied reference KML or reference CSV.
+A manually supplied reference is optional. The default engine constructs a candidate population using standardized spatial/ecological rules. Aquatic and terrestrial reference populations are domain-specific and are never silently substituted for one another.
 
-## Automatic reference hierarchy
+The reference record retains method, candidate size, diagnostics and approval status. Reference uncertainty can be represented separately from the observed metric uncertainty.
 
-### Terrestrial
+## Benchmarking
 
-The engine resolves the project's ecological context using the RESOLVE 2017 ecoregion layer. It excludes the project area and its immediate exclusion buffer, applies a least-modified Human Modification filter, and uses the site's terrestrial land-cover context for appropriate condition metrics. The resulting pixel population is the reference distribution.
+The benchmark layer converts a raw value into a direction-aware comparison:
 
-### Aquatic
+- `higher_is_better`: observed / reference;
+- `lower_is_better`: reference / observed;
+- `reference_target`: bounded departure from the comparable reference.
 
-The engine resolves the site's ecoregion and searches the HydroLAKES catalog for comparable waterbodies. Candidates are screened by ecological region, approximate area similarity, spatial exclusion and near-shore Human Modification context. Candidate-level water metrics are then calculated under the same definitions used at the project site. There is no automatic promotion of a generic 5 km context ring to a reference population.
+The displayed intactness is bounded to 0–100. This is a normalization convention, not a claim that all ecological indicators share identical response functions.
 
-A manually supplied reference can be supported as an explicit future override, but it is not required by the standard workflow.
+## Scoring eligibility
 
-## Reference uncertainty
+An indicator is score-eligible only when:
 
-The reference median is accompanied by a bootstrap standard error. A reference is approved for scoring only when the minimum reference sample size, estimator validity and configured relative-SE tolerance are satisfied.
+1. the measurement is valid;
+2. the indicator is referenceable;
+3. a comparable reference is available;
+4. the reference is approved by the configured reference pathway.
 
-## Indicator benchmark
+Contextual/screening metrics remain visible without being silently converted into a composite score.
 
-The benchmark estimator is scale-aware:
+## Pillars
 
-- ratio-scale quantities use a signed log response ratio;
-- interval/bounded/index quantities use a signed robust standardized deviation;
-- direction is oriented so a positive signed benchmark means better relative to reference.
+- C1 Extent
+- C2 Vegetation / Habitat Condition
+- C3 Fauna
+- C4 Pressure
 
-The signed benchmark is converted through a declared logistic normalization for aggregation and reporting. **50% is the normalized midpoint at the reference condition.** This is a product normalization, not a claim that 50% represents a universal ecological threshold.
-
-## Concern convention
-
-Concern is assigned only after the continuous normalized score exists:
-
-| Intactness / normalized score | Concern |
-|---:|---|
-| 80–100 | Very Low |
-| 60–<80 | Low |
-| 40–<60 | Moderate |
-| 20–<40 | High |
-| 0–<20 | Very High |
-
-These five equal-width bands are a declared Darukaa product convention.
-
-## Pillars and aggregation
-
-The fixed core is:
-
-- C1 — Extent
-- C2 — Vegetation / ecosystem condition
-- C3 — Fauna
-- C4 — Pressure
-
-Indicators are aggregated on continuous 0–100 scores using the geometric mean. Concern labels are never averaged. The overall condition score is the geometric mean of C1–C3. C4 is retained as a separate pressure axis; the four-pillar State of Nature score is exposed when all four pillars have valid scored evidence.
-
-Every roll-up names the limiting pillar and limiting indicator where available.
+C1–C3 are aggregated as condition. C4 is reported separately as pressure. A complete four-pillar composite can be enabled deliberately, but the aquatic Year-0 profile does not require a synthetic composite when fauna evidence is absent.

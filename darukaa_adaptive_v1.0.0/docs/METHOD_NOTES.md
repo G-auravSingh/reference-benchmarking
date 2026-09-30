@@ -1,39 +1,70 @@
-# Method notes — v1.2.0
+# Method notes
 
-## 1. Spatial frame
+## 1. Spatial domains
 
-The supplied KML/KMZ is the master assessment boundary. Four deterministic analytical domains can be derived: dynamic water, a 50 m littoral/nearshore band, a 100 m fixed riparian band, and a broader 5 km terrestrial/context domain.
+The supplied KML/KMZ is the fixed master assessment boundary. The pipeline does not assume that every pixel inside the boundary is permanently water.
 
-## 2. Reference selection
+A dynamic water domain is derived separately for each requested period. A fixed external 100 m ring is used for standardized riparian pressure/vegetation metrics, and a broader 5 km context ring is available for contextual/reference work.
 
-The reference workflow is fully automated. No project reference KML/CSV is required.
+Exposed pixels are not automatically treated as terrestrial habitat, because exposed lakebed, littoral substrate and terrestrial vegetation are ecologically different states.
 
-Terrestrial indicators use the site's resolved ecoregion, low-human-modification pixels and relevant land-cover masks. Aquatic indicators use comparable waterbodies from HydroLAKES within the site's ecoregion, approximate area similarity, spatial exclusion and a low-human-modification screen.
+## 2. Dynamic water detection
 
-Reference populations are represented as distributions. A benchmark is approved only when the minimum reference sample size and relative uncertainty criteria are met and the estimator is valid for the metric's measurement scale.
+Dynamic World is the primary water source when at least the configured minimum number of observations is available. The primary mask is the mean Dynamic World `water` probability meeting the configured threshold.
 
-## 3. Benchmarking and normalization
+When optical coverage is insufficient and fallback is enabled, Sentinel-1 VV is converted to a per-image water detection using the configured backscatter threshold. The fallback water mask is the configured majority fraction of those observations. Fallback output is explicitly labelled.
 
-Ratio-scale metrics use a signed log response ratio. Bounded/index/interval metrics use a signed robust standardized deviation where reference dispersion permits. The sign is oriented so positive means better-than-reference.
+Water extent and water persistence are reference-target indicators when a comparable reference is available. They are not assumed to be universally higher-is-better or lower-is-better.
 
-The signed benchmark is transformed by a declared logistic to a 0–1 normalized score and displayed as 0–100. The reference condition is the midpoint (50%). The raw signed benchmark and reference distribution are retained for auditability.
+## 3. Baseline and monitoring
 
-## 4. Concern bands
+The default Year-0 baseline is 1 August 2025 through 31 August 2026. This captures a complete seasonal cycle while the current assessment is in 2026.
 
-- 80–100: Very Low
-- 60–<80: Low
-- 40–<60: Moderate
-- 20–<40: High
-- 0–<20: Very High
+The historical 2018–2026 window is retained for the riparian trend metric. Future monitoring should use the same seasonal baseline window shifted by one or more complete years rather than comparing arbitrary calendar windows.
 
-These are a declared Darukaa product convention and are not universal ecological thresholds.
+## 4. Water-quality proxies
 
-## 5. Pillar aggregation
+NDCI uses Sentinel-2 bands B5 and B4 and is masked to the dynamic water domain. The red-reflectance proxy uses B4 under the same water mask. The FAI bloom proxy uses B4, B8 and B11 and reports the frequency of threshold exceedance over valid water-masked observations.
 
-C1, C2, C3 and C4 are the fixed core pillars. Continuous 0–100 indicator scores are combined using geometric means. Concern labels are assigned only after aggregation. The limiting indicator/pillar is published alongside the aggregate.
+These are remote-sensing proxies. They are not calibrated chlorophyll-a, turbidity concentration or confirmed harmful algal bloom occurrence unless independent observations support that interpretation.
 
-Overall State of Nature is produced when all four pillars have valid scored evidence. Overall condition (C1–C3) and pressure (C4) remain separately available.
+## 5. Riparian metrics
 
-## 6. Evidence streams
+The fixed riparian domain is a standardized external buffer generated in a local UTM projection to avoid applying a degree-based buffer in geographic coordinates.
 
-Field, acoustic and eDNA metrics enter through a shared observation contract. A metric may be reported as measured/indicated/inferred/unresolved without being scored. Quantitative scoring requires a comparable reference and explicit approval.
+Baseline riparian NDVI is reported as a vegetation-condition proxy in **C2 Vegetation**. The historical Theil–Sen/Kendall trend remains a contextual monitoring indicator and is not directly converted to intactness.
+
+Shoreline disturbance is a transparent land-cover pressure proxy derived from Dynamic World mode classes for crops, built and bare land. Bare substrate can be natural, so the metric must not be equated directly with anthropogenic impact without local interpretation.
+
+## 6. Universal reference and scoring model
+
+The adaptive framework uses one common architecture across ecosystem realms:
+
+`raw value → comparable reference → intactness 0–100 → concern → pillar geometric mean → overall geometric mean`
+
+The four common pillars are:
+
+- C1 Extent
+- C2 Vegetation
+- C3 Fauna
+- C4 Pressure
+
+Concern bands are fixed at 0–<20, 20–<40, 40–<60, 60–<80 and 80–100, corresponding to Very High, High, Moderate, Low and Very Low concern. These are an explicit Darukaa product convention, not universal ecological thresholds.
+
+Direction is indicator-specific. Higher-is-better and lower-is-better indicators use direction-aware ratios; reference-target indicators use bounded proportional distance from the reference.
+
+Tier-1 references are preferred when available. Tier-2 is a candidate regional/context benchmark. Scoring requires explicit approval of the selected reference tier.
+
+## 7. Field and other indicators
+
+The scoring engine can consume field, terrestrial, acoustic and other validated observations through the generic external-observation interface. Those observations must carry their own pillar, direction and reference metadata.
+
+The domain module remains responsible for calculating the raw indicator; the common scoring engine does not invent field values or references.
+
+## 8. JRC historical context
+
+JRC Global Surface Water v1.4 is treated as historical context only. It is not used as though it contains current observations beyond its published water-history period.
+
+## 9. Biological evidence boundary
+
+Remote sensing cannot establish local species occurrence, population size, eDNA persistence or acoustic biodiversity health by itself. C3 Fauna should therefore be supplied by field observations, eDNA, acoustics or other independent biodiversity modules before a complete four-pillar composite is considered.
