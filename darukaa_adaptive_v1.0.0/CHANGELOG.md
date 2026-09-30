@@ -25,3 +25,9 @@ Rebuilt from the supplied previous v1.0.0 base as the production adaptive baseli
 - Fixed Earth Engine callback casting and null-result handling retained in the aquatic implementation.
 - Package installation now declares runtime dependencies through `setup.py` as well as `requirements.txt`.
 - Legacy v0.1.0 package remains frozen.
+
+## Release hardening follow-up — 2026-09-30
+
+- Fixed automatic aquatic-reference benchmarking for riparian and shoreline metrics by explicitly converting Earth Engine reference geometries to Shapely before local buffering.
+- Updated the Nandoshi Lake Colab monthly water series to use the configured Year-0 baseline and monitoring-month cycle, preventing future calendar months from appearing as zero-observation/zero-water months.
+- Updated the monthly water-mask inspection to use the final configured baseline month rather than a hard-coded calendar month.

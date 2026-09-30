@@ -18,3 +18,16 @@ Automatic reference populations remain benchmark candidates. They must not be de
 ## Run gate
 
 The live Earth Engine assessment should only proceed after the notebook prints a valid package version/path, successful profile validation, successful EE initialization, and the intended Git SHA is recorded.
+
+## Live-run fixes — 2026-09-30
+
+7. Fixed an EE/Shapely geometry type mismatch in automatic aquatic reference benchmarking for riparian and shoreline metrics.
+8. Reworked the Nandoshi monthly water series to follow the configured Year-0 baseline and monitoring-month cycle; future months are no longer represented as zero-water observations.
+9. Reworked the monthly water-mask inspection to select the final configured baseline month rather than a hard-coded September period.
+
+## Validation after live-run fixes
+
+- Package tests: 14 passed.
+- Notebook JSON and all 28 code cells compile successfully (63 total cells).
+- Aquatic profile validation: no errors.
+- Baseline conversion: 2025-08-01 to exclusive 2026-09-01.

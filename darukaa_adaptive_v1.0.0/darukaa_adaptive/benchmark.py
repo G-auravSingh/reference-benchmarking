@@ -186,6 +186,28 @@ class ReferenceEngine:
                 if rec.metric == metric: return rec.value
         return None
 
+    @staticmethod
+    def _as_shapely_geometry(geometry):
+        """Normalize Shapely/EE geometries before local spatial operations.
+
+        Automatic reference candidates are stored as Earth Engine geometries, while
+        manually supplied reference KMLs are Shapely geometries. Local buffering
+        requires the latter, so convert EE geometries explicitly at this boundary.
+        """
+        if geometry is None:
+            return None
+        if hasattr(geometry, "__geo_interface__"):
+            from shapely.geometry import shape
+            return shape(geometry.__geo_interface__)
+        # Earth Engine Geometry objects expose getInfo(), not a Shapely centroid.
+        if hasattr(geometry, "getInfo"):
+            from shapely.geometry import shape
+            info = geometry.getInfo()
+            if not info:
+                return None
+            return shape(info)
+        return geometry
+
     def _reference_record(self, metric, geometry, start, end):
         if geometry is None: return None
         if metric == "water_extent": return self.metrics.water_extent(geometry, start, end)
@@ -194,9 +216,11 @@ class ReferenceEngine:
         if metric == "red_reflectance_turbidity_proxy": return self.metrics.turbidity_proxy(geometry, start, end)
         if metric == "surface_algal_bloom_frequency": return self.metrics.bloom_frequency(geometry, start, end)
         if metric == "riparian_ndvi":
+            geometry = self._as_shapely_geometry(geometry)
             d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
             return self.metrics.riparian_ndvi(ee_geometry(d["riparian_fixed"]),start,end)
         if metric == "shoreline_disturbance_fraction":
+            geometry = self._as_shapely_geometry(geometry)
             d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
             return self.metrics.shoreline_disturbance(ee_geometry(d["riparian_fixed"]),start,end)
         if metric in {"natural_landcover_fraction","terrestrial_ndvi","built_fraction"}:
