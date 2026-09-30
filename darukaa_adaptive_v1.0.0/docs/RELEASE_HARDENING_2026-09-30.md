@@ -31,3 +31,9 @@ The live Earth Engine assessment should only proceed after the notebook prints a
 - Notebook JSON and all 28 code cells compile successfully (63 total cells).
 - Aquatic profile validation: no errors.
 - Baseline conversion: 2025-08-01 to exclusive 2026-09-01.
+
+### R3 hotfix — YAML date normalization
+- Normalized unquoted YAML ISO dates to ISO strings in `AssessmentConfig.from_yaml()`.
+- Made the Nandoshi monthly baseline notebook cell defensive to either string or `date` inputs.
+- This prevents `TypeError: fromisoformat: argument must be str` during monthly water-series generation.
+- Validation: 14/14 tests passed; all notebook code cells compile; profile baseline resolves to `2025-08-01` through exclusive `2026-09-01`.

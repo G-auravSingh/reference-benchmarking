@@ -166,9 +166,19 @@ class AssessmentConfig:
         if gee_raw is None:
             gee_raw = raw.get("gEE", {})
 
+        temporal_raw = dict(raw.get("temporal", {}))
+        # PyYAML safe_load parses unquoted ISO dates (e.g. 2025-08-01)
+        # as datetime.date objects. Normalize them to ISO strings because the
+        # TemporalConfig public fields are string-valued and are serialized
+        # into manifests/notebooks as ISO dates.
+        for key in ("baseline_start_date", "baseline_end_date"):
+            value = temporal_raw.get(key)
+            if hasattr(value, "isoformat"):
+                temporal_raw[key] = value.isoformat()
+
         return cls(
             gee=GEEConfig(**gee_raw),
-            temporal=TemporalConfig(**raw.get("temporal", {})),
+            temporal=TemporalConfig(**temporal_raw),
             water=WaterConfig(**raw.get("water", {})),
             spatial=SpatialConfig(**raw.get("spatial", {})),
             reference=ReferenceConfig(**raw.get("reference", {})),
