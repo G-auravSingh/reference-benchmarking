@@ -1,9 +1,0 @@
-profile:
-  name: terrestrial_legacy
-  version: legacy-wrapper-1.0
-  composite_son_enabled: true
-  allow_terrestrial_metrics: true
-  notes: >-
-    Compatibility wrapper only. Reproduce historical terrestrial assessments with
-    legacy/darukaa_reference_v0.1.0/. The adaptive LakePipeline does not execute the
-    legacy indicator implementation. Keep the legacy package frozen for reproducibility.

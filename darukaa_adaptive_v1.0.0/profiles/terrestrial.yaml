@@ -1,5 +1,0 @@
-profile:
-  name: terrestrial
-  version: 1.0.0
-  allow_terrestrial_metrics: true
-  notes: Terrestrial EO core with optional field/acoustic/eDNA evidence.
