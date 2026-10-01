@@ -648,6 +648,10 @@ def _project_headline(son: Dict, mts: Dict, zone_labels: Optional[List[str]] = N
 
 
 def render_html(report: Dict, project_name: str = "Darukaa Assessment") -> str:
+    # v0.2.9 Phase 5: reports built from the frozen v0.2.8 engine rows have their own renderer (same styling); the legacy report path is unchanged.
+    if (report.get("meta") or {}).get("report_kind") == "engine_v0.2.8":
+        from darukaa_reference.engine_html import render_engine_html
+        return render_engine_html(report, project_name)
     meta = report.get("meta", {})
     status = report.get("indicator_status", {})
     profiles = report.get("site_profiles", {})

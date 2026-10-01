@@ -206,7 +206,12 @@ def build_site_profile(benchmarks: List[Dict],
     benchmarks.
 
     Each item in ``benchmarks`` is a dict:
-        {name, construct, subdimension, value(signed), estimator, ci(optional)}
+        {name, construct, subdimension, value(signed), estimator, ci(optional), score(optional)}
+
+    ``score`` (optional) is an ALREADY-NORMALISED 0-1 aggregation score (0.5 = at reference, higher = better) supplied by the v0.2.8 benchmarking engine,
+    which scores some indicators by reference percentile and others by the same logistic as ``normalize``. When present it is used AS IS: it is never
+    re-normalised (a percentile fed through the z-score logistic would be silently wrong). When absent, ``value`` + ``estimator`` are normalised exactly as
+    before, so every legacy caller is unchanged.
     Only CONDITION constructs (C1/C2/C3) feed the condition roll-up; C4_pressure feeds
     the pressure axis; the two are combined into the matrix cell, never averaged.
 
@@ -221,7 +226,7 @@ def build_site_profile(benchmarks: List[Dict],
     raw_by_comp: Dict[str, list] = {}   # signed benchmarks for the SEED kernel
 
     for b in benchmarks:
-        s = normalize(b.get("value"), b.get("estimator", ""))
+        s = b["score"] if b.get("score") is not None else normalize(b.get("value"), b.get("estimator", ""))
         if s is None:
             continue
         if b["construct"] == "C4_pressure":
@@ -229,7 +234,8 @@ def build_site_profile(benchmarks: List[Dict],
         elif b["construct"] in cond_constructs:
             by_comp.setdefault(b["construct"], {}).setdefault(
                 b.get("subdimension", "_"), []).append(s)
-            raw_by_comp.setdefault(b["construct"], []).append(b.get("value"))
+            if b.get("value") is not None and b.get("score") is None:      # SEED kernel needs a signed benchmark; an engine percentile has none
+                raw_by_comp.setdefault(b["construct"], []).append(b.get("value"))
         else:
             # REAL BUG FIXED HERE (Aug 2026, found by an automated
             # unused-variable check — cond_constructs was declared but
