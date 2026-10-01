@@ -64,8 +64,10 @@ def source_fingerprint(pkg_dir: str = PKG_DIR) -> str:
 
 
 def _capture() -> Dict[str, Any]:
+    from darukaa_reference import engine_identity as EI
     s = repo_state()
     s["source_sha256"] = source_fingerprint()
+    s["engine_sha256"] = EI.engine_sha256()                  # the frozen engine files this process loaded
     s["captured_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     return s
 
@@ -106,13 +108,24 @@ def run_provenance(config: Any = None, code_version: str = "") -> Dict[str, Any]
         warnings.append("checkout_changed_since_import: the files on disk are not the code this process loaded; RESTART the runtime before trusting this label")
     if LOADED.get("dirty"):
         warnings.append("dirty_working_tree_at_import: uncommitted changes were loaded, the commit alone does not identify the code")
+    from darukaa_reference import engine_identity as EI
+    engine_now = EI.engine_sha256()
+    engine = {"engine_sha256_at_import": LOADED.get("engine_sha256"), "engine_sha256_now": engine_now, "frozen_engine_sha256": EI.FROZEN_ENGINE_SHA256,
+              "engine_matches_frozen": LOADED.get("engine_sha256") == EI.FROZEN_ENGINE_SHA256 and engine_now == EI.FROZEN_ENGINE_SHA256,
+              "engine_files": list(EI.ENGINE_FILES), "engine_config_sha256": EI.engine_config_sha256(config) if config is not None else None,
+              "frozen_engine_config_sha256": EI.FROZEN_ENGINE_CONFIG_SHA256, "engine_config_diff": EI.engine_config_diff(config) if config is not None else None}
+    engine["engine_config_matches_frozen"] = (None if config is None else not engine["engine_config_diff"])
+    if not engine["engine_matches_frozen"]:
+        warnings.append("engine_not_frozen: the engine modules differ from the frozen v0.2.8 engine (engine_sha256); results are NOT v0.2.8-engine results")
+    if engine["engine_config_matches_frozen"] is False:
+        warnings.append("engine_config_differs_from_frozen: engine-read configuration fields differ from the frozen standalone configuration: " + ", ".join(sorted(engine["engine_config_diff"])))
     return {"git_commit": LOADED["commit"], "git_commit_short": LOADED["commit_short"], "branch": LOADED["branch"], "dirty": LOADED["dirty"],
             "dirty_files": LOADED.get("dirty_files", []), "commit_time_utc": LOADED.get("commit_time_utc"), "remote": LOADED.get("remote"),
             "in_git_checkout": LOADED["in_git_checkout"], "source_sha256_at_import": LOADED["source_sha256"], "imported_utc": LOADED["captured_utc"],
             "checkout_now": {"commit": now["commit"], "branch": now["branch"], "dirty": now["dirty"]},
             "checkout_changed_since_import": changed_commit, "source_changed_since_import": changed_src, "warnings": warnings,
             "package_version": pkg_version, "contract_version": getattr(IC, "CONTRACT_VERSION", None), "code_version": code_version,
-            "config": cfg, "config_sha256": hashlib.sha256(json.dumps(cfg, sort_keys=True).encode()).hexdigest(),
+            "engine": engine, "config": cfg, "config_sha256": hashlib.sha256(json.dumps(cfg, sort_keys=True).encode()).hexdigest(),
             "environment": _versions(), "written_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
 
 
@@ -121,7 +134,8 @@ def brief(p: Dict[str, Any]) -> str:
     w = f" | WARNING: {'; '.join(p['warnings'])}" if p.get("warnings") else ""
     return (f"commit {p['git_commit_short']} on {p['branch']}{' (DIRTY)' if p.get('dirty') else ''} | code {p.get('code_version')} | "
             f"contract {p.get('contract_version')} | package {p.get('package_version')} | config sha {p['config_sha256'][:10]} | "
-            f"source sha {p['source_sha256_at_import'][:10]}{w}")
+            f"source sha {p['source_sha256_at_import'][:10]} | engine {(p.get('engine') or {}).get('engine_sha256_at_import', '')[:10]}"
+            f"{' (FROZEN)' if (p.get('engine') or {}).get('engine_matches_frozen') else ' (NOT FROZEN)'}{w}")
 
 
 def verify_outputs(out_dir: str, expected_commit: Optional[str] = None, expected_contract: Optional[str] = None,
