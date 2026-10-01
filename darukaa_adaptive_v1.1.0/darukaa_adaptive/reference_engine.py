@@ -143,6 +143,12 @@ class AutomaticReferenceEngine:
         local focal mean of land pixels surrounding candidate water, rather than
         interpreted as a water-quality variable or as a direct measure of lake
         condition.
+
+        The diagnostics deliberately retain the *pre-pressure* HMI distribution and
+        progressive retention at several thresholds. This is essential for auditing
+        whether a strict absolute HMI gate is genuinely excluding the regional
+        candidate population or whether another reference-selection gate is
+        responsible.
         """
         import ee
 
@@ -172,6 +178,68 @@ class AutomaticReferenceEngine:
             units="meters",
         )
 
+        # Diagnostics before the HMI threshold. These describe the HMI exposure of
+        # the entire ecologically/hydrologically matched candidate population.
+        pre_stats = contextual.updateMask(water_mask).reduceRegion(
+            reducer=ee.Reducer.percentile([0, 5, 10, 25, 50, 75, 90, 95, 100])
+                    .combine(ee.Reducer.count(), sharedInputs=True),
+            geometry=context, scale=90, maxPixels=1e9, bestEffort=True,
+        )
+
+        def get_info_dict(obj):
+            try:
+                value = obj.getInfo()
+                return {} if value is None else value
+            except Exception:
+                return {}
+
+        pre_stats_raw = get_info_dict(pre_stats)
+        # Earth Engine reducer output keys are band-prefixed for percentile
+        # reducers and '<band>_count' for the combined count.
+        hmi_band = self.config.reference.hmi_gee_band
+
+        def first_key(prefixes):
+            for prefix in prefixes:
+                if prefix in pre_stats_raw:
+                    return pre_stats_raw[prefix]
+            return None
+
+        hmi_distribution = {
+            "n_hmi_pixels": first_key([f"{hmi_band}_count", "count"]),
+            "min": first_key([f"{hmi_band}_p0", f"{hmi_band}_p0.0"]),
+            "p05": first_key([f"{hmi_band}_p5", f"{hmi_band}_p5.0"]),
+            "p10": first_key([f"{hmi_band}_p10", f"{hmi_band}_p10.0"]),
+            "p25": first_key([f"{hmi_band}_p25", f"{hmi_band}_p25.0"]),
+            "p50": first_key([f"{hmi_band}_p50", f"{hmi_band}_p50.0"]),
+            "p75": first_key([f"{hmi_band}_p75", f"{hmi_band}_p75.0"]),
+            "p90": first_key([f"{hmi_band}_p90", f"{hmi_band}_p90.0"]),
+            "p95": first_key([f"{hmi_band}_p95", f"{hmi_band}_p95.0"]),
+            "max": first_key([f"{hmi_band}_p100", f"{hmi_band}_p100.0"]),
+        }
+
+        thresholds = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50]
+        retention_by_threshold = {}
+        for threshold_value in thresholds:
+            retained = water_mask.And(contextual.lte(threshold_value)).selfMask()
+            retained_area = ee.Image.pixelArea().updateMask(retained).reduceRegion(
+                reducer=ee.Reducer.sum(), geometry=context, scale=10,
+                maxPixels=1e9, bestEffort=True).get("area")
+            retained_pixels = retained.reduceRegion(
+                reducer=ee.Reducer.count(), geometry=context, scale=10,
+                maxPixels=1e9, bestEffort=True).values().get(0)
+            area_m2 = get_info_dict(retained_area)
+            pixels_value = get_info_dict(retained_pixels)
+            # getInfo() on scalar EE objects returns a scalar rather than a dict;
+            # normalize both forms.
+            if isinstance(area_m2, dict):
+                area_m2 = area_m2.get("area")
+            if isinstance(pixels_value, dict):
+                pixels_value = next(iter(pixels_value.values()), None)
+            retention_by_threshold[str(threshold_value)] = {
+                "area_ha": None if area_m2 is None else float(area_m2) / 1e4,
+                "pixels_10m": None if pixels_value is None else int(pixels_value),
+            }
+
         threshold = float(self.config.reference.hmi_max_for_reference)
         pre_area = ee.Image.pixelArea().updateMask(water_mask).reduceRegion(
             reducer=ee.Reducer.sum(), geometry=context, scale=10,
@@ -196,22 +264,29 @@ class AutomaticReferenceEngine:
         retention = None
         if pre_m2 not in (None, 0) and post_m2 is not None:
             retention = float(post_m2) / float(pre_m2)
-        pressure_pass = bool(
-            hmi_mean_value is not None
-            and float(hmi_mean_value) <= threshold
-            and post_m2 is not None
-            and float(post_m2) > 0
-        )
+
         diagnostics = {
             **hmi_diag,
             "hmi_context_radius_m": float(self.config.reference.hmi_context_radius_m),
             "hmi_max_for_reference": threshold,
             "land_context_dataset": self.config.reference.landcover_asset,
             "land_context_images": dw_n,
+            "prepressure_candidate_area_ha": None if pre_m2 is None else float(pre_m2) / 1e4,
+            "postpressure_candidate_area_ha": None if post_m2 is None else float(post_m2) / 1e4,
             "hmi_mean_over_prepressure_candidate": hmi_mean_value,
+            "hmi_distribution_prepressure": hmi_distribution,
+            "hmi_retention_by_threshold": retention_by_threshold,
             "pressure_retention_fraction": retention,
-            "pressure_screen_status": "passed" if pressure_pass else "failed",
+            "pressure_screen_status": "passed" if (
+                post_m2 is not None and float(post_m2) > 0
+            ) else "failed",
         }
+
+        # The thresholded image itself is the pressure-screened population.
+        # Approval still requires the downstream population-size QA gate. Do not
+        # require the *mean of the unfiltered population* to be below the threshold:
+        # that would reject a candidate even when a sufficient low-HMI subset exists.
+        pressure_pass = bool(post_m2 is not None and float(post_m2) > 0)
         return screened, pressure_pass, diagnostics
 
     @staticmethod
@@ -248,9 +323,43 @@ class AutomaticReferenceEngine:
             )
             eco_context, eco_ok, eco_diag = self._ecoregion_geometry(master_geometry, context)
             prepressure_candidate = water_similar.clip(eco_context).selfMask()
+
+            def _mask_area_pixels(mask):
+                area_obj = ee.Image.pixelArea().updateMask(mask).reduceRegion(
+                    reducer=ee.Reducer.sum(), geometry=eco_context, scale=10,
+                    maxPixels=1e9, bestEffort=True).get("area")
+                pix_obj = mask.reduceRegion(
+                    reducer=ee.Reducer.count(), geometry=eco_context, scale=10,
+                    maxPixels=1e9, bestEffort=True).values().get(0)
+                try:
+                    area_value = area_obj.getInfo() if area_obj is not None else None
+                except Exception:
+                    area_value = None
+                try:
+                    pix_value = pix_obj.getInfo() if pix_obj is not None else None
+                except Exception:
+                    pix_value = None
+                return {
+                    "area_ha": None if area_value is None else float(area_value) / 1e4,
+                    "pixels_10m": None if pix_value is None else int(pix_value),
+                }
+
+            progressive = {
+                "hydrology_and_water_occurrence": _mask_area_pixels(water_similar),
+                "ecoregion_hydrology_candidate": _mask_area_pixels(prepressure_candidate),
+            }
+
             candidate, pressure_ok, hmi_diag = self._hmi_context_filter(
                 prepressure_candidate, eco_context, start=start, end=end
             )
+            progressive["hmi_screened_candidate"] = {
+                "area_ha": hmi_diag.get("postpressure_candidate_area_ha"),
+                "pixels_10m": (
+                    hmi_diag.get("hmi_retention_by_threshold", {})
+                    .get(str(float(self.config.reference.hmi_max_for_reference)), {})
+                    .get("pixels_10m")
+                ),
+            }
             candidate = candidate.selfMask()
 
             area = ee.Image.pixelArea().updateMask(candidate).reduceRegion(
@@ -295,6 +404,7 @@ class AutomaticReferenceEngine:
                     "site_occurrence_method": site_method,
                     "occurrence_images": int(n),
                     "site_occurrence_images": int(site_n),
+                    "progressive_candidate_gates": progressive,
                     **eco_diag,
                     **hmi_diag,
                 },

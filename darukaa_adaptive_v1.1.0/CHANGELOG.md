@@ -78,3 +78,8 @@ This release consolidates the full adaptive assessment workflow into one interna
 ## Historical base
 
 Earlier `darukaa_adaptive_v1.0.0` work remains represented by the historical package and migration documentation. Historical releases should be retained when exact reproducibility of an older assessment is required; they should not be mixed module-by-module with v1.1.0.
+
+### Reference-engine diagnostic hardening
+- Added pre-pressure HMI percentile diagnostics and threshold-retention diagnostics (0.05–0.50) for automatic aquatic reference candidates.
+- Added progressive candidate-area/pixel diagnostics before and after the HMI gate.
+- Corrected the HMI pressure gate so a sufficient low-HMI subset is not rejected merely because the unfiltered candidate population mean exceeds the threshold; downstream population QA remains decisive.
