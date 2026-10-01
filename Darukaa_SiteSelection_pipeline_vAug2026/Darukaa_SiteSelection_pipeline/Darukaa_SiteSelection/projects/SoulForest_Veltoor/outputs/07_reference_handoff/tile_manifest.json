@@ -18,5 +18,14 @@
     "SEG02",
     "SEG03",
     "SEG04"
+  ],
+  "tile_realms": [
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial"
   ]
 }

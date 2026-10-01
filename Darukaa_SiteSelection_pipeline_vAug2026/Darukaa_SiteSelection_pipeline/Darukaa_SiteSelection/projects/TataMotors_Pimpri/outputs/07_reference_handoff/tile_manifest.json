@@ -22,5 +22,19 @@
     "EMU_Water_margin",
     "EMU_Wetland_forest",
     "EMU_Wildlife"
+  ],
+  "tile_realms": [
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial",
+    "terrestrial"
+  ],
+  "companions": [
+    "TataMotors_Pimpri_Aquatic"
   ]
 }
