@@ -3,6 +3,12 @@
 Format: Keep a Changelog; SemVer. Every entry cites a change-set (CS-xx) and, where
 applicable, the reviewer comment (Cxx) and HMI/SEED audit fix (F-HMI-x).
 
+## v0.2.9-pipeline (Phase 5, unreleased)
+- General project-agnostic pipeline on the FROZEN v0.2.8 engine (manifest -> zones -> engine -> per-realm aggregation -> JSON/CSV/HTML). See PHASE5_ENGINE_PIPELINE.md.
+- Manifests may declare `tile_realms` and `companions`; legacy name-based inference is a warned fallback.
+- `scoring.build_site_profile` accepts an engine-supplied `score`; `html_report.write_html` dispatches engine reports; provenance records the engine fingerprint.
+- Legacy pipeline unchanged and selectable with `--engine legacy`.
+
 ## [0.2.7] -- Real site-selection integration, client-facing report rebuild, a connected multi-pipeline handoff, and real per-tile realm-aware combined reporting
 
 ### A real, deeper report rebuild — bounded %, traceable limiting chain, pillar
