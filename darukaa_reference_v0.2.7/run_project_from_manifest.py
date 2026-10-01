@@ -163,8 +163,57 @@ def find_manifest_by_project_name(repo_root, project_name: str) -> Path:
     return matches[0]
 
 
+def _ensure_ee(config):
+    """The engine reads Earth Engine for every zone: fail early and clearly if it is not usable."""
+    import ee
+    try:
+        ee.Number(1).getInfo()
+    except Exception:
+        try:
+            ee.Initialize(project=(config.gee_project or "").strip() or None)
+            ee.Number(1).getInfo()
+        except Exception as e:
+            raise RuntimeError("Earth Engine is not initialised. In Colab run ee.Authenticate(); ee.Initialize(project='<your project>') first. "
+                               f"({type(e).__name__}: {e})")
+
+
+def _main_engine(args):
+    """DEFAULT path (v0.2.9 Phase 5): the general pipeline on the FROZEN v0.2.8 engine. Project-agnostic: zones and realms come from the manifest."""
+    import dataclasses
+    from darukaa_reference.engine_pipeline import run_engine_project
+    from darukaa_reference.manifest import find_manifest_by_project_name as _find, resolve_zone_specs
+    if args.project:
+        repo_root = Path(__file__).resolve().parent.parent
+        manifest_path = _find(repo_root, args.project).resolve()
+    else:
+        manifest_path = Path(args.manifest).resolve()
+        repo_root = manifest_path.parent
+    project_name, specs = resolve_zone_specs(manifest_path, repo_root, combine_companions=not args.no_combine)
+    if args.realm:
+        if args.realm == "mixed":
+            raise SystemExit("--realm mixed is not supported by the v0.2.8 engine path: declare tile_realms (terrestrial | aquatic) in the manifest.")
+        logger.warning("--realm %s overrides the manifest's declared realm for EVERY zone", args.realm)
+        specs = [dataclasses.replace(s, realm=args.realm, realm_source="cli_override") for s in specs]
+    config = Config.from_yaml(args.config)
+    if config.gee_project:
+        config = dataclasses.replace(config, gee_project=config.gee_project.strip())     # config.yaml carries a stray leading space (not engine-read)
+    _ensure_ee(config)
+    output_dir = args.output_dir or f"./outputs/{project_name}"
+    registry = create_default_registry()
+    logger.info("Engine v0.2.8 pipeline: %s | %d zone(s): %s", project_name, len(specs), {s.label: s.realm for s in specs})
+    report = run_engine_project(config, registry, project_name, specs, output_dir, resume=args.resume, strict_provenance=not args.no_strict_provenance)
+    logger.info("Done. Project report: %s/%s_project.json / .csv / .html", output_dir, project_name)
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run darukaa_reference against a real project tile manifest.")
+    parser.add_argument("--engine", default="v0.2.8", choices=["v0.2.8", "legacy"],
+                        help="Assessment engine. v0.2.8 (DEFAULT) = the frozen benchmarking engine through the general pipeline "
+                        "(realms from the manifest's tile_realms). legacy = the original v0.2.7 pipeline, unchanged and still callable.")
+    parser.add_argument("--resume", action="store_true", help="(v0.2.8 engine) reuse a zone's existing audit ONLY if produced by identical code, engine and configuration")
+    parser.add_argument("--no-strict-provenance", action="store_true",
+                        help="(v0.2.8 engine) allow a dirty / moved checkout or an engine-config difference. A non-frozen ENGINE is always refused.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--manifest", help="Exact path to a project's tile_manifest.json")
     group.add_argument("--project", help="Real project name (e.g. TataMotors_Pimpri) — "
@@ -186,6 +235,9 @@ def main():
                        "blindly applied to every tile. Pass this flag to force a standalone, "
                        "terrestrial-only run even when a real aquatic companion exists.")
     args = parser.parse_args()
+
+    if args.engine == "v0.2.8":
+        return _main_engine(args)
 
     if args.project:
         repo_root = Path(__file__).resolve().parent.parent  # this repo's real root
