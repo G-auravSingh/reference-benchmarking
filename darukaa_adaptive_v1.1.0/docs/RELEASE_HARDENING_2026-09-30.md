@@ -1,39 +1,21 @@
-# v1.0.0 Release Hardening — 2026-09-30
+# Release Hardening Notes — 2026-09-30 to 2026-10-01
 
-This replacement package is aligned to the current `main` v1.0.0 package API and includes a client-run hardening pass.
+This document records the hardening work that preceded the complete `darukaa_adaptive_v1.1.0` release.
 
-## Changes
+## Changes carried into v1.1.0
 
-1. Fixed the aquatic profile seasonal monitoring month list by removing the duplicated August. The Year-0 baseline remains 2025-08-01 through 2026-08-31 inclusive.
-2. Rebuilt the Nandoshi Lake Colab notebook from the full workflow and migrated it to the current `AdaptivePipeline` API.
-3. The notebook now installs only `darukaa_adaptive_v1.0.0`, explicitly verifies package version/path, records the Git SHA, validates the profile before expensive Earth Engine work, and avoids stale imports.
-4. Replaced obsolete `summarize_composite()` usage with the current pipeline-generated benchmark, metric-concern, pillar, and overall scorecards.
-5. Updated monthly water output handling from the obsolete `primary_images` field to the current `images_used` field.
-6. The notebook retains the exploratory maps, monthly water series, dynamic-water mask, persistence, proxy inspection, riparian trend, baseline/monitoring comparison, readiness, report, manifest, and ZIP workflow.
+1. Fixed duplicate/ambiguous aquatic seasonal-month handling.
+2. Migrated the Nandoshi Colab workflow to the profile-driven `AdaptivePipeline`.
+3. Added clean repository checkout and stale-package guards.
+4. Added package version/path/Git-SHA checks.
+5. Added profile validation before expensive Earth Engine operations.
+6. Removed obsolete composite-scoring notebook calls.
+7. Corrected reference geometry handling for riparian/shoreline reference metrics.
+8. Corrected monthly water diagnostics to follow the configured Year-0 baseline rather than inventing future zero-water months.
+9. Added reference-condition QA and approval governance.
+10. Corrected TNC HM v3 90 m asset handling as an Earth Engine ImageCollection.
+11. Added full reference diagnostics and execution-error handling.
+12. Added integrated reference governance outputs and manifest records.
+13. Added C3 fauna gating to overall condition scoring.
 
-## Scientific interpretation
-
-Automatic reference populations remain benchmark candidates. They must not be described as pristine controls without ecological validation. Proxy indicators remain explicitly labelled as proxies and are not converted into calibrated water-quality measurements by the pipeline.
-
-## Run gate
-
-The live Earth Engine assessment should only proceed after the notebook prints a valid package version/path, successful profile validation, successful EE initialization, and the intended Git SHA is recorded.
-
-## Live-run fixes — 2026-09-30
-
-7. Fixed an EE/Shapely geometry type mismatch in automatic aquatic reference benchmarking for riparian and shoreline metrics.
-8. Reworked the Nandoshi monthly water series to follow the configured Year-0 baseline and monitoring-month cycle; future months are no longer represented as zero-water observations.
-9. Reworked the monthly water-mask inspection to select the final configured baseline month rather than a hard-coded September period.
-
-## Validation after live-run fixes
-
-- Package tests: 14 passed.
-- Notebook JSON and all 28 code cells compile successfully (63 total cells).
-- Aquatic profile validation: no errors.
-- Baseline conversion: 2025-08-01 to exclusive 2026-09-01.
-
-### R3 hotfix — YAML date normalization
-- Normalized unquoted YAML ISO dates to ISO strings in `AssessmentConfig.from_yaml()`.
-- Made the Nandoshi monthly baseline notebook cell defensive to either string or `date` inputs.
-- This prevents `TypeError: fromisoformat: argument must be str` during monthly water-series generation.
-- Validation: 14/14 tests passed; all notebook code cells compile; profile baseline resolves to `2025-08-01` through exclusive `2026-09-01`.
+The authoritative final methodology is `docs/METHODOLOGY.md` and the detailed reference standard is `docs/REFERENCE_CONDITION_METHODOLOGY.md`.

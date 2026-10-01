@@ -1,58 +1,80 @@
-## Release hardening — 2026-09-30
-
-- Fixed duplicate August in the aquatic seasonal monitoring-month configuration.
-- Migrated the full Nandoshi Lake Colab workflow to the v1.0.0 `AdaptivePipeline` API.
-- Added package-path/version/SHA guards and preflight profile validation to prevent stale Colab imports.
-- Removed obsolete `summarize_composite()` notebook usage and aligned score inspection with current reference-gated condition/pressure outputs.
-
 # Changelog — darukaa_adaptive_v1.1.0
 
-## v1.0.0
+## v1.1.0 — Complete adaptive methodology and pipeline build — 2026-10-01
 
-Rebuilt from the supplied previous v1.0.0 base as the production adaptive baseline engine.
+This release consolidates the full adaptive assessment workflow into one internally consistent package. The reference-condition changes are integrated with measurement QA, benchmarking, scoring, readiness, reporting, provenance and the Nandoshi Colab workflow.
 
-- Profile-driven aquatic / terrestrial / mixed architecture.
-- Master KML boundary retained as the only required spatial input.
-- Automatic reference-population construction; manual reference files are optional overrides.
-- Explicit aquatic, littoral/shoreline, riparian and landscape-domain concepts.
-- Shared multi-source evidence contract for EO, field, acoustic, eDNA and modelled evidence.
-- Optional eDNA ingestion and C3 scoring pathway; eDNA persistence-potential proxy remains contextual unless validated for scoring.
-- Condition (C1–C3) and pressure (C4) are separated.
-- Reference-relative intactness and five-band concern convention retained as a product convention.
-- Reference diagnostics/provenance are exported.
-- Complete self-contained Year-0 HTML report generated automatically.
-- Colab notebook rebuilt as a clean cell-by-cell production workflow with repository sync, package reinstall and optional external/eDNA input.
-- Fixed Earth Engine callback casting and null-result handling retained in the aquatic implementation.
-- Package installation now declares runtime dependencies through `setup.py` as well as `requirements.txt`.
-- Legacy v0.1.0 package remains frozen.
+### Assessment architecture
 
-## Release hardening follow-up — 2026-09-30
+- Profile-driven aquatic, terrestrial and mixed workflows retained.
+- Master KML/KMZ remains the canonical project boundary input.
+- Geometry QA, local-UTM area calculation and input SHA-256 provenance retained.
+- Aquatic dynamic-water, riparian, shoreline and landscape-context domains remain explicit.
+- Reference search radius is separated from the ordinary analytical context.
 
-- Fixed automatic aquatic-reference benchmarking for riparian and shoreline metrics by explicitly converting Earth Engine reference geometries to Shapely before local buffering.
-- Updated the Nandoshi Lake Colab monthly water series to use the configured Year-0 baseline and monitoring-month cycle, preventing future calendar months from appearing as zero-observation/zero-water months.
-- Updated the monthly water-mask inspection to use the final configured baseline month rather than a hard-coded calendar month.
+### Aquatic metrics and water detection
 
-## 2026-10-01 — R4 Reference-Condition Architecture
+- Dynamic World remains the primary water detector.
+- Sentinel-1 VV remains the configured fallback when optical coverage is insufficient.
+- Water extent remains descriptive/reference-target rather than universally higher-is-better.
+- Water persistence now retains spatial distribution diagnostics in addition to its central value.
+- NDCI, red reflectance and FAI bloom frequency remain explicitly labelled optical proxies.
+- Riparian NDVI and Theil–Sen/Kendall trend remain separated into baseline condition and contextual monitoring roles.
+- Shoreline disturbance remains a transparent pressure proxy.
+- Modal Dynamic World land-cover composition is retained as a composition diagnostic and is not conflated with dynamic water extent.
 
-### Scientific architecture
-- Rebuilt the automatic reference concept around an explicit **reference condition** rather than a generic nearby comparison.
-- Added `darukaa_adaptive/reference_condition.py` with pure, unit-testable contracts for reference distributions, candidate QA, signed reference-relative departure and reference attainment.
-- Added explicit reference-state taxonomy: `undisturbed_minimally_disturbed`, `least_disturbed_contemporary`, `historical`, `best_attainable`, `paired_control`, `published_target`.
-- Separated **reference attainment** from **landscape intactness**. The legacy `intactness_score_0_100` field remains as a compatibility alias.
+### Reference-condition framework
 
-### Automatic reference selection
-- Aquatic references now use a broader configurable search radius, RESOLVE ecoregion compatibility, hydroperiod similarity, and low human-modification screening in surrounding land context.
-- Terrestrial references now use RESOLVE ecoregion compatibility + Dynamic World habitat stratum + TNC Global Human Modification v3 pressure screening.
-- Automatic approval is now **QA-gated**. `auto_approve` cannot approve a candidate that fails the ecological, pressure, temporal, spatial or population gates.
-- Reference method, reference state, approval basis and QA diagnostics are retained in benchmark outputs.
+- Added explicit reference-state taxonomy.
+- Automatic aquatic reference selection now combines hydrological similarity, dominant RESOLVE ecoregion compatibility, low-pressure screening, temporal adequacy and population gates.
+- Automatic terrestrial reference selection combines ecoregion, Dynamic World comparability stratum and low human-modification screening.
+- Automatic approval is strictly QA-gated.
+- Reference candidates exclude the assessed site from the search annulus.
+- Raster-derived reference metrics use the spatial median (`P50`) as the default central estimator when available, while retaining additional spatial percentiles for audit.
+- Reference diagnostics distinguish candidate rejection from software execution failure.
+- Legacy `intactness_score_0_100` is retained only as a compatibility alias; production terminology is reference attainment.
+- Water extent is never assigned a false 100% reference.
+- Manual Tier-1 reference KML and CSV inputs are supported; explicit Tier-1 approval remains required for scoring.
 
-### Scoring/reporting
-- Added explicit reference-relative departure and reference-attainment fields.
-- Reports no longer treat an unavailable pillar as a valid 100/100 result.
-- Reference framework section now exposes reference state and approval governance.
-- The methodology explicitly prevents interpreting a reference-attainment value at/above 100 as ecological perfection.
+### Earth Engine implementation hardening
+
+- Corrected TNC HM v3 90 m static snapshot handling: `TNC/HM/v3/90m_s` is loaded as an Earth Engine ImageCollection and the configured `All_threats_combined` band is derived from the collection.
+- Aquatic HMI screening uses surrounding land context rather than interpreting terrestrial HMI as water quality.
+- RESOLVE ecoregion selection now chooses the dominant site-overlap feature rather than indiscriminately unioning all intersecting ecoregions.
+- Reference-engine exception diagnostics are retained rather than silently reduced to empty diagnostics.
+
+### Scoring and readiness
+
+- Condition and pressure remain structurally separate.
+- Overall condition now respects the configured C3 Fauna requirement.
+- Missing C3 cannot be represented as a valid 100/100 condition pillar.
+- Reference approval is required before a reference-derived metric can become score-eligible.
+- Reference governance fields propagate through benchmark, scorecard, readiness and manifest outputs.
+
+### Reporting and provenance
+
+- Added `reference_governance.csv`.
+- Assessment manifest now retains benchmark, metric-concern, pillar and reference-population governance records in addition to configuration and provenance.
+- HTML reports distinguish unassessed pillars from scored pillars.
+- HTML reports expose reference method/state/approval and relative-departure fields.
+- Output README expanded into an auditable output contract.
+
+### Colab workflow
+
+- Nandoshi notebook now installs only `darukaa_adaptive_v1.1.0` from a clean repository checkout.
+- Package path/version checks include the reference-condition modules.
+- Dataset preflight explicitly checks TNC HM as an ImageCollection and RESOLVE as a FeatureCollection.
+- Exact Git commit is recorded in `DARUKAA_GIT_COMMIT` and therefore in the assessment manifest.
+- Added mandatory live reference-condition validation checkpoint.
+- Any automatic-reference execution error is treated as a validation failure rather than silently accepted.
+- Monthly water diagnostics remain aligned to the configured Year-0 baseline.
 
 ### Documentation
-- Added `docs/REFERENCE_CONDITION_METHODOLOGY.md` as the core company methodology document.
-- Added `docs/REFERENCE_CONDITION_QA_CHECKLIST.md` as the production release checklist.
-- Updated package README and methodology/scoring framing.
+
+- Added `docs/METHODOLOGY.md` as the overall company methodology for the full pipeline.
+- Updated reference-condition, scoring, method notes, runbook, release-readiness and validation documents.
+- Documentation now distinguishes implementation status, methodological guardrails and live-validation requirements.
+
+## Historical base
+
+Earlier `darukaa_adaptive_v1.0.0` work remains represented by the historical package and migration documentation. Historical releases should be retained when exact reproducibility of an older assessment is required; they should not be mixed module-by-module with v1.1.0.

@@ -91,17 +91,26 @@ def aggregate_overall(pillar_df, config):
          "limiting_pillar":None,"limiting_metric":None,"limiting_metric_score_0_to_100":None,
          "aggregation_method":"geometric_mean","son_score_0_to_100":None,"son_concern_label":None}
     if pillar_df.empty: return row
-    cond=pillar_df[pillar_df.pillar.isin(["C1_extent","C2_vegetation","C3_fauna"]) & pillar_df.score_0_to_100.notna()]
+    cond=pillar_df[pillar_df.pillar.isin(["C1_extent","C2_vegetation","C3_fauna"]) & pillar_df.score_0_to_100.notna()].copy()
     press=pillar_df[(pillar_df.pillar=="C4_pressure") & pillar_df.score_0_to_100.notna()]
     if len(press)==1:
         row["pressure_score_0_to_100"]=float(press.iloc[0].score_0_to_100); row["pressure_concern_label"]=concern_label(row["pressure_score_0_to_100"])
     row["condition_pillars"]=cond.pillar.tolist()
-    if len(cond)>=config.scoring.min_condition_pillars:
+    fauna_required=bool(getattr(config.scoring, "require_fauna_for_condition", False))
+    fauna_present="C3_fauna" in set(cond.pillar)
+    condition_gate=(len(cond)>=config.scoring.min_condition_pillars and (not fauna_required or fauna_present))
+    if condition_gate:
         row["condition_score_0_to_100"]=geometric_mean(cond.score_0_to_100.astype(float).tolist()); row["condition_concern_label"]=concern_label(row["condition_score_0_to_100"]); row["status"]="condition_scored"
+    elif fauna_required and not fauna_present:
+        row["status"]="insufficient_fauna_coverage"
     if len(cond)>0:
         r=cond.loc[cond.score_0_to_100.astype(float).idxmin()]; row["limiting_pillar"]=str(r.pillar); row["limiting_metric"]=None if pd.isna(r.limiting_metric) else str(r.limiting_metric); row["limiting_metric_score_0_to_100"]=None if pd.isna(r.limiting_metric_score_0_to_100) else float(r.limiting_metric_score_0_to_100)
-    if config.scoring.composite_son_enabled and len(pillar_df[pillar_df.score_0_to_100.notna()])==4:
-        vals=pillar_df.score_0_to_100.astype(float).tolist(); row["son_score_0_to_100"]=geometric_mean(vals); row["son_concern_label"]=concern_label(row["son_score_0_to_100"])
+    if config.scoring.composite_son_enabled:
+        valid_pillars = pillar_df[pillar_df.score_0_to_100.notna()]
+        complete_gate = len(valid_pillars) == config.scoring.total_pillars if config.scoring.require_complete_pillars else len(valid_pillars) >= config.scoring.min_valid_pillars
+        if not complete_gate:
+            return row
+        vals=valid_pillars.score_0_to_100.astype(float).tolist(); row["son_score_0_to_100"]=geometric_mean(vals); row["son_concern_label"]=concern_label(row["son_score_0_to_100"])
     return row
 
 def build_scorecard(metric_results, benchmark_results, config):

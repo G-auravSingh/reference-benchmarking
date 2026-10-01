@@ -98,7 +98,9 @@ The required variables are **metric- and ecosystem-specific**. The engine must n
 
 A low-pressure screen is used to identify contemporary candidates that are less affected by anthropogenic modification.
 
-For terrestrial reference construction, the production engine uses the TNC Global Human Modification v3 90 m 2022 surface (`TNC/HM/v3/90m_s`, band `All_threats_combined`) as the default cumulative-pressure screen.
+For terrestrial reference construction, the production engine uses the TNC Global Human Modification v3 90 m 2022 surface (`TNC/HM/v3/90m_s`, band `All_threats_combined`) as the default cumulative-pressure screen. The Earth Engine asset is an `ImageCollection`; the configured band is derived from that collection.
+
+For aquatic reference construction, HMI is used only through a focal mean of surrounding land-context pixels around candidate water. It is not interpreted as a water-quality or direct lake-condition variable.
 
 The HM surface is a pressure proxy, not a direct biodiversity-condition measurement. It therefore cannot by itself establish reference condition.
 
@@ -288,14 +290,14 @@ For every metric where the underlying sample is available, the reference summary
 - median;
 - standard deviation;
 - MAD;
-- P10;
+- P05/P10;
 - P25;
-- P75;
-- P90;
-- bootstrap median interval;
-- bootstrap SE.
+- P50;
+- P75/P90;
+- P95;
+- descriptive uncertainty where a valid bootstrap sample is available.
 
-The median is the default central estimator because environmental distributions are often skewed and can contain extreme values.
+The median (`P50`) is the default central estimator because environmental distributions are often skewed and can contain extreme values. For live raster reference populations, the stored spatial percentiles are not treated as independent-replicate confidence intervals.
 
 ### 9.1 Why the median is not the whole answer
 

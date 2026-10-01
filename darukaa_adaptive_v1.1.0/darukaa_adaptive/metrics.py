@@ -30,6 +30,11 @@ class MetricResult:
     valid_pixels: Optional[int] = None
     std_dev: Optional[float] = None
     p05: Optional[float] = None
+    p10: Optional[float] = None
+    p25: Optional[float] = None
+    p50: Optional[float] = None
+    p75: Optional[float] = None
+    p90: Optional[float] = None
     p95: Optional[float] = None
     notes: str = ""
 
@@ -100,7 +105,7 @@ class LakeMetrics:
         reducer = (
             ee.Reducer.mean()
             .combine(ee.Reducer.stdDev(), sharedInputs=True)
-            .combine(ee.Reducer.percentile([5, 95]), sharedInputs=True)
+            .combine(ee.Reducer.percentile([5, 10, 25, 50, 75, 90, 95]), sharedInputs=True)
             .combine(ee.Reducer.count(), sharedInputs=True)
         )
         data = image.reduceRegion(
@@ -122,6 +127,11 @@ class LakeMetrics:
             "mean": pick("mean"),
             "std_dev": pick("stddev"),
             "p05": pick("p5"),
+            "p10": pick("p10"),
+            "p25": pick("p25"),
+            "p50": pick("p50"),
+            "p75": pick("p75"),
+            "p90": pick("p90"),
             "p95": pick("p95"),
             "count": int(count) if count is not None else None,
         }
@@ -152,6 +162,11 @@ class LakeMetrics:
             valid_pixels=stats.get("count"),
             std_dev=stats.get("std_dev"),
             p05=stats.get("p05"),
+            p10=stats.get("p10"),
+            p25=stats.get("p25"),
+            p50=stats.get("p50"),
+            p75=stats.get("p75"),
+            p90=stats.get("p90"),
             p95=stats.get("p95"),
             notes=notes,
         )
@@ -167,11 +182,12 @@ class LakeMetrics:
 
     def water_persistence(self, geometry, start, end):
         r = self.water.persistence(geometry, start, end)
+        stats = r.get("stats") or {}
         return self._make(
             "water_persistence", r["water_occurrence_fraction"],
             r["status"], _window_label(start, end), r["method"], 10,
-            r["n_images"], None,
-            "Fraction of valid observations classified as water, spatially averaged over the master boundary.",
+            r["n_images"], stats,
+            "Fraction of valid observations classified as water, spatially averaged over the master boundary. Reference diagnostics retain spatial percentiles; pixels are not independent replicates.",
         )
 
     def ndci(self, geometry, start, end):

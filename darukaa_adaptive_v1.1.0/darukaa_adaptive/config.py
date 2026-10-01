@@ -258,6 +258,14 @@ class AssessmentConfig:
             errors.append("reference.min_ecological_match_score must be in [0,1]")
         if self.reference.min_reference_observations < 1:
             errors.append("reference.min_reference_observations must be >= 1")
+        if not self.reference.hmi_gee_asset:
+            errors.append("reference.hmi_gee_asset must not be empty")
+        if not self.reference.hmi_gee_band:
+            errors.append("reference.hmi_gee_band must not be empty")
+        if self.reference.uncertainty_bootstrap_n < 0:
+            errors.append("reference.uncertainty_bootstrap_n must be >= 0")
+        if self.reference.uncertainty_min_reference_n < 2:
+            errors.append("reference.uncertainty_min_reference_n must be >= 2")
 
         if self.scoring.min_condition_pillars < 1 or self.scoring.min_condition_pillars > 3:
             errors.append("scoring.min_condition_pillars must be between 1 and 3")

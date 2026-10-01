@@ -297,27 +297,46 @@ class WaterDetector:
             end,
         )
 
-        value = occurrence.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=geometry,
-            scale=10,
-            maxPixels=1e8,
-            bestEffort=True,
-        ).get("water_occurrence")
+        reducer = (
+            ee.Reducer.mean()
+            .combine(ee.Reducer.stdDev(), sharedInputs=True)
+            .combine(ee.Reducer.percentile([5, 10, 25, 50, 75, 90, 95]), sharedInputs=True)
+            .combine(ee.Reducer.count(), sharedInputs=True)
+        )
+        data = occurrence.reduceRegion(
+            reducer=reducer, geometry=geometry, scale=10,
+            maxPixels=1e8, bestEffort=True,
+        ).getInfo() or {}
 
-        value = self._evaluate_number(value)
+        def pick(name):
+            value = data.get(name)
+            if value is not None:
+                return float(value)
+            return None
 
+        value = pick("water_occurrence_mean")
+        if value is None:
+            value = pick("water_occurrence")
+        count = data.get("water_occurrence_count")
         return {
             "period_start": start,
             "period_end": end,
             "method": method,
             "n_images": n,
             "water_occurrence_fraction": value,
-            "status": (
-                "ok"
-                if value is not None
-                else "insufficient_data"
-            ),
+            "status": "ok" if value is not None else "insufficient_data",
+            "stats": {
+                "mean": value,
+                "std_dev": pick("water_occurrence_stdDev"),
+                "p05": pick("water_occurrence_p5"),
+                "p10": pick("water_occurrence_p10"),
+                "p25": pick("water_occurrence_p25"),
+                "p50": pick("water_occurrence_p50"),
+                "p75": pick("water_occurrence_p75"),
+                "p90": pick("water_occurrence_p90"),
+                "p95": pick("water_occurrence_p95"),
+                "count": int(count) if count is not None else None,
+            },
         }
 
     def period_metrics(

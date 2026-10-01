@@ -79,3 +79,15 @@ The term **landscape intactness** is reserved for spatial configuration concepts
 ## 8. External evidence
 
 Field, acoustic, eDNA and other evidence can enter the same downstream contract, but evidence-specific reference requirements remain explicit. A first baseline does not create a valid self-referential reference merely because the observed data exist.
+
+## 9. v1.1.0 integrated-pipeline controls
+
+The reference layer is now executed as part of the complete `AdaptivePipeline`, not as a separate post-processing step.
+
+The pipeline records the automatic reference population summary and carries reference diagnostics into every benchmark record. The default central estimator for raster-derived reference metrics is the spatial median (`P50`) when available; spatial percentiles are retained for audit.
+
+The aquatic profile requires a score-eligible C3 Fauna pillar before an overall condition score is emitted. C4 Pressure remains separate.
+
+The live Nandoshi notebook includes a release-blocking check for reference-engine execution errors. A candidate can legitimately be rejected by the QA gates; that is different from a failed dataset/API operation.
+
+Manual Tier-1 reference KML and CSV inputs remain supported. Tier-1 scoring requires the explicit Tier-1 approval configuration.

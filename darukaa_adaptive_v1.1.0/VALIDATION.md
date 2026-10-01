@@ -1,48 +1,47 @@
-# Validation status — Darukaa Adaptive v1.1.0 / R4
+# Validation — darukaa_adaptive_v1.1.0
 
-## Automated validation completed
+## Automated validation target
 
-- **29 pytest tests pass** in the clean R4 package tree.
-- All Python modules compile with `python -m compileall`.
-- Nandoshi notebook JSON is valid.
-- All 28 notebook code cells compile as Python syntax.
-- `aquatic_lake.yaml` loads successfully and passes configuration validation.
-- Reference-condition pure functions are tested for:
-  - reference distribution statistics;
-  - reproducibility;
-  - candidate population gates;
-  - ecological-match gate;
-  - pressure gate;
-  - reference-state validation;
-  - relative departure;
-  - percentile calculation;
-  - bounded reference attainment;
-  - reference governance propagation;
-  - missing-fauna report rendering.
-- Existing package regression tests remain passing.
+The release must pass:
 
-## Packaging validation
-
-The source tree is internally consistent and the package imports correctly from the release tree. A local editable-install attempt was also checked; dependency/build isolation could not be fully exercised because this execution environment has no outbound package-index/network access. The package's normal Colab installation remains the authoritative dependency-resolution path.
+- complete pytest suite;
+- Python compilation of all package modules;
+- configuration validation for the aquatic profile;
+- notebook JSON validation;
+- notebook Python-code-cell compilation;
+- package integrity checks;
+- release SHA-256 regeneration after all source/documentation changes.
 
 ## Live Earth Engine validation boundary
 
-The following cannot be honestly claimed from this environment and must be executed in the target Colab/GEE project before a client result is issued:
+Software tests cannot verify Earth Engine authentication, current dataset availability or live geospatial results. The Nandoshi Colab workflow is therefore the authoritative live acceptance test.
 
-1. Dynamic World access.
-2. Sentinel-1/Sentinel-2 access.
-3. RESOLVE ecoregion lookup.
-4. TNC HM v3 90 m asset and band access.
-5. Live automatic aquatic reference construction.
-6. Live automatic terrestrial reference construction.
-7. Reference candidate geometry/vectorization.
-8. Live metric extraction over the reference population.
-9. End-to-end Nandoshi baseline run under the R4 reference architecture.
+The live run must verify:
 
-The production acceptance criteria for that live test are documented in `docs/RELEASE_READINESS_R4.md`.
+1. Dynamic World access;
+2. Sentinel-1 access;
+3. Sentinel-2 access;
+4. TNC HM v3 90 m ImageCollection access and `All_threats_combined` band;
+5. RESOLVE Ecoregions FeatureCollection access;
+6. master KML geometry and hash;
+7. dynamic water detection;
+8. Year-0 monthly water series;
+9. automatic aquatic reference construction;
+10. reference QA diagnostics;
+11. reference candidate geometry/metrics;
+12. reference benchmark generation;
+13. reference approval/score-eligibility gating;
+14. C3 fauna gating;
+15. report/manifest consistency.
 
 ## Scientific validation boundary
 
-Passing software tests does not establish that an EO proxy is ecologically calibrated. Metrics such as NDCI, red reflectance and FAI bloom frequency remain proxy measurements unless independently validated against field/laboratory observations or a defensible published response function.
+Passing code tests does not validate ecological calibration. NDCI, red reflectance, FAI bloom frequency and NDVI remain EO proxies unless independent evidence supports a stronger interpretation.
 
-Likewise, an automatically approved contemporary reference is a **least-disturbed reference candidate accepted by explicit spatial/QA rules**, not proof of pristine or pre-human condition.
+An automatically approved contemporary reference is a reference candidate accepted by explicit rules; it is not proof of pristine or pre-human ecological condition.
+
+## Current release-build status
+
+The package has been rebuilt and internally checked in this environment. The remaining acceptance step is the user's live Colab/GEE execution and inspection of the resulting output bundle.
+
+The final package should not be described as live-validated until that step is complete.

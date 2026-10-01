@@ -34,6 +34,18 @@ def test_condition_pressure_are_separate():
     assert abs(o['condition_score_0_to_100']-geometric_mean([90,80,70]))<1e-9; assert abs(o['pressure_score_0_to_100']-20)<1e-9
     assert o['son_score_0_to_100'] is None
 
+def test_condition_requires_fauna_when_profile_requires_it():
+    cfg=AssessmentConfig()
+    cfg.scoring.require_fauna_for_condition=True
+    scored=pd.DataFrame([
+      {'metric':'a','pillar':'C1_extent','intactness_score_0_100':90,'score_eligible':True},
+      {'metric':'b','pillar':'C2_vegetation','intactness_score_0_100':80,'score_eligible':True},
+      {'metric':'p','pillar':'C4_pressure','intactness_score_0_100':70,'score_eligible':True}])
+    p=aggregate_pillars(scored,cfg); o=aggregate_overall(p,cfg)
+    assert o['condition_score_0_to_100'] is None
+    assert o['status']=='insufficient_fauna_coverage'
+
+
 def test_external_evidence_same_path():
     cfg=AssessmentConfig(); df=pd.DataFrame([{'metric':'edna_fish_richness','pillar':'C3_fauna','raw_value':8,'direction':'higher_is_better','reference_value':10,'reference_approved_for_scoring':True,'evidence_type':'eDNA'}])
     m,p,o=score_external_observations(df,cfg); assert float(m.iloc[0].intactness_score_0_100)==80; assert m.iloc[0].evidence_type=='eDNA'

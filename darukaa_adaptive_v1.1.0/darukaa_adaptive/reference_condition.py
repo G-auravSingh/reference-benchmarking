@@ -65,10 +65,12 @@ def reference_distribution(values: Iterable[float], bootstrap_n: int = 1000,
     """
     x = _finite(values)
     if x.size == 0:
-        return {"n": 0, "median": None, "p10": None, "p25": None,
-                "p75": None, "p90": None, "mad": None,
-                "bootstrap_ci_low": None, "bootstrap_ci_high": None,
-                "bootstrap_se": None}
+        return {
+            "n": 0, "mean": None, "median": None, "std": None, "mad": None,
+            "p05": None, "p10": None, "p25": None, "p50": None,
+            "p75": None, "p90": None, "p95": None,
+            "bootstrap_ci_low": None, "bootstrap_ci_high": None, "bootstrap_se": None,
+        }
     med = float(np.median(x))
     mad = float(np.median(np.abs(x - med)))
     out = {
@@ -77,10 +79,13 @@ def reference_distribution(values: Iterable[float], bootstrap_n: int = 1000,
         "median": med,
         "std": float(np.std(x, ddof=1)) if x.size > 1 else 0.0,
         "mad": mad,
+        "p05": float(np.percentile(x, 5)),
         "p10": float(np.percentile(x, 10)),
         "p25": float(np.percentile(x, 25)),
+        "p50": med,
         "p75": float(np.percentile(x, 75)),
         "p90": float(np.percentile(x, 90)),
+        "p95": float(np.percentile(x, 95)),
     }
     if x.size >= 2 and bootstrap_n > 0:
         rng = np.random.default_rng(seed)
@@ -113,7 +118,9 @@ def evaluate_reference_candidate(*, candidate_area_ha: Optional[float], candidat
     """
     if reference_state not in REFERENCE_STATES:
         raise ValueError(f"Unknown reference state: {reference_state}")
-    area_ok = candidate_area_ha is not None and float(candidate_area_ha) >= float(min_area_ha)
+    if not math.isfinite(float(ecological_match_score)):
+        ecological_match_score = 0.0
+    area_ok = candidate_area_ha is not None and math.isfinite(float(candidate_area_ha)) and float(candidate_area_ha) >= float(min_area_ha)
     pixels_ok = candidate_pixels is not None and int(candidate_pixels) >= int(min_pixels)
     eco_ok = float(ecological_match_score) >= float(min_ecological_match_score)
     population_ok = bool(area_ok and pixels_ok)
@@ -127,6 +134,7 @@ def evaluate_reference_candidate(*, candidate_area_ha: Optional[float], candidat
         "population_ok": population_ok,
         "area_ok": area_ok,
         "pixels_ok": pixels_ok,
+        "candidate_area_ha_finite": candidate_area_ha is not None and math.isfinite(float(candidate_area_ha)),
         "ecological_match_ok": eco_ok,
         "pressure_screen_ok": bool(pressure_screen_pass),
         "temporal_match_ok": bool(temporal_match_pass),

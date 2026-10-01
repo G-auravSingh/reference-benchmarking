@@ -32,7 +32,7 @@ These are remote-sensing proxies. They are not calibrated chlorophyll-a, turbidi
 
 The fixed riparian domain is a standardized external buffer generated in a local UTM projection to avoid applying a degree-based buffer in geographic coordinates.
 
-Baseline riparian NDVI is reported as a vegetation-condition proxy in **C2 Vegetation**. The historical Theil–Sen/Kendall trend remains a contextual monitoring indicator and is not directly converted to intactness.
+Baseline riparian NDVI is reported as a vegetation-condition proxy in **C2 Vegetation**. The historical Theil–Sen/Kendall trend remains a contextual monitoring indicator and is not directly converted to reference attainment.
 
 Shoreline disturbance is a transparent land-cover pressure proxy derived from Dynamic World mode classes for crops, built and bare land. Bare substrate can be natural, so the metric must not be equated directly with anthropogenic impact without local interpretation.
 
@@ -40,7 +40,7 @@ Shoreline disturbance is a transparent land-cover pressure proxy derived from Dy
 
 The adaptive framework uses one common architecture across ecosystem realms:
 
-`raw value → comparable reference → intactness 0–100 → concern → pillar geometric mean → overall geometric mean`
+`raw value → comparable reference → reference attainment 0–100 → concern → pillar geometric mean → overall condition/pressure`
 
 The four common pillars are:
 
@@ -72,3 +72,41 @@ Remote sensing cannot establish local species occurrence, population size, eDNA 
 ## R4 reference-condition note (2026-10-01)
 
 The reference-condition architecture was upgraded in v1.1.0. See `REFERENCE_CONDITION_METHODOLOGY.md` for the authoritative method. In particular, an automatic candidate is now approved only after explicit ecological, pressure, temporal, spatial and population gates. The default automatic state is `least_disturbed_contemporary`; this is not a claim of pristine or pre-human condition.
+
+## 10. Full v1.1.0 release integration note (2026-10-01)
+
+The v1.1.0 release integrates the reference-condition architecture with the complete adaptive pipeline rather than treating reference selection as a standalone add-on.
+
+The production path is now:
+
+`geometry → domains → metrics → measurement QA → reference construction → reference QA → benchmarking → score eligibility → pillar/overall scoring → readiness → report → manifest`
+
+The reference engine is required to distinguish a legitimate candidate rejection from a software execution failure. The Nandoshi Colab notebook therefore includes a mandatory reference-validation checkpoint after the full pipeline run.
+
+### Reference central estimator
+
+For referenceable raster-derived metrics, the default central reference estimator is the spatial median (`P50`) where available. Mean, SD and additional spatial percentiles are retained as diagnostics. These are spatial summaries, not independent-replicate confidence intervals.
+
+### TNC Human Modification dataset
+
+`TNC/HM/v3/90m_s` is loaded as an Earth Engine `ImageCollection` and the configured `All_threats_combined` band is aggregated as a median image. The product is the 2022 static 90 m snapshot. It is used as a pressure-screening surface, not as a water-quality metric.
+
+### Aquatic HMI screening
+
+For aquatic reference candidates, the HMI screen uses a focal mean of surrounding **land-context** pixels around candidate water. Dynamic World water pixels are excluded from the land-context mask when Dynamic World observations are available. This prevents the HMI screen from being interpreted as direct modification of the water itself.
+
+### Terrestrial HMI screening
+
+For terrestrial reference candidates, the same TNC HMI product is applied to the Dynamic World comparability stratum. A low HMI value is a pressure screen, not proof that the land-cover class is natural.
+
+### Scoring gate
+
+The aquatic profile requires a score-eligible C3 Fauna pillar before overall condition is scored. Missing fauna evidence is therefore reported as insufficient condition coverage rather than being represented as a complete or 100/100 pillar.
+
+### Manual references
+
+The pipeline supports both Tier-1 reference CSV and Tier-1 reference geometry. A manually supplied reference is not automatically scored unless the configured Tier-1 approval flag is enabled.
+
+### Output governance
+
+The assessment now exports `reference_governance.csv` in addition to `benchmark_scorecard.csv`. The manifest also retains benchmark, pillar, overall, readiness and reference-population governance records so the final output is self-contained for audit.

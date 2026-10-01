@@ -110,6 +110,21 @@ def _bootstrap_ci(values, n_boot=200):
     return float(low), float(high), float(np.std(medians, ddof=1))
 
 
+def _reference_central_value(metric_record):
+    """Use the spatial median as the default reference central estimator when available."""
+    if metric_record is None:
+        return None
+    p50 = getattr(metric_record, "p50", None)
+    return p50 if p50 is not None else getattr(metric_record, "value", None)
+
+
+def _reference_distribution_diagnostics(metric_record):
+    if metric_record is None:
+        return {}
+    keys = ("valid_pixels", "value", "std_dev", "p05", "p10", "p25", "p50", "p75", "p90", "p95")
+    return {k: getattr(metric_record, k, None) for k in keys}
+
+
 def benchmark_metric(metric_name, observed, tier1, tier2, allow_tier2=True, tier1_approved=False, tier2_approved=False,
                      reference_level=None, reference_n=None, reference_ci=None, reference_uncertainty=None,
                      reference_method="", reference_state="", reference_approval_basis="",
@@ -153,13 +168,23 @@ def benchmark_metric(metric_name, observed, tier1, tier2, allow_tier2=True, tier
 def benchmark_observation(metric_name, observed, reference, direction, reference_level="external", reference_approved=True):
     if reference is None:
         return BenchmarkResult(metric_name, observed, None, None, None, "none", None, None, None,
-                               "reference_unavailable", "reference_unavailable")
+                               "reference_unavailable", "reference_unavailable",
+                               reference_approved_for_scoring=False, reference_state="external",
+                               reference_approval_basis="not_available", interpretation_status="reference_unavailable")
     raw = raw_relative_ratio(observed, reference, direction)
     intact = reference_relative_intactness(observed, reference, direction)
+    dep = relative_departure(observed, reference, direction)
+    interpretation = "at_or_above_reference" if dep is not None and dep >= 0 else "below_reference"
+    if direction == "reference_target" and dep is not None:
+        interpretation = "near_reference_target" if dep == 0 else "departed_from_reference_target"
     return BenchmarkResult(metric_name, observed, None, None, float(reference), reference_level, raw, intact,
                            None if intact is None else intact * 100,
                            "reference_relative_ratio" if direction != "reference_target" else "distance_from_reference",
-                           "ok", bool(reference_approved), notes="External evidence uses the same scoring pathway.")
+                           "ok", bool(reference_approved), notes="External evidence uses the same scoring pathway.",
+                           reference_state="external", reference_approval_basis="explicit_external_reference" if reference_approved else "not_approved",
+                           relative_departure_pct=None if dep is None else dep * 100.0,
+                           reference_attainment_0_100=None if intact is None else intact * 100.0,
+                           interpretation_status=interpretation)
 
 
 class ReferenceEngine:
@@ -253,12 +278,12 @@ class ReferenceEngine:
     def build(self, metric_results, master_geometry, tier1_geometry=None, tier2_geometry=None, baseline_start=None, baseline_end=None):
         if baseline_start is None or baseline_end is None:
             baseline_start, baseline_end = self.config.temporal.baseline_dates()
-        manual = load_reference_csv(self.config.reference.tier1_reference_csv) if self.config.reference.tier1_reference_csv else {}
+        manual = load_reference_csv(self.config.reference.tier1_reference_csv) if (self.config.reference.tier1_enabled and self.config.reference.tier1_reference_csv) else {}
         auto_geom, auto_pop = (None, None)
-        if self.config.reference.automatic_enabled and tier2_geometry is None:
-            auto_geom, auto_pop = self.build_automatic_population(master_geometry, baseline_start, baseline_end, realm="aquatic")
-        else:
+        if tier2_geometry is not None:
             auto_geom = tier2_geometry
+        elif self.config.reference.automatic_enabled and self.config.reference.tier2_enabled:
+            auto_geom, auto_pop = self.build_automatic_population(master_geometry, baseline_start, baseline_end, realm="aquatic")
         results=[]
         for result in metric_results:
             if not result.reference_allowed:
@@ -268,10 +293,10 @@ class ReferenceEngine:
             if tier1_value is None and tier1_geometry is not None:
                 tier1_value = self._metric_reference_value(result.metric, tier1_geometry, baseline_start, baseline_end)
             auto_record = None if result.metric == "water_extent" else self._reference_record(result.metric, auto_geom, baseline_start, baseline_end) if auto_geom is not None else None
-            auto_value = None if auto_record is None else auto_record.value
+            auto_value = _reference_central_value(auto_record)
             auto_uncertainty = None
             if auto_record is not None and auto_record.std_dev is not None and auto_record.valid_pixels and auto_record.valid_pixels > 1:
-                # Conservative descriptive SE proxy; spatial autocorrelation means this is not a formal independent-pixel CI.
+                # Descriptive SE proxy only. Spatial pixels are autocorrelated and are not treated as independent replicates.
                 auto_uncertainty = float(auto_record.std_dev) / (float(auto_record.valid_pixels) ** 0.5)
             level = "tier1" if tier1_value is not None else "auto_aquatic"
             approved = self.config.reference.tier1_approved_for_scoring if tier1_value is not None else bool(auto_pop and auto_pop.approval and auto_value is not None)
@@ -282,13 +307,14 @@ class ReferenceEngine:
                                       reference_method=(auto_pop.method if tier1_value is None and auto_pop else "manual_or_external"),
                                       reference_state=(auto_pop.reference_state if tier1_value is None and auto_pop else "external_or_manual"),
                                       reference_approval_basis=("automated_reference_QA" if tier1_value is None and auto_pop and auto_pop.approval else "explicit_manual_approval" if tier1_value is not None and approved else "not_approved"),
-                                      reference_diagnostics=(auto_pop.diagnostics if tier1_value is None and auto_pop else {}))
+                                      reference_diagnostics={**(auto_pop.diagnostics if tier1_value is None and auto_pop else {}),
+                                                            "reference_distribution": _reference_distribution_diagnostics(auto_record)} if tier1_value is None else {} )
             if tier1_value is None and auto_pop:
                 status.reference_method = auto_pop.method
-                status.reference_n = auto_pop.candidate_pixels
-                status.reference_uncertainty = None
+                status.reference_n = auto_record.valid_pixels if auto_record is not None and auto_record.valid_pixels is not None else auto_pop.candidate_pixels
+                status.reference_uncertainty = auto_uncertainty
                 status.reference_state = auto_pop.reference_state
-                status.reference_diagnostics = auto_pop.diagnostics or {}
+                status.reference_diagnostics = {**(auto_pop.diagnostics or {}), "reference_distribution": _reference_distribution_diagnostics(auto_record)}
                 status.notes = (f"Automatic reference population: {auto_pop.status}. The population is approved only after the automated ecological/pressure/temporal/spatial QA gate." if result.metric != "water_extent" else "Water extent is a site-specific hydroperiod/footprint metric; no false 100% spatial benchmark is used.")
             results.append(status)
         return results

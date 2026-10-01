@@ -43,7 +43,13 @@ def write_html_report(out, config, site_path, area_ha, domains, metrics_df, benc
     cond=overall.get("condition_score_0_to_100"); press=overall.get("pressure_score_0_to_100")
     title=config.profile.name.replace('_',' ').title()
     gaps=[]
-    if scored_df.empty or not (scored_df.get("pillar",pd.Series(dtype=str)).eq("C3_fauna").any() if not scored_df.empty else False): gaps.append("Fauna evidence (field/acoustic/eDNA) is not yet represented in the current scorecard.")
+    c3_scored = False
+    if not scored_df.empty and "pillar" in scored_df.columns and "score_eligible" in scored_df.columns:
+        c3_scored = bool(scored_df.loc[scored_df["pillar"].eq("C3_fauna"), "score_eligible"].fillna(False).any())
+    if not c3_scored:
+        gaps.append("Fauna evidence (field/acoustic/eDNA) is not currently score-eligible; C3 cannot be treated as a completed condition pillar.")
+    if overall.get("status") == "insufficient_fauna_coverage":
+        gaps.append("Overall condition scoring is gated because the configured profile requires a scored C3 Fauna pillar.")
     if benchmark_df.empty: gaps.append("No reference benchmark was generated.")
     elif not benchmark_df.empty and (benchmark_df.get("selected_reference").isna().all()): gaps.append("No defensible reference value was available for the scoreable indicators.")
     if evidence_df.empty: gaps.append("No optional external/eDNA evidence file was supplied.")
@@ -68,7 +74,7 @@ footer{{margin-top:40px;color:#697681;font-size:12px}}
 <div class="notice"><b>Scoring guardrail:</b> a valid measurement is not automatically a scored ecological indicator. Reference comparability, uncertainty and evidence provenance are retained explicitly.</div>
 <h2>1. Assessment Overview</h2><div class="grid"><div class="card"><b>Boundary</b><br>Master assessment boundary supplied by the project.</div><div class="card"><b>Baseline</b><br>{html.escape(str(config.temporal.baseline_start_date))} to {html.escape(str(config.temporal.baseline_end_date))}</div><div class="card"><b>Historical context</b><br>{config.temporal.start_year}–{config.temporal.end_year}</div><div class="card"><b>Domains</b><br>Aquatic • littoral/shoreline • riparian • landscape context</div></div>
 <h2>2. Assessment Architecture</h2><p><b>Project boundary → ecological domains → multi-source indicators → automatic reference population → reference comparison → reference attainment (0–100) → C1/C2/C3 condition + C4 pressure → transparent management interpretation.</b></p>
-<h2>3. Reference Framework</h2><p>The default workflow constructs an ecologically matched reference candidate automatically. The candidate is screened by ecosystem comparability, pressure, temporal compatibility and population quality before it can be approved for scoring. Manual reference KML/CSV files remain optional overrides. The reference state, method, QA diagnostics and approval basis are retained in the assessment manifest.</p>{_table(benchmark_df[[c for c in ["metric","selected_reference","selected_reference_level","reference_n","reference_uncertainty","reference_method","reference_state","reference_approval_basis","benchmark_status","reference_approved_for_scoring"] if c in benchmark_df.columns]])}
+<h2>3. Reference Framework</h2><p>The default workflow constructs an ecologically matched reference candidate automatically. The candidate is screened by ecosystem comparability, pressure, temporal compatibility and population quality before it can be approved for scoring. Manual reference KML/CSV files remain optional overrides. The reference state, method, QA diagnostics and approval basis are retained in the assessment manifest.</p>{_table(benchmark_df[[c for c in ["metric","selected_reference","selected_reference_level","reference_n","reference_uncertainty","relative_departure_pct","reference_attainment_0_100","reference_method","reference_state","reference_approval_basis","benchmark_status","reference_approved_for_scoring"] if c in benchmark_df.columns]])}
 <h2>4. Indicator Results</h2>{_table(metric_display)}
 <h2>5. Pillar Results</h2>{pillar_html}<div style="margin-top:18px">C1 Extent, C2 Vegetation/Habitat and C3 Fauna are treated as condition components. C4 Pressure is reported separately.</div>
 <h2>6. State of Nature</h2><div class="grid"><div class="card"><div class="muted">Overall condition</div><div class="big">{('%.1f / 100' % cond) if cond is not None else 'Not scoreable'}</div><div>{html.escape(str(overall.get('condition_concern_label') or ''))}</div></div><div class="card"><div class="muted">Overall pressure</div><div class="big">{('%.1f / 100' % press) if press is not None else 'Not scoreable'}</div><div>{html.escape(str(overall.get('pressure_concern_label') or ''))}</div></div><div class="card"><div class="muted">Limiting condition component</div><div class="big" style="font-size:20px">{html.escape(str(overall.get('limiting_pillar') or 'Pending'))}</div><div>{html.escape(str(overall.get('limiting_metric') or ''))}</div></div></div>
@@ -93,12 +99,36 @@ def write_assessment(output_dir, config, site_path, boundary_area_ha, domains, m
     if landcover is not None: pd.DataFrame([{"dynamic_world_class":k,"fraction":v} for k,v in landcover.items()]).to_csv(out/'landcover_composition.csv',index=False)
     qdf=metric_qa if metric_qa is not None else pd.DataFrame(); qdf.to_csv(out/'metric_qa_scorecard.csv',index=False)
     edf=evidence_df if evidence_df is not None else pd.DataFrame(); edf.to_csv(out/'external_evidence.csv',index=False)
+    ref_cols=[c for c in ['metric','selected_reference','selected_reference_level','reference_n','reference_uncertainty','relative_departure_pct','reference_attainment_0_100','reference_method','reference_state','reference_approval_basis','reference_approved_for_scoring','benchmark_status','interpretation_status','reference_diagnostics'] if c in bdf.columns]
+    bdf[ref_cols].to_csv(out/'reference_governance.csv',index=False) if ref_cols else pd.DataFrame().to_csv(out/'reference_governance.csv',index=False)
     (out/'readiness.json').write_text(json.dumps(readiness,indent=2,default=str),encoding='utf-8')
     (out/'overall_scorecard.json').write_text(json.dumps(overall or {},indent=2,default=str),encoding='utf-8')
     pd.DataFrame(indicator_table()).to_csv(out/'indicator_registry.csv',index=False); pd.DataFrame(legacy_crosswalk()).to_csv(out/'legacy_metric_crosswalk.csv',index=False)
-    manifest={"package":"darukaa_adaptive","version":config.profile.version,"run_timestamp_utc":datetime.now(timezone.utc).isoformat(),"python_version":platform.python_version(),"site_file":str(site_path),"site_sha256":hashlib.sha256(Path(site_path).read_bytes()).hexdigest(),"git_commit":_git_commit_for(Path.cwd()),"boundary_area_ha":boundary_area_ha,"config":config.to_dict(),"readiness":readiness,"overall_scorecard":overall or {},"spatial_domains":{"master_boundary":True,"dynamic_water_generated_per_period":True,"fixed_riparian_buffer_m":config.spatial.riparian_buffer_m,"context_buffer_km":config.spatial.context_buffer_km},"metrics":[m.to_dict() for m in metrics],"metric_qa":qdf.to_dict(orient='records'),"external_evidence":edf.to_dict(orient='records')}
+    manifest={
+        "package":"darukaa_adaptive",
+        "version":config.profile.version,
+        "run_timestamp_utc":datetime.now(timezone.utc).isoformat(),
+        "python_version":platform.python_version(),
+        "site_file":str(site_path),
+        "site_sha256":hashlib.sha256(Path(site_path).read_bytes()).hexdigest(),
+        "git_commit":_git_commit_for(Path.cwd()),
+        "boundary_area_ha":boundary_area_ha,
+        "config":config.to_dict(),
+        "readiness":readiness,
+        "overall_scorecard":overall or {},
+        "pillar_scorecard":pdf.to_dict(orient='records'),
+        "metric_concern_scorecard":sdf.to_dict(orient='records'),
+        "benchmark_scorecard":bdf.to_dict(orient='records'),
+        "spatial_domains":{"master_boundary":True,"dynamic_water_generated_per_period":True,
+                           "fixed_riparian_buffer_m":config.spatial.riparian_buffer_m,
+                           "context_buffer_km":config.spatial.context_buffer_km,
+                           "reference_search_radius_km":config.reference.search_radius_km},
+        "metrics":[m.to_dict() for m in metrics],
+        "metric_qa":qdf.to_dict(orient='records'),
+        "external_evidence":edf.to_dict(orient='records'),
+    }
     if extra_manifest: manifest.update(extra_manifest)
     (out/'assessment_manifest.json').write_text(json.dumps(manifest,indent=2,default=str),encoding='utf-8')
     html_path=write_html_report(out,config,site_path,boundary_area_ha,domains,metric_df,bdf,sdf,pdf,overall or {},pd.DataFrame(water_periods),readiness,edf)
-    (out/'README_OUTPUTS.md').write_text('# Assessment outputs\n\nThe package contains raw metric, QA, reference, scoring, water-period, optional external/eDNA evidence, manifest and a self-contained professional HTML Year-0 report. Contextual indicators remain visible but are not silently converted into composite scores.\n',encoding='utf-8')
-    return {"metric_scorecard":str(out/'metric_scorecard.csv'),"benchmark_scorecard":str(out/'benchmark_scorecard.csv'),"metric_concern_scorecard":str(out/'metric_concern_scorecard.csv'),"pillar_scorecard":str(out/'pillar_scorecard.csv'),"water_periods":str(out/'water_periods.csv'),"readiness":str(out/'readiness.json'),"overall_scorecard":str(out/'overall_scorecard.json'),"manifest":str(out/'assessment_manifest.json'),"html_report":str(html_path),"external_evidence":str(out/'external_evidence.csv')}
+    (out/'README_OUTPUTS.md').write_text('# Assessment outputs\n\nThis directory is the auditable output bundle for the Darukaa Adaptive assessment. It contains raw measurements, measurement QA, reference governance, reference-relative benchmarking, score eligibility, pillar/overall scoring, water-period diagnostics, optional external/eDNA evidence, provenance, and the self-contained Year-0 HTML report. Contextual indicators remain visible but are not silently converted into composite scores.\n\n## Key files\n- `metric_scorecard.csv`: raw metric measurements and data-quality fields.\n- `metric_qa_scorecard.csv`: structural QA/QC.\n- `reference_governance.csv`: reference selection, approval and reference-relative interpretation.\n- `benchmark_scorecard.csv`: complete benchmark records including diagnostics.\n- `metric_concern_scorecard.csv`: score eligibility and concern bands.\n- `pillar_scorecard.csv` / `overall_scorecard.json`: aggregation.\n- `assessment_manifest.json`: exact input hash, configuration, package version and Git commit.\n- `Year0_Biodiversity_Baseline_Report.html`: client-facing report.\n',encoding='utf-8')
+    return {"metric_scorecard":str(out/'metric_scorecard.csv'),"benchmark_scorecard":str(out/'benchmark_scorecard.csv'),"reference_governance":str(out/'reference_governance.csv'),"metric_concern_scorecard":str(out/'metric_concern_scorecard.csv'),"pillar_scorecard":str(out/'pillar_scorecard.csv'),"water_periods":str(out/'water_periods.csv'),"readiness":str(out/'readiness.json'),"overall_scorecard":str(out/'overall_scorecard.json'),"manifest":str(out/'assessment_manifest.json'),"html_report":str(html_path),"external_evidence":str(out/'external_evidence.csv')}

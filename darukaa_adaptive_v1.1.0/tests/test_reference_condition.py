@@ -29,6 +29,17 @@ def test_reference_distribution_ignores_nonfinite():
     assert out["median"] == pytest.approx(1.5)
 
 
+def test_reference_distribution_exposes_full_percentile_contract():
+    out = reference_distribution([1, 2, 3, 4, 5], bootstrap_n=0)
+    assert out["p05"] == pytest.approx(1.2)
+    assert out["p10"] == pytest.approx(1.4)
+    assert out["p25"] == pytest.approx(2.0)
+    assert out["p50"] == pytest.approx(3.0)
+    assert out["p75"] == pytest.approx(4.0)
+    assert out["p90"] == pytest.approx(4.6)
+    assert out["p95"] == pytest.approx(4.8)
+
+
 def test_candidate_requires_population_size():
     qa = evaluate_reference_candidate(
         candidate_area_ha=1.0,

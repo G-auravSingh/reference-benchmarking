@@ -53,3 +53,13 @@ The reference audit has now been promoted from a local benchmark implementation 
 The key decision is that automatic reference construction must be based on ecological comparability + low anthropogenic pressure + temporal compatibility + population adequacy, followed by an explicit approval gate. Low human modification is a pressure screen and is not, by itself, proof of pristine condition.
 
 The legacy `intactness_score_0_100` name is retained only for downstream compatibility. New interpretation uses `reference_attainment_0_100` and `relative_departure_pct`.
+
+## v1.1.0 complete-pipeline integration — 2026-10-01
+
+The reference-condition changes are integrated with the full adaptive pipeline. Reference selection is no longer treated as an isolated scoring patch.
+
+The final package now carries reference population summaries and benchmark governance through:
+
+`AdaptivePipeline → ReferenceEngine → BenchmarkResult → scoring → readiness → report → assessment_manifest.json`
+
+The live Nandoshi notebook explicitly validates reference-engine execution and fails the validation checkpoint when an automatic-reference software/API error is detected.
