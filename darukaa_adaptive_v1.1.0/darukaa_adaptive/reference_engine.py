@@ -301,7 +301,7 @@ class AutomaticReferenceEngine:
             )
 
             ref_geom = None
-            if qa.approval:
+            if qa.approval_recommendation:
                 vectors = candidate.reduceToVectors(
                     geometry=eco_context, scale=30, geometryType="polygon",
                     eightConnected=True, labelProperty="reference_water",
@@ -309,13 +309,13 @@ class AutomaticReferenceEngine:
                 )
                 ref_geom = vectors.geometry()
 
-            status = "validated_candidate" if qa.approval else (
+            status = "validated_candidate" if qa.approval_recommendation else (
                 "candidate_rejected" if area_ha is not None else "candidate_unresolved"
             )
             return ReferencePopulation(
                 "auto_aquatic", "aquatic", "ecoregion_hydrology_low_pressure", status,
                 geometry=ref_geom, candidate_area_ha=area_ha, candidate_pixels=pixels,
-                approval=qa.approval, reference_state="least_disturbed_contemporary",
+                approval=qa.approval_recommendation, reference_state="least_disturbed_contemporary",
                 diagnostics=qa.diagnostics,
             )
         except Exception as exc:
@@ -410,18 +410,18 @@ class AutomaticReferenceEngine:
                 },
             )
             ref_geom = None
-            if qa.approval:
+            if qa.approval_recommendation:
                 vectors = candidate.reduceToVectors(
                     geometry=eco_context, scale=30, geometryType="polygon",
                     eightConnected=True, labelProperty="reference_habitat",
                     maxPixels=1e9, bestEffort=True,
                 )
                 ref_geom = vectors.geometry()
-            status = "validated_candidate" if qa.approval else "candidate_rejected"
+            status = "validated_candidate" if qa.approval_recommendation else "candidate_rejected"
             return ReferencePopulation(
                 "auto_terrestrial", "terrestrial", "ecoregion_landcover_low_pressure", status,
                 geometry=ref_geom, candidate_area_ha=area_ha,
-                candidate_pixels=pixels, approval=qa.approval,
+                candidate_pixels=pixels, approval=qa.approval_recommendation,
                 reference_state="least_disturbed_contemporary", diagnostics=qa.diagnostics,
             )
         except Exception as exc:
