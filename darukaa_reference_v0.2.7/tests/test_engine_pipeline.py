@@ -47,7 +47,7 @@ def reg():
 @pytest.fixture
 def clean_loaded(monkeypatch):
     """A clean, frozen loaded state, independent of whether the developer's tree has uncommitted edits."""
-    loaded = dict(PV.LOADED); loaded.update(dirty=False, dirty_files=[], engine_sha256=EI.FROZEN_ENGINE_SHA256)
+    loaded = dict(PV.LOADED); loaded.update(dirty=False, dirty_files=[], engine_closure_sha256=EI.FROZEN_ENGINE_CLOSURE_SHA256)
     monkeypatch.setattr(PV, "LOADED", loaded)
     return loaded
 
@@ -138,7 +138,7 @@ def test_realms_in_the_report_are_the_manifest_declared_realms_and_stay_separate
 
 # ---------------------------------------------------------------- provenance gate
 def test_the_run_is_refused_if_the_engine_is_not_the_frozen_engine_even_when_not_strict(tmp_path, cfg, reg, monkeypatch, clean_loaded):
-    loaded = dict(PV.LOADED); loaded["engine_sha256"] = "0" * 64
+    loaded = dict(PV.LOADED); loaded["engine_closure_sha256"] = "0" * 64
     monkeypatch.setattr(PV, "LOADED", loaded)
     name, specs = specs_of("SoulForest_Veltoor")
     with pytest.raises(EP.ProvenanceRefusal, match="engine_not_frozen"):
@@ -171,11 +171,11 @@ def test_a_clean_frozen_checkout_passes_strict_mode_and_the_report_carries_the_e
     name, specs = specs_of("SoulForest_Veltoor")
     rep = EP.run_engine_project(cfg, reg, name, specs, str(tmp_path), provider_factory=F.fake_factory, zone_loader=F.stub_zone_loader, log=lambda *a, **k: None)
     e = rep["meta"]["engine"]
-    assert e["engine_sha256_at_import"] == EI.FROZEN_ENGINE_SHA256 and e["engine_matches_frozen"] and e["engine_config_matches_frozen"]
+    assert e["engine_closure_sha256_at_import"] == EI.FROZEN_ENGINE_CLOSURE_SHA256 and e["engine_closure_matches_frozen"] and e["engine_config_matches_frozen"]
     assert e["contract_version"] == "0.2.8" and e["code_version"] == A.CODE_VERSION
     for z in rep["zones"].values():                                                         # the per-zone audit file carries the same engine identity
         d = json.loads(Path(z["audit_files"]["json"]).read_text())
-        assert d["provenance"]["engine"]["engine_sha256_at_import"] == EI.FROZEN_ENGINE_SHA256
+        assert d["provenance"]["engine"]["engine_closure_sha256_at_import"] == EI.FROZEN_ENGINE_CLOSURE_SHA256
 
 
 # ---------------------------------------------------------------- failures
@@ -219,7 +219,7 @@ def test_resume_reuses_only_audits_from_identical_code_engine_and_configuration(
         assert [r["score"] for r in z["rows"]] == [r["score"] for r in first["zones"][label]["rows"]]
     # tamper: a different engine fingerprint, a different configuration, a different source -> NOT reused
     victim = tmp_path / "SEG01_audit.json"
-    d = json.loads(victim.read_text()); d["provenance"]["engine"]["engine_sha256_at_import"] = "1" * 64; victim.write_text(json.dumps(d))
+    d = json.loads(victim.read_text()); d["provenance"]["engine"]["engine_closure_sha256_at_import"] = "1" * 64; victim.write_text(json.dumps(d))
     victim2 = tmp_path / "SEG02_audit.json"
     d = json.loads(victim2.read_text()); d["provenance"]["config_sha256"] = "2" * 64; victim2.write_text(json.dumps(d))
     victim3 = tmp_path / "SEG03_audit.json"

@@ -6,7 +6,8 @@ applicable, the reviewer comment (Cxx) and HMI/SEED audit fix (F-HMI-x).
 ## v0.2.9-pipeline (Phase 5, unreleased)
 - General project-agnostic pipeline on the FROZEN v0.2.8 engine (manifest -> zones -> engine -> per-realm aggregation -> JSON/CSV/HTML). See PHASE5_ENGINE_PIPELINE.md.
 - Manifests may declare `tile_realms` and `companions`; legacy name-based inference is a warned fallback.
-- `scoring.build_site_profile` accepts an engine-supplied `score`; `html_report.write_html` dispatches engine reports; provenance records the engine fingerprint.
+- `engine_profile.build_profile` aggregates ENGINE scores as is (pipeline layer; `scoring.py` stays byte-identical to the frozen tag); `html_report.write_html` dispatches engine reports; provenance records the engine-closure identity.
+- Engine identity is the 19-file executable CLOSURE of `assess.py` (not 12 files): see PHASE5_ENGINE_PIPELINE.md.
 - Legacy pipeline unchanged and selectable with `--engine legacy`.
 
 ## [0.2.7] -- Real site-selection integration, client-facing report rebuild, a connected multi-pipeline handoff, and real per-tile realm-aware combined reporting

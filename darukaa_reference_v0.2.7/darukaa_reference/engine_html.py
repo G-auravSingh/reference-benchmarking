@@ -161,8 +161,8 @@ def render_engine_html(report: Dict[str, Any], project_name: str = "Darukaa Asse
     out.append(f'<div class="dk-header"><h1>{_esc(project_name)}</h1><div class="dk-subtitle">Reference benchmarking: frozen v0.2.8 engine, general pipeline</div>'
                f'<div class="dk-meta-strip"><span>{_esc(meta.get("n_zones"))} zones assessed ({_esc(meta.get("n_zones_failed"))} failed)</span>'
                f'<span>realms: {_esc(", ".join(f"{k} {len(v)}" for k, v in meta.get("zones_by_realm", {}).items()))}</span>'
-               f'<span>contract {_esc(eng.get("contract_version"))}</span><span>engine {_esc(str(eng.get("engine_sha256_at_import", ""))[:12])}'
-               f'{" (frozen)" if eng.get("engine_matches_frozen") else " (NOT FROZEN)"}</span><span>commit {_esc(prov.get("git_commit_short"))}</span></div></div>')
+               f'<span>contract {_esc(eng.get("contract_version"))}</span><span>engine {_esc(str(eng.get("engine_closure_sha256_at_import", ""))[:12])}'
+               f'{" (frozen)" if eng.get("engine_closure_matches_frozen") else " (NOT FROZEN)"}</span><span>commit {_esc(prov.get("git_commit_short"))}</span></div></div>')
     out.append(f'<div class="dk-framing"><b>How to read the numbers.</b> {_esc(ER.SCORE_EXPLAINER)}</div>')
     if meta.get("failed_zones"):
         out.append('<div class="dk-framing dk-warn">Zones that failed and are NOT in this report: ' + _esc(meta["failed_zones"]) + "</div>")
@@ -188,6 +188,6 @@ def render_engine_html(report: Dict[str, Any], project_name: str = "Darukaa Asse
     out.append('<h2 class="dk-h2">Status policy</h2><table class="dk-table"><tr><th>Engine status</th><th>Used as</th></tr>' +
                "".join(f"<tr><td>{_esc(k)}</td><td>{_esc(v)}</td></tr>" for k, v in report["status_policy"].items()) + "</table>")
     out.append(f'<div class="dk-footer">pipeline {_esc(meta.get("pipeline_version"))} &middot; engine code {_esc(eng.get("code_version"))} &middot; engine sha256 '
-               f'{_esc(eng.get("engine_sha256_at_import"))} &middot; engine config matches the frozen configuration: {_esc(eng.get("engine_config_matches_frozen"))} '
+               f'{_esc(eng.get("engine_closure_sha256_at_import"))} &middot; engine config matches the frozen configuration: {_esc(eng.get("engine_config_matches_frozen"))} '
                f'&middot; source sha256 {_esc(str(prov.get("source_sha256_at_import", ""))[:16])} &middot; generated {_esc(meta.get("generated_at"))}</div></body></html>')
     return "".join(out)

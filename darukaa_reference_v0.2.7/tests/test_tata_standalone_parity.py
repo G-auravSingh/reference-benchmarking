@@ -30,7 +30,7 @@ from darukaa_reference import assess as A
 from darukaa_reference import engine_pipeline as EP
 from darukaa_reference import indicator_contract as IC
 from darukaa_reference import manifest as M
-from darukaa_reference import scoring, son_score
+from darukaa_reference import engine_profile, son_score
 from darukaa_reference.config import Config
 from darukaa_reference.indicators import create_default_registry
 
@@ -113,7 +113,7 @@ def test_every_audit_file_the_pipeline_wrote_holds_exactly_the_standalone_rows(p
         written = json.loads((parity_run["out"] / f"{label}_audit.json").read_text())
         assert written["rows"] == d["rows"], label                                              # identical, key for key (provenance block of the FILE is new, rows are not)
         assert written["meta"]["evidence"] == d["meta"]["evidence"]
-        assert written["provenance"]["engine"]["engine_sha256_at_import"] == written["provenance"]["engine"]["frozen_engine_sha256"]
+        assert written["provenance"]["engine"]["engine_closure_sha256_at_import"] == written["provenance"]["engine"]["frozen_engine_closure_sha256"]
 
 
 def test_zone_indicator_site_reference_benchmark_score_status_and_reason_reproduce_for_all_690_rows(parity_run):
@@ -165,7 +165,7 @@ def test_realm_headline_reproduces_an_independent_profile_from_the_standalone_sc
                     worst[r["indicator"]] = r
         items = [{"name": i, "construct": IC.CONTRACTS[i].construct, "subdimension": IC.CONTRACTS[i].subdimension, "value": r["benchmark"], "estimator": IC.CONTRACTS[i].estimator,
                   "score": r["score"]} for i, r in sorted(worst.items())]
-        prof = scoring.build_site_profile(items)
+        prof = engine_profile.build_profile(items)
         h = rep["realms"][realm]["headline"]
         oc = son_score.overall_condition(prof)
         assert same(h["condition"]["score"], oc["score"]) and h["condition"]["minimum_component"] == oc["minimum_component"]

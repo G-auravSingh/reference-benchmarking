@@ -111,6 +111,6 @@ def test_every_output_is_written_for_the_project_and_carries_the_frozen_engine_i
     for label in LABELS:
         assert all((tmp_path / f"{label}_audit.{e}").exists() for e in ("json", "csv", "md"))
     assert all((tmp_path / f"SoulForest_Veltoor_project.{e}").exists() for e in ("json", "csv", "html"))
-    assert rep["meta"]["engine"]["engine_matches_frozen"] is True and rep["meta"]["pipeline_version"] == EP.PIPELINE_VERSION
+    assert rep["meta"]["engine"]["engine_closure_matches_frozen"] is True and rep["meta"]["pipeline_version"] == EP.PIPELINE_VERSION
     html = (tmp_path / "SoulForest_Veltoor_project.html").read_text()
     assert "Terrestrial realm" in html and "Aquatic realm" not in html

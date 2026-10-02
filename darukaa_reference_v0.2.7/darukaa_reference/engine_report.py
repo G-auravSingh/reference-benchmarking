@@ -25,7 +25,7 @@ TWO DIFFERENT QUANTITIES are always kept apart
 
 AGGREGATION (per REALM; terrestrial and aquatic zones are never pooled)
   project-realm signal for an indicator = the WORST scored zone's `score` (non-compensatory, the limiting-factor rule already used by project_aggregation),
-  fed to scoring.build_site_profile with the engine's score as is. Area-weighted figures are secondary context and labelled so.
+  fed to engine_profile.build_profile with the engine's score as is. Area-weighted figures are secondary context and labelled so.
 HEADLINE: the existing profile-first mechanism (son_score), computed only from `scored` rows, with explicit pillar coverage. No scoreable condition evidence
   -> no headline (never a 0, never a default).
 """
@@ -38,7 +38,7 @@ from collections import Counter, OrderedDict
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from darukaa_reference import indicator_contract as IC
-from darukaa_reference import scoring, son_score
+from darukaa_reference import engine_profile, son_score
 
 STATUS_POLICY: Dict[str, str] = {
     "scored": "aggregate",
@@ -182,7 +182,7 @@ def zone_profile(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     """profile-first scoring for ONE zone from its `scored` rows only, using the engine's score as is."""
     items = [{"name": r["indicator"], "construct": r["construct"], "subdimension": r["subdimension"], "value": r["benchmark"],
               "estimator": r["estimator"] or "", "score": float(r["score"])} for r in rows if r["aggregation_role"] == "aggregate"]
-    return scoring.build_site_profile(items)
+    return engine_profile.build_profile(items)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -302,7 +302,7 @@ def build_project_report(project_name: str, zones: Sequence[Dict[str, Any]], reg
         rrows = [r for k in labels for r in zone_out[k]["rows"]]
         areas = {k: zone_out[k]["area_ha"] for k in labels}
         agg = aggregate_realm(rrows, areas)
-        prof = scoring.build_site_profile(agg["combined_benchmarks"])
+        prof = engine_profile.build_profile(agg["combined_benchmarks"])
         mk = [{"indicator": i["indicator"], "display_name": i["display_name"], "construct": i["construct"], "subdimension": i["subdimension"],
                "site_value": i["worst_zone_site_value"]} for i in agg["per_indicator"].values() if i["status"] == "ok"]
         zc = {k: zone_out[k]["coverage"] for k in labels}

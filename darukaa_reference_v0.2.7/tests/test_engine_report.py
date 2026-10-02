@@ -249,7 +249,7 @@ def _report():
         zs.append({"label": d["rows"][0]["zone"], "realm": d["rows"][0]["realm"], "area_ha": d["meta"]["evidence"]["site_area_m2"] / 1e4, "rows": d["rows"], "meta": d["meta"],
                    "realm_source": "manifest"})
     rep = ER.build_project_report("fixture", zs)
-    rep["meta"]["engine"] = {"engine_sha256_at_import": "x" * 64, "engine_matches_frozen": True}
+    rep["meta"]["engine"] = {"engine_closure_sha256_at_import": "x" * 64, "engine_closure_matches_frozen": True}
     rep["meta"]["provenance"] = {"git_commit_short": "abc1234"}
     return rep
 

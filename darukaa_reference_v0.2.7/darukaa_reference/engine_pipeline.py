@@ -9,7 +9,7 @@ Site extraction, applicability, reference construction, benchmarking and scoring
 exactly as the standalone (notebook) runs called it; this module adds orchestration only. It contains no project names and no per-project branches: everything it
 knows about a project comes from the manifest (see manifest.py).
 
-Safety: before any zone is assessed, the run's provenance is checked. If the engine modules differ from the frozen engine (`engine_matches_frozen`), the run
+Safety: before any zone is assessed, the run's provenance is checked. If the engine modules differ from the frozen engine (`engine_closure_matches_frozen`), the run
 is refused (results would not be v0.2.8-engine results). `strict_provenance=True` (default) also refuses on a dirty / moved checkout or a changed engine-read
 configuration, because those make the result's identity unprovable.
 """
@@ -57,7 +57,7 @@ def _resumable(audit_json: str, prov: Dict[str, Any]) -> Optional[Dict[str, Any]
         p = d.get("provenance") or {}
         e = p.get("engine") or {}
         same = (p.get("source_sha256_at_import") == prov["source_sha256_at_import"] and p.get("config_sha256") == prov["config_sha256"]
-                and e.get("engine_sha256_at_import") == prov["engine"]["engine_sha256_at_import"] and e.get("engine_matches_frozen") is True)
+                and e.get("engine_closure_sha256_at_import") == prov["engine"]["engine_closure_sha256_at_import"] and e.get("engine_closure_matches_frozen") is True)
         return d if same else None
     except Exception:
         return None
