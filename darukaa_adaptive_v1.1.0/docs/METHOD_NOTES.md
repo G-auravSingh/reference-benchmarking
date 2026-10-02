@@ -53,7 +53,7 @@ Concern bands are fixed at 0–<20, 20–<40, 40–<60, 60–<80 and 80–100, c
 
 Direction is indicator-specific. Higher-is-better and lower-is-better indicators use direction-aware ratios; reference-target indicators use bounded proportional distance from the reference.
 
-Tier-1 references are preferred when available. Tier-2 is a candidate regional/context benchmark. Scoring requires explicit approval of the selected reference tier.
+Reference selection is finite: strict low-pressure contemporary → least-disturbed contemporary quantile → optional analyst-entered manual HMI threshold. Scoring remains reference-QA gated; the manual threshold is recorded as an explicit analyst decision.
 
 ## 7. Field and other indicators
 
@@ -105,7 +105,7 @@ The aquatic profile requires a score-eligible C3 Fauna pillar before overall con
 
 ### Manual references
 
-The pipeline supports both Tier-1 reference CSV and Tier-1 reference geometry. A manually supplied reference is not automatically scored unless the configured Tier-1 approval flag is enabled.
+The production pipeline has no manual reference-file pathway. The only manual fallback is an explicitly entered HMI threshold in Colab, chosen from the reference diagnostics after the two automatic contemporary stages fail.
 
 ### Output governance
 

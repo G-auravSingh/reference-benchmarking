@@ -37,7 +37,7 @@ class ReferencePopulation:
 
 
 class AutomaticReferenceEngine:
-    """Construct comparable candidate populations without a required reference KML/CSV."""
+    """Construct comparable candidate populations for the finite automatic reference workflow; no reference-file upload is required."""
 
     def __init__(self, config, water_detector=None):
         self.config = config
@@ -136,305 +136,196 @@ class AutomaticReferenceEngine:
             "hmi_resolution_m": 90,
         }
 
-    def _hmi_context_filter(self, water_mask, context, start=None, end=None):
-        """Screen aquatic candidates using low human modification in surrounding land.
+    def _hmi_context_filter(self, water_mask, context, start=None, end=None, threshold=None):
+        """Apply an HMI threshold to a candidate water population.
 
-        HMI is a terrestrial pressure surface. It is therefore sampled through a
-        local focal mean of land pixels surrounding candidate water, rather than
-        interpreted as a water-quality variable or as a direct measure of lake
-        condition.
-
-        The diagnostics deliberately retain the *pre-pressure* HMI distribution and
-        progressive retention at several thresholds. This is essential for auditing
-        whether a strict absolute HMI gate is genuinely excluding the regional
-        candidate population or whether another reference-selection gate is
-        responsible.
+        ``threshold`` is supplied by the caller so the same implementation can
+        support the strict minimally-disturbed screen and the finite
+        least-disturbed contemporary fallback without silently changing the policy.
         """
         import ee
-
         hmi, hmi_n, hmi_diag = self._hmi_image(context)
         if hmi is None:
-            return ee.Image(0).selfMask().rename("reference_water"), False, {
-                **hmi_diag,
-                "pressure_screen_status": "unavailable",
-            }
-
-        land_mask = None
-        dw_n = None
+            return ee.Image(0).selfMask().rename("reference_water"), False, {**hmi_diag, "pressure_screen_status":"unavailable"}
+        land_mask = None; dw_n = None
         if start and end:
-            dw = (ee.ImageCollection(self.config.reference.landcover_asset)
-                  .filterBounds(context).filterDate(start, end).select("label"))
-            dw_n = int(dw.size().getInfo())
-            if dw_n > 0:
-                # Dynamic World label 0 is water. Other classes are treated as
-                # surrounding land context for the pressure screen only.
-                land_mask = dw.mode().neq(0)
+            dw=(ee.ImageCollection(self.config.reference.landcover_asset).filterBounds(context).filterDate(start,end).select("label"))
+            dw_n=int(dw.size().getInfo())
+            if dw_n>0: land_mask=dw.mode().neq(0)
+        contextual=hmi
+        if land_mask is not None: contextual=contextual.updateMask(land_mask)
+        contextual=contextual.focal_mean(radius=float(self.config.reference.hmi_context_radius_m),units="meters")
+        threshold=float(self.config.reference.hmi_max_for_reference if threshold is None else threshold)
+        screened=water_mask.And(contextual.lte(threshold)).selfMask().rename("reference_water")
+        pre_area=ee.Image.pixelArea().updateMask(water_mask).reduceRegion(reducer=ee.Reducer.sum(),geometry=context,scale=10,maxPixels=1e9,bestEffort=True).get("area")
+        post_area=ee.Image.pixelArea().updateMask(screened).reduceRegion(reducer=ee.Reducer.sum(),geometry=context,scale=10,maxPixels=1e9,bestEffort=True).get("area")
+        def get_number(v):
+            try: return None if v is None else v.getInfo()
+            except Exception: return None
+        pre_m2=get_number(pre_area); post_m2=get_number(post_area)
+        hmi_mean=get_number(contextual.updateMask(water_mask).reduceRegion(reducer=ee.Reducer.mean(),geometry=context,scale=90,maxPixels=1e9,bestEffort=True).values().get(0))
+        retention=None if pre_m2 in (None,0) or post_m2 is None else float(post_m2)/float(pre_m2)
+        pressure_pass=bool(post_m2 is not None and float(post_m2)>0)
+        diagnostics={**hmi_diag,"hmi_context_radius_m":float(self.config.reference.hmi_context_radius_m),
+                     "hmi_max_for_reference":threshold,"land_context_dataset":self.config.reference.landcover_asset,
+                     "land_context_images":dw_n,"hmi_mean_over_prepressure_candidate":hmi_mean,
+                     "pressure_retention_fraction":retention,"pressure_screen_status":"passed" if pressure_pass else "failed",
+                     **self._hmi_diagnostics(contextual,water_mask,context)}
+        return screened,pressure_pass,diagnostics
 
-        contextual = hmi
-        if land_mask is not None:
-            contextual = contextual.updateMask(land_mask)
-        contextual = contextual.focal_mean(
-            radius=float(self.config.reference.hmi_context_radius_m),
-            units="meters",
+    def _hmi_diagnostics(self, contextual, water_mask, geometry):
+        """Return pre-pressure HMI distribution and threshold-retention diagnostics.
+
+        HMI pixels are spatial observations, not independent ecological replicates.
+        These diagnostics are therefore descriptive and are never treated as site n.
+        """
+        import ee
+        stats = contextual.updateMask(water_mask).reduceRegion(
+            reducer=ee.Reducer.percentile([0,5,10,25,50,75,90,95,100]).combine(
+                ee.Reducer.count(), sharedInputs=True
+            ), geometry=geometry, scale=90, maxPixels=1e9, bestEffort=True
         )
-
-        # Diagnostics before the HMI threshold. These describe the HMI exposure of
-        # the entire ecologically/hydrologically matched candidate population.
-        pre_stats = contextual.updateMask(water_mask).reduceRegion(
-            reducer=ee.Reducer.percentile([0, 5, 10, 25, 50, 75, 90, 95, 100])
-                    .combine(ee.Reducer.count(), sharedInputs=True),
-            geometry=context, scale=90, maxPixels=1e9, bestEffort=True,
-        )
-
-        def get_info_dict(obj):
-            try:
-                value = obj.getInfo()
-                return {} if value is None else value
-            except Exception:
-                return {}
-
-        pre_stats_raw = get_info_dict(pre_stats)
-        # Earth Engine reducer output keys are band-prefixed for percentile
-        # reducers and '<band>_count' for the combined count.
-        hmi_band = self.config.reference.hmi_gee_band
-
-        def first_key(prefixes):
-            for prefix in prefixes:
-                if prefix in pre_stats_raw:
-                    return pre_stats_raw[prefix]
+        info = stats.getInfo() or {}
+        # Earth Engine percentile/count keys depend on the band name; normalize them.
+        band = self.config.reference.hmi_gee_band
+        def pick(p):
+            for k in (f"{band}_p{p}", f"{band}_percentile_{p}", f"p{p}"):
+                if k in info: return info[k]
             return None
-
-        hmi_distribution = {
-            "n_hmi_pixels": first_key([f"{hmi_band}_count", "count"]),
-            "min": first_key([f"{hmi_band}_p0", f"{hmi_band}_p0.0"]),
-            "p05": first_key([f"{hmi_band}_p5", f"{hmi_band}_p5.0"]),
-            "p10": first_key([f"{hmi_band}_p10", f"{hmi_band}_p10.0"]),
-            "p25": first_key([f"{hmi_band}_p25", f"{hmi_band}_p25.0"]),
-            "p50": first_key([f"{hmi_band}_p50", f"{hmi_band}_p50.0"]),
-            "p75": first_key([f"{hmi_band}_p75", f"{hmi_band}_p75.0"]),
-            "p90": first_key([f"{hmi_band}_p90", f"{hmi_band}_p90.0"]),
-            "p95": first_key([f"{hmi_band}_p95", f"{hmi_band}_p95.0"]),
-            "max": first_key([f"{hmi_band}_p100", f"{hmi_band}_p100.0"]),
-        }
-
-        thresholds = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50]
-        retention_by_threshold = {}
-        for threshold_value in thresholds:
-            retained = water_mask.And(contextual.lte(threshold_value)).selfMask()
-            retained_area = ee.Image.pixelArea().updateMask(retained).reduceRegion(
-                reducer=ee.Reducer.sum(), geometry=context, scale=10,
+        count = info.get(f"{band}_count", info.get("count"))
+        dist = {"hmi_min": pick(0), "hmi_p05": pick(5), "hmi_p10": pick(10),
+                "hmi_p25": pick(25), "hmi_p50": pick(50), "hmi_p75": pick(75),
+                "hmi_p90": pick(90), "hmi_p95": pick(95), "hmi_max": pick(100),
+                "hmi_valid_pixels": count}
+        thresholds = [0.05,0.10,0.15,0.20,0.30,0.40,0.50]
+        sens = {}
+        for t in thresholds:
+            mask = water_mask.And(contextual.lte(t)).selfMask()
+            area = ee.Image.pixelArea().updateMask(mask).reduceRegion(
+                reducer=ee.Reducer.sum(), geometry=geometry, scale=10,
                 maxPixels=1e9, bestEffort=True).get("area")
-            retained_pixels = retained.reduceRegion(
-                reducer=ee.Reducer.count(), geometry=context, scale=10,
-                maxPixels=1e9, bestEffort=True).values().get(0)
-            area_m2 = get_info_dict(retained_area)
-            pixels_value = get_info_dict(retained_pixels)
-            # getInfo() on scalar EE objects returns a scalar rather than a dict;
-            # normalize both forms.
-            if isinstance(area_m2, dict):
-                area_m2 = area_m2.get("area")
-            if isinstance(pixels_value, dict):
-                pixels_value = next(iter(pixels_value.values()), None)
-            retention_by_threshold[str(threshold_value)] = {
-                "area_ha": None if area_m2 is None else float(area_m2) / 1e4,
-                "pixels_10m": None if pixels_value is None else int(pixels_value),
-            }
-
-        threshold = float(self.config.reference.hmi_max_for_reference)
-        pre_area = ee.Image.pixelArea().updateMask(water_mask).reduceRegion(
-            reducer=ee.Reducer.sum(), geometry=context, scale=10,
-            maxPixels=1e9, bestEffort=True).get("area")
-        screened = water_mask.And(contextual.lte(threshold)).selfMask().rename("reference_water")
-        post_area = ee.Image.pixelArea().updateMask(screened).reduceRegion(
-            reducer=ee.Reducer.sum(), geometry=context, scale=10,
-            maxPixels=1e9, bestEffort=True).get("area")
-        hmi_mean = contextual.updateMask(water_mask).reduceRegion(
-            reducer=ee.Reducer.mean(), geometry=context, scale=90,
-            maxPixels=1e9, bestEffort=True).values().get(0)
-
-        def get_number(value):
-            try:
-                return None if value is None else value.getInfo()
-            except Exception:
-                return None
-
-        pre_m2 = get_number(pre_area)
-        post_m2 = get_number(post_area)
-        hmi_mean_value = get_number(hmi_mean)
-        retention = None
-        if pre_m2 not in (None, 0) and post_m2 is not None:
-            retention = float(post_m2) / float(pre_m2)
-
-        diagnostics = {
-            **hmi_diag,
-            "hmi_context_radius_m": float(self.config.reference.hmi_context_radius_m),
-            "hmi_max_for_reference": threshold,
-            "land_context_dataset": self.config.reference.landcover_asset,
-            "land_context_images": dw_n,
-            "prepressure_candidate_area_ha": None if pre_m2 is None else float(pre_m2) / 1e4,
-            "postpressure_candidate_area_ha": None if post_m2 is None else float(post_m2) / 1e4,
-            "hmi_mean_over_prepressure_candidate": hmi_mean_value,
-            "hmi_distribution_prepressure": hmi_distribution,
-            "hmi_retention_by_threshold": retention_by_threshold,
-            "pressure_retention_fraction": retention,
-            "pressure_screen_status": "passed" if (
-                post_m2 is not None and float(post_m2) > 0
-            ) else "failed",
-        }
-
-        # The thresholded image itself is the pressure-screened population.
-        # Approval still requires the downstream population-size QA gate. Do not
-        # require the *mean of the unfiltered population* to be below the threshold:
-        # that would reject a candidate even when a sufficient low-HMI subset exists.
-        pressure_pass = bool(post_m2 is not None and float(post_m2) > 0)
-        return screened, pressure_pass, diagnostics
+            pix = mask.reduceRegion(reducer=ee.Reducer.count(), geometry=geometry,
+                                    scale=10, maxPixels=1e9, bestEffort=True).values().get(0)
+            try: area_v = area.getInfo() if area is not None else None
+            except Exception: area_v = None
+            try: pix_v = pix.getInfo() if pix is not None else None
+            except Exception: pix_v = None
+            area_ha_v = None if area_v is None else float(area_v)/1e4
+            # Use area-derived nominal 10-m pixel equivalents rather than a
+            # bestEffort reducer count, which may silently change analysis scale.
+            nominal_pixels = None if area_v is None else int(round(float(area_v) / 100.0))
+            sens[str(t)] = {"area_ha": area_ha_v,
+                            "candidate_pixels_nominal_10m": nominal_pixels,
+                            "pixel_count_note": "area-derived nominal 10-m pixel equivalents; not independent ecological replicates"}
+        dist["hmi_threshold_sensitivity"] = sens
+        return dist
 
     @staticmethod
     def _as_float(value):
         return None if value is None else float(value)
 
-    def aquatic_candidate(self, master_geometry, start: str, end: str) -> ReferencePopulation:
+    def _aquatic_candidate_once(self, master_geometry, start, end, threshold, state, method):
         import ee
+        context=self._buffer_annulus(master_geometry)
+        occurrence,method_occ,n=self.water.occurrence_image(context,start,end)
+        site_occurrence,site_method,site_n=self.water.occurrence_image(master_geometry,start,end)
+        site_mean=self._site_mean(site_occurrence,master_geometry,scale=10)
+        if site_mean is None:
+            return ReferencePopulation("auto_aquatic","aquatic",method,"site_hydroperiod_unavailable",reference_state=state,diagnostics={"occurrence_method":site_method,"occurrence_images":n,"site_occurrence_images":site_n})
+        min_occ=float(self.config.reference.auto_min_water_occurrence); tol=float(self.config.reference.water_occurrence_tolerance)
+        water_similar=occurrence.gte(min_occ).And(occurrence.subtract(float(site_mean)).abs().lte(tol)).And(occurrence.lte(1.0))
+        eco_context,eco_ok,eco_diag=self._ecoregion_geometry(master_geometry,context)
+        pre=water_similar.clip(eco_context).selfMask()
+        candidate,pressure_ok,hmi_diag=self._hmi_context_filter(pre,eco_context,start=start,end=end,threshold=threshold)
+        candidate=candidate.selfMask()
+        area=ee.Image.pixelArea().updateMask(candidate).reduceRegion(reducer=ee.Reducer.sum(),geometry=eco_context,scale=10,maxPixels=1e9,bestEffort=True).get("area")
+        area_m2 = self._as_float(area.getInfo() if area is not None else None)
+        area_ha = None if area_m2 is None else area_m2/1e4
+        # Candidate pixel count is a nominal 10-m equivalent derived from area;
+        # do not use a bestEffort reducer count as if it were a fixed-scale count.
+        pixels = None if area_m2 is None else int(round(area_m2/100.0))
+        candidate_occ=occurrence.updateMask(candidate).reduceRegion(reducer=ee.Reducer.mean(),geometry=eco_context,scale=10,maxPixels=1e9,bestEffort=True).values().get(0)
+        candidate_occ=self._as_float(candidate_occ.getInfo() if candidate_occ is not None else None)
+        match_score=max(0.0,1.0-abs(candidate_occ-float(site_mean))/max(tol,1e-6)) if candidate_occ is not None else 0.0
+        temporal_ok=n>=self.config.reference.min_reference_observations and site_n>=self.config.reference.min_reference_observations
+        qa=evaluate_reference_candidate(candidate_area_ha=area_ha,candidate_pixels=pixels,min_area_ha=self.config.reference.auto_min_candidate_area_ha,min_pixels=self.config.reference.auto_min_candidate_pixels,ecological_match_score=match_score if eco_ok else 0.0,min_ecological_match_score=self.config.reference.min_ecological_match_score,pressure_screen_pass=pressure_ok,temporal_match_pass=temporal_ok,spatial_quality_pass=eco_ok,reference_state=state,auto_approve=self.config.reference.auto_approve,extra={"site_water_occurrence":float(site_mean),"candidate_mean_water_occurrence":candidate_occ,"water_occurrence_tolerance":tol,"minimum_water_occurrence":min_occ,"occurrence_method":method_occ,"site_occurrence_method":site_method,"occurrence_images":int(n),"site_occurrence_images":int(site_n),"reference_hmi_threshold":float(threshold),**eco_diag,**hmi_diag})
+        ref_geom=None
+        if qa.approval_recommendation:
+            vectors=candidate.reduceToVectors(geometry=eco_context,scale=30,geometryType="polygon",eightConnected=True,labelProperty="reference_water",maxPixels=1e9,bestEffort=True)
+            ref_geom=vectors.geometry()
+        status="validated_candidate" if qa.approval_recommendation else ("candidate_rejected" if area_ha is not None else "candidate_unresolved")
+        return ReferencePopulation("auto_aquatic","aquatic",method,status,geometry=ref_geom,candidate_area_ha=area_ha,candidate_pixels=pixels,approval=qa.approval_recommendation,reference_state=state,diagnostics=qa.diagnostics)
 
-        context = self._buffer_annulus(master_geometry)
+    def aquatic_candidate(self, master_geometry, start: Optional[str] = None, end: Optional[str] = None):
+        """Finite three-stage aquatic reference selection.
+
+        Stage A: strict low-pressure contemporary (HMI <= configured strict threshold).
+        Stage B: lowest-disturbance configured quantile of the same comparable population.
+        Stage C: explicitly entered manual HMI threshold, intended to be chosen from
+        the diagnostics produced by A/B. If Stage C is not configured or fails QA,
+        selection terminates; the engine does not keep relaxing criteria.
+        """
         if self.water is None:
-            return ReferencePopulation(
-                "auto_aquatic", "aquatic", "ecologically_matched_water_population",
-                "no_water_detector", reference_state="least_disturbed_contemporary",
-                diagnostics={"error": "Water detector is required for automatic aquatic references."},
-            )
+            return ReferencePopulation("auto_aquatic", "aquatic", "ecoregion_hydrology_low_pressure", "no_water_detector", reference_state="least_disturbed_contemporary", diagnostics={"error":"Water detector is required for automatic aquatic references."})
         try:
-            occurrence, method, n = self.water.occurrence_image(context, start, end)
-            site_occurrence, site_method, site_n = self.water.occurrence_image(master_geometry, start, end)
-            site_mean = self._site_mean(site_occurrence, master_geometry, scale=10)
-            if site_mean is None:
-                return ReferencePopulation(
-                    "auto_aquatic", "aquatic", "ecoregion_hydrology_low_pressure",
-                    "site_hydroperiod_unavailable", reference_state="least_disturbed_contemporary",
-                    diagnostics={"occurrence_method": site_method, "occurrence_images": n, "site_occurrence_images": site_n},
-                )
+            strict=self._aquatic_candidate_once(master_geometry,start,end,float(self.config.reference.hmi_max_for_reference),"least_disturbed_contemporary","ecoregion_hydrology_low_pressure")
+            if strict.approval or not self.config.reference.least_disturbed_enabled:
+                return strict
 
-            min_occ = float(self.config.reference.auto_min_water_occurrence)
-            tol = float(self.config.reference.water_occurrence_tolerance)
-            water_similar = (
-                occurrence.gte(min_occ)
-                .And(occurrence.subtract(float(site_mean)).abs().lte(tol))
-                .And(occurrence.lte(1.0))
-            )
-            eco_context, eco_ok, eco_diag = self._ecoregion_geometry(master_geometry, context)
-            prepressure_candidate = water_similar.clip(eco_context).selfMask()
+            # Stage B: lowest-disturbance configured quantile of the same comparable population.
+            context=self._buffer_annulus(master_geometry)
+            occurrence,_,_=self.water.occurrence_image(context,start,end)
+            site_occurrence,_,_=self.water.occurrence_image(master_geometry,start,end)
+            site_mean=self._site_mean(site_occurrence,master_geometry,scale=10)
+            eco_context,_,_=self._ecoregion_geometry(master_geometry,context)
+            pre=occurrence.gte(float(self.config.reference.auto_min_water_occurrence)).And(occurrence.subtract(float(site_mean)).abs().lte(float(self.config.reference.water_occurrence_tolerance))).And(occurrence.lte(1.0)).clip(eco_context).selfMask()
+            hmi,_,_=self._hmi_image(eco_context)
+            import ee
+            dw=ee.ImageCollection(self.config.reference.landcover_asset).filterBounds(eco_context).filterDate(start,end).select("label")
+            land=dw.mode().neq(0) if int(dw.size().getInfo())>0 else None
+            contextual=hmi.updateMask(land) if land is not None else hmi
+            contextual=contextual.focal_mean(radius=float(self.config.reference.hmi_context_radius_m),units="meters")
+            q=float(self.config.reference.least_disturbed_quantile)*100.0
+            qdict=contextual.updateMask(pre).reduceRegion(reducer=ee.Reducer.percentile([q]),geometry=eco_context,scale=90,maxPixels=1e9,bestEffort=True).getInfo() or {}
+            qval=float(next(iter(qdict.values()))) if qdict else None
+            if qval is not None:
+                least=self._aquatic_candidate_once(master_geometry,start,end,qval,"least_disturbed_contemporary","ecoregion_hydrology_least_disturbed_quantile")
+                least.diagnostics=(least.diagnostics or {}) | {"escalation_from":"ecoregion_hydrology_low_pressure","least_disturbed_quantile":float(self.config.reference.least_disturbed_quantile),"least_disturbed_hmi_threshold":qval,"strict_candidate_status":strict.status,"strict_candidate_area_ha":strict.candidate_area_ha,"strict_candidate_pixels":strict.candidate_pixels}
+                if least.approval:
+                    return least
+            else:
+                least = strict
 
-            def _mask_area_pixels(mask):
-                area_obj = ee.Image.pixelArea().updateMask(mask).reduceRegion(
-                    reducer=ee.Reducer.sum(), geometry=eco_context, scale=10,
-                    maxPixels=1e9, bestEffort=True).get("area")
-                pix_obj = mask.reduceRegion(
-                    reducer=ee.Reducer.count(), geometry=eco_context, scale=10,
-                    maxPixels=1e9, bestEffort=True).values().get(0)
-                try:
-                    area_value = area_obj.getInfo() if area_obj is not None else None
-                except Exception:
-                    area_value = None
-                try:
-                    pix_value = pix_obj.getInfo() if pix_obj is not None else None
-                except Exception:
-                    pix_value = None
-                return {
-                    "area_ha": None if area_value is None else float(area_value) / 1e4,
-                    "pixels_10m": None if pix_value is None else int(pix_value),
+            # Stage C: explicit manual HMI threshold chosen from the diagnostics.
+            manual_hmi=self.config.reference.manual_hmi_threshold
+            if self.config.reference.manual_hmi_fallback_enabled and manual_hmi is not None:
+                manual=self._aquatic_candidate_once(master_geometry,start,end,float(manual_hmi),self.config.reference.manual_hmi_reference_state,"ecoregion_hydrology_manual_hmi_threshold")
+                manual.diagnostics=(manual.diagnostics or {}) | {
+                    "escalation_from":"ecoregion_hydrology_least_disturbed_quantile",
+                    "manual_hmi_threshold":float(manual_hmi),
+                    "strict_hmi_threshold":float(self.config.reference.hmi_max_for_reference),
+                    "least_disturbed_quantile":float(self.config.reference.least_disturbed_quantile),
+                    "least_disturbed_hmi_threshold":qval,
+                    "strict_candidate_status":strict.status,
+                    "least_disturbed_candidate_status":least.status,
+                    "manual_threshold_requires_explicit_colab_configuration":True,
                 }
+                if manual.approval:
+                    return manual
+                manual.status="candidate_rejected_reference_unavailable"
+                return manual
 
-            progressive = {
-                "hydrology_and_water_occurrence": _mask_area_pixels(water_similar),
-                "ecoregion_hydrology_candidate": _mask_area_pixels(prepressure_candidate),
+            terminal=least
+            terminal.status="candidate_rejected_reference_unavailable"
+            terminal.diagnostics=(terminal.diagnostics or {}) | {
+                "strict_candidate_status":strict.status,
+                "least_disturbed_candidate_status":least.status,
+                "manual_hmi_fallback_configured":False,
+                "next_action":"Set reference.manual_hmi_threshold in the Colab configuration using the reported HMI distribution, then rerun the pipeline."
             }
-
-            candidate, pressure_ok, hmi_diag = self._hmi_context_filter(
-                prepressure_candidate, eco_context, start=start, end=end
-            )
-            progressive["hmi_screened_candidate"] = {
-                "area_ha": hmi_diag.get("postpressure_candidate_area_ha"),
-                "pixels_10m": (
-                    hmi_diag.get("hmi_retention_by_threshold", {})
-                    .get(str(float(self.config.reference.hmi_max_for_reference)), {})
-                    .get("pixels_10m")
-                ),
-            }
-            candidate = candidate.selfMask()
-
-            area = ee.Image.pixelArea().updateMask(candidate).reduceRegion(
-                reducer=ee.Reducer.sum(), geometry=eco_context, scale=10,
-                maxPixels=1e9, bestEffort=True).get("area")
-            pix = candidate.reduceRegion(
-                reducer=ee.Reducer.count(), geometry=eco_context, scale=10,
-                maxPixels=1e9, bestEffort=True).values().get(0)
-            area_ha = self._as_float(area.getInfo() if area is not None else None)
-            pixels_raw = pix.getInfo() if pix is not None else None
-            pixels = None if pixels_raw is None else int(pixels_raw)
-            area_ha = None if area_ha is None else area_ha / 1e4
-
-            candidate_occ = occurrence.updateMask(candidate).reduceRegion(
-                reducer=ee.Reducer.mean(), geometry=eco_context, scale=10,
-                maxPixels=1e9, bestEffort=True).values().get(0)
-            candidate_occ = self._as_float(candidate_occ.getInfo() if candidate_occ is not None else None)
-            match_score = (
-                max(0.0, 1.0 - abs(candidate_occ - float(site_mean)) / max(tol, 1e-6))
-                if candidate_occ is not None else 0.0
-            )
-
-            temporal_ok = n >= self.config.reference.min_reference_observations and site_n >= self.config.reference.min_reference_observations
-            qa = evaluate_reference_candidate(
-                candidate_area_ha=area_ha,
-                candidate_pixels=pixels,
-                min_area_ha=self.config.reference.auto_min_candidate_area_ha,
-                min_pixels=self.config.reference.auto_min_candidate_pixels,
-                ecological_match_score=match_score if eco_ok else 0.0,
-                min_ecological_match_score=self.config.reference.min_ecological_match_score,
-                pressure_screen_pass=pressure_ok,
-                temporal_match_pass=temporal_ok,
-                spatial_quality_pass=eco_ok,
-                reference_state="least_disturbed_contemporary",
-                auto_approve=self.config.reference.auto_approve,
-                extra={
-                    "site_water_occurrence": float(site_mean),
-                    "candidate_mean_water_occurrence": candidate_occ,
-                    "water_occurrence_tolerance": tol,
-                    "minimum_water_occurrence": min_occ,
-                    "occurrence_method": method,
-                    "site_occurrence_method": site_method,
-                    "occurrence_images": int(n),
-                    "site_occurrence_images": int(site_n),
-                    "progressive_candidate_gates": progressive,
-                    **eco_diag,
-                    **hmi_diag,
-                },
-            )
-
-            ref_geom = None
-            if qa.approval_recommendation:
-                vectors = candidate.reduceToVectors(
-                    geometry=eco_context, scale=30, geometryType="polygon",
-                    eightConnected=True, labelProperty="reference_water",
-                    maxPixels=1e9, bestEffort=True,
-                )
-                ref_geom = vectors.geometry()
-
-            status = "validated_candidate" if qa.approval_recommendation else (
-                "candidate_rejected" if area_ha is not None else "candidate_unresolved"
-            )
-            return ReferencePopulation(
-                "auto_aquatic", "aquatic", "ecoregion_hydrology_low_pressure", status,
-                geometry=ref_geom, candidate_area_ha=area_ha, candidate_pixels=pixels,
-                approval=qa.approval_recommendation, reference_state="least_disturbed_contemporary",
-                diagnostics=qa.diagnostics,
-            )
+            return terminal
         except Exception as exc:
-            return ReferencePopulation(
-                "auto_aquatic", "aquatic", "ecoregion_hydrology_low_pressure",
-                f"error:{type(exc).__name__}",
-                reference_state="least_disturbed_contemporary",
-                diagnostics={"error": str(exc), "exception_type": type(exc).__name__},
-            )
+            return ReferencePopulation("auto_aquatic","aquatic","ecoregion_hydrology_low_pressure","error:"+type(exc).__name__,reference_state="least_disturbed_contemporary",diagnostics={"error":str(exc),"exception_type":type(exc).__name__})
 
     def terrestrial_candidate(self, master_geometry, start: Optional[str] = None, end: Optional[str] = None):
         import ee

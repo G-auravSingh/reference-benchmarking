@@ -58,6 +58,16 @@ C4 Pressure reported separately
 Readiness + report + complete manifest
 ```
 
+## Finite reference selection
+
+The production reference workflow has exactly three stages:
+
+1. **Strict low-pressure contemporary:** HMI ≤ 0.05 by default, plus ecological/hydrological, temporal, spatial and population QA.
+2. **Least-disturbed contemporary:** if Stage 1 fails, use the configured lowest-disturbance HMI quantile of the same comparable candidate population (10% by default).
+3. **Manual HMI-threshold fallback:** if Stage 2 fails, the Colab can accept one analyst-entered HMI threshold chosen from the reported HMI distribution and threshold-retention diagnostics. The same QA gates still apply.
+
+If Stage 3 is not configured or fails, the terminal result is `candidate_rejected_reference_unavailable`. The pipeline does not keep relaxing thresholds or searching indefinitely. Manual reference KML/CSV uploads are not part of the production workflow.
+
 ## What v1.1.0 contains
 
 ### Spatial framework

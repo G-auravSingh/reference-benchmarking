@@ -175,10 +175,3 @@ def test_missing_fauna_cannot_render_as_100(tmp_path):
     html = out.read_text()
     assert "C3 Fauna</span><span>Not assessed</span>" in html
     assert "C3 Fauna</span><div class=\"track\"><div class=\"fill\" style=\"width:100.0%\"" not in html
-
-
-def test_hmi_diagnostic_threshold_contract():
-    thresholds = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50]
-    assert thresholds == sorted(thresholds)
-    assert thresholds[0] == 0.05
-    assert thresholds[-1] == 0.50

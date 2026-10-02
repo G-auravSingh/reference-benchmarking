@@ -453,21 +453,15 @@ If small parameter changes produce large changes in the reference, the reference
 
 ## 16. Manual references
 
-Manual KML/CSV references remain supported, but they are **overrides and validation pathways**, not the normal requirement for every project.
+Manual reference KML/CSV uploads are intentionally **not supported in the production workflow**. The finite manual fallback is an HMI threshold entered in Colab after reviewing the automatic diagnostics.
 
-A manual reference should document:
+The manual HMI fallback should document:
 
-- who selected it;
-- why it is ecologically comparable;
-- what reference state it represents;
-- temporal basis;
-- spatial basis;
-- evidence source;
-- approval status.
-
-This preserves flexibility for exceptional ecosystems while keeping the normal platform workflow scalable.
-
----
+- the exact HMI threshold entered;
+- the HMI distribution used to justify it;
+- the strict threshold and least-disturbed quantile that were already attempted;
+- the resulting candidate area/pixel population;
+- the analyst rationale for treating the threshold as a best-attainable contemporary reference.
 
 ## 17. Dataset upgrade policy
 
@@ -577,3 +571,14 @@ The architecture is designed to support, without redesigning the downstream scor
 - ecosystem-specific distance-to-collapse models.
 
 The reference engine should therefore be treated as a **versioned scientific subsystem**, not as a helper function inside a metric script.
+
+## Finite Reference Escalation (v1.1.0)
+
+The adaptive engine does not relax reference criteria indefinitely. It follows a fixed sequence:
+
+1. **Strict minimally-disturbed contemporary** — configured HMI threshold (default 0.05) plus ecological, hydrological, temporal and population QA.
+2. **Least-disturbed contemporary** — if Tier A has no approved population, select the configured lowest-disturbance quantile of the same ecologically/hydrologically comparable candidate population (default 10%). This is explicitly *not* labelled pristine or minimally disturbed.
+3. **Manual HMI-threshold fallback** — if Stage B fails, the analyst may enter a defensible HMI threshold in Colab based on the reported HMI distribution. The same QA gates remain mandatory.
+4. **Terminal state** — if no manual threshold is configured or it fails QA, the result is `candidate_rejected_reference_unavailable`. The pipeline does not keep widening the search or relaxing thresholds automatically.
+
+The least-disturbed quantile is a governed selection rule, not a claim that the selected population is natural. Raster HMI observations are treated as spatial evidence; they are not counted as independent ecological replicates.

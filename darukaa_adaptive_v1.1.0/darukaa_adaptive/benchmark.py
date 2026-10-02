@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Dict, Iterable, Optional
 import math
 import pandas as pd
 
 from .registry import get_indicator_spec
-from .site import ee_geometry, make_shapely_domains, read_kml
+from .site import ee_geometry, make_shapely_domains
 from .reference_engine import AutomaticReferenceEngine, ReferencePopulation
 from .reference_condition import relative_departure, reference_attainment
 
@@ -91,12 +90,6 @@ def baseline_delta(current, baseline):
 def percent_change(current, baseline):
     return None if current is None or baseline in (None, 0) else float((current - baseline) / baseline * 100.0)
 
-
-def load_reference_csv(path: str | Path) -> Dict[str, float]:
-    df = pd.read_csv(path)
-    if not {"metric", "value"}.issubset(df.columns):
-        raise ValueError("Reference CSV must contain columns: ['metric', 'value']")
-    return {str(r.metric).strip(): float(r.value) for r in df.itertuples() if pd.notna(r.value)}
 
 
 def _bootstrap_ci(values, n_boot=200):
@@ -188,71 +181,47 @@ def benchmark_observation(metric_name, observed, reference, direction, reference
 
 
 class ReferenceEngine:
-    """Automatic reference engine with optional manual overrides."""
+    """Finite automatic reference engine: strict → least-disturbed → manual HMI."""
     def __init__(self, config, metrics):
         self.config, self.metrics = config, metrics
         self.auto = AutomaticReferenceEngine(config, getattr(metrics, "water", None))
         self.last_population: Optional[ReferencePopulation] = None
-
-    def build_tier1_geometry(self, path):
-        if not path:
-            return None
-        geom, _ = read_kml(path)
-        return geom
 
     def build_automatic_population(self, master_geometry, start, end, realm="aquatic"):
         pop = self.auto.build(master_geometry, realm, start, end)
         self.last_population = pop
         return pop.geometry, pop
 
-    def build_tier2_candidate_geometry(self, context_geometry, start, end):
-        # Backward-compatible alias: this is now an automatically derived candidate,
-        # not a generic context-ring benchmark.
-        try:
-            pop = self.auto.aquatic_candidate(context_geometry, start, end)
-            return pop.geometry, pop.status
-        except Exception as exc:
-            return None, f"error:{exc}"
-
     def _metric_reference_value(self, metric, geometry, start, end):
-        if geometry is None:
-            return None
+        if geometry is None: return None
         if metric == "water_extent": return self.metrics.water_extent(geometry, start, end).value
         if metric == "water_persistence": return self.metrics.water_persistence(geometry, start, end).value
         if metric == "ndci_proxy": return self.metrics.ndci(geometry, start, end).value
         if metric == "red_reflectance_turbidity_proxy": return self.metrics.turbidity_proxy(geometry, start, end).value
         if metric == "surface_algal_bloom_frequency": return self.metrics.bloom_frequency(geometry, start, end).value
         if metric == "riparian_ndvi":
-            domains = make_shapely_domains(geometry, self.config.spatial.riparian_buffer_m, self.config.spatial.context_buffer_km)
-            return self.metrics.riparian_ndvi(ee_geometry(domains["riparian_fixed"]), start, end).value
+            geometry = self._as_shapely_geometry(geometry)
+            d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
+            return self.metrics.riparian_ndvi(ee_geometry(d["riparian_fixed"]),start,end).value
         if metric == "shoreline_disturbance_fraction":
-            domains = make_shapely_domains(geometry, self.config.spatial.riparian_buffer_m, self.config.spatial.context_buffer_km)
-            return self.metrics.shoreline_disturbance(ee_geometry(domains["riparian_fixed"]), start, end).value
-        if metric in {"natural_landcover_fraction", "terrestrial_ndvi", "built_fraction"}:
-            for rec in self.metrics.run(geometry, start, end):
-                if rec.metric == metric: return rec.value
+            geometry = self._as_shapely_geometry(geometry)
+            d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
+            return self.metrics.shoreline_disturbance(ee_geometry(d["riparian_fixed"]),start,end).value
+        if metric in {"natural_landcover_fraction","terrestrial_ndvi","built_fraction"}:
+            for rec in self.metrics.run(geometry,start,end):
+                if rec.metric==metric: return rec.value
         return None
 
     @staticmethod
     def _as_shapely_geometry(geometry):
-        """Normalize Shapely/EE geometries before local spatial operations.
-
-        Automatic reference candidates are stored as Earth Engine geometries, while
-        manually supplied reference KMLs are Shapely geometries. Local buffering
-        requires the latter, so convert EE geometries explicitly at this boundary.
-        """
-        if geometry is None:
-            return None
+        if geometry is None: return None
         if hasattr(geometry, "__geo_interface__"):
             from shapely.geometry import shape
             return shape(geometry.__geo_interface__)
-        # Earth Engine Geometry objects expose getInfo(), not a Shapely centroid.
         if hasattr(geometry, "getInfo"):
             from shapely.geometry import shape
-            info = geometry.getInfo()
-            if not info:
-                return None
-            return shape(info)
+            info=geometry.getInfo()
+            return shape(info) if info else None
         return geometry
 
     def _reference_record(self, metric, geometry, start, end):
@@ -263,59 +232,47 @@ class ReferenceEngine:
         if metric == "red_reflectance_turbidity_proxy": return self.metrics.turbidity_proxy(geometry, start, end)
         if metric == "surface_algal_bloom_frequency": return self.metrics.bloom_frequency(geometry, start, end)
         if metric == "riparian_ndvi":
-            geometry = self._as_shapely_geometry(geometry)
-            d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
+            geometry=self._as_shapely_geometry(geometry); d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
             return self.metrics.riparian_ndvi(ee_geometry(d["riparian_fixed"]),start,end)
         if metric == "shoreline_disturbance_fraction":
-            geometry = self._as_shapely_geometry(geometry)
-            d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
+            geometry=self._as_shapely_geometry(geometry); d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
             return self.metrics.shoreline_disturbance(ee_geometry(d["riparian_fixed"]),start,end)
         if metric in {"natural_landcover_fraction","terrestrial_ndvi","built_fraction"}:
             for rec in self.metrics.run(geometry,start,end):
                 if rec.metric==metric: return rec
         return None
 
-    def build(self, metric_results, master_geometry, tier1_geometry=None, tier2_geometry=None, baseline_start=None, baseline_end=None):
+    def build(self, metric_results, master_geometry, baseline_start=None, baseline_end=None):
         if baseline_start is None or baseline_end is None:
             baseline_start, baseline_end = self.config.temporal.baseline_dates()
-        manual = load_reference_csv(self.config.reference.tier1_reference_csv) if (self.config.reference.tier1_enabled and self.config.reference.tier1_reference_csv) else {}
         auto_geom, auto_pop = (None, None)
-        if tier2_geometry is not None:
-            auto_geom = tier2_geometry
-        elif self.config.reference.automatic_enabled and self.config.reference.tier2_enabled:
+        if self.config.reference.automatic_enabled:
             auto_geom, auto_pop = self.build_automatic_population(master_geometry, baseline_start, baseline_end, realm="aquatic")
         results=[]
         for result in metric_results:
             if not result.reference_allowed:
                 results.append(benchmark_metric(result.metric, result.value, None, None))
                 continue
-            tier1_value = manual.get(result.metric)
-            if tier1_value is None and tier1_geometry is not None:
-                tier1_value = self._metric_reference_value(result.metric, tier1_geometry, baseline_start, baseline_end)
             auto_record = None if result.metric == "water_extent" else self._reference_record(result.metric, auto_geom, baseline_start, baseline_end) if auto_geom is not None else None
             auto_value = _reference_central_value(auto_record)
             auto_uncertainty = None
             if auto_record is not None and auto_record.std_dev is not None and auto_record.valid_pixels and auto_record.valid_pixels > 1:
-                # Descriptive SE proxy only. Spatial pixels are autocorrelated and are not treated as independent replicates.
-                auto_uncertainty = float(auto_record.std_dev) / (float(auto_record.valid_pixels) ** 0.5)
-            level = "tier1" if tier1_value is not None else "auto_aquatic"
-            approved = self.config.reference.tier1_approved_for_scoring if tier1_value is not None else bool(auto_pop and auto_pop.approval and auto_value is not None)
-            status = benchmark_metric(result.metric, result.value, tier1_value, auto_value,
-                                      allow_tier2=True, tier1_approved=approved if tier1_value is not None else False,
-                                      tier2_approved=approved if tier1_value is None else False,
-                                      reference_level=level, reference_uncertainty=auto_uncertainty,
-                                      reference_method=(auto_pop.method if tier1_value is None and auto_pop else "manual_or_external"),
-                                      reference_state=(auto_pop.reference_state if tier1_value is None and auto_pop else "external_or_manual"),
-                                      reference_approval_basis=("automated_reference_QA" if tier1_value is None and auto_pop and auto_pop.approval else "explicit_manual_approval" if tier1_value is not None and approved else "not_approved"),
-                                      reference_diagnostics={**(auto_pop.diagnostics if tier1_value is None and auto_pop else {}),
-                                                            "reference_distribution": _reference_distribution_diagnostics(auto_record)} if tier1_value is None else {} )
-            if tier1_value is None and auto_pop:
-                status.reference_method = auto_pop.method
-                status.reference_n = auto_record.valid_pixels if auto_record is not None and auto_record.valid_pixels is not None else auto_pop.candidate_pixels
-                status.reference_uncertainty = auto_uncertainty
-                status.reference_state = auto_pop.reference_state
-                status.reference_diagnostics = {**(auto_pop.diagnostics or {}), "reference_distribution": _reference_distribution_diagnostics(auto_record)}
-                status.notes = (f"Automatic reference population: {auto_pop.status}. The population is approved only after the automated ecological/pressure/temporal/spatial QA gate." if result.metric != "water_extent" else "Water extent is a site-specific hydroperiod/footprint metric; no false 100% spatial benchmark is used.")
+                auto_uncertainty=float(auto_record.std_dev)/(float(auto_record.valid_pixels)**0.5)
+            if auto_value is not None and auto_pop and auto_pop.approval:
+                selected_value, level, approved = auto_value, "automatic_reference", True
+                ref_method=auto_pop.method; ref_state=auto_pop.reference_state; approval_basis="automated_reference_QA"
+                ref_diag={**(auto_pop.diagnostics or {}),"reference_distribution":_reference_distribution_diagnostics(auto_record)}
+            else:
+                selected_value, level, approved = None, "none", False
+                ref_method=auto_pop.method if auto_pop else "automatic_reference_unavailable"
+                ref_state=auto_pop.reference_state if auto_pop else ""
+                approval_basis="not_approved"
+                ref_diag=(auto_pop.diagnostics if auto_pop else {}) | {"terminal_reference_status":auto_pop.status if auto_pop else "not_run"}
+            status = benchmark_metric(result.metric,result.value,None,selected_value if level=="automatic_reference" else None,allow_tier2=True,tier2_approved=approved,reference_level=level,reference_uncertainty=auto_uncertainty,reference_method=ref_method,reference_state=ref_state,reference_approval_basis=approval_basis,reference_diagnostics=ref_diag)
+            if level=="automatic_reference" and auto_pop:
+                status.reference_n=auto_record.valid_pixels if auto_record is not None and auto_record.valid_pixels is not None else auto_pop.candidate_pixels
+                status.reference_uncertainty=auto_uncertainty
+                status.notes=f"Automatic reference population: {auto_pop.status}. Finite selection: strict low-pressure → least-disturbed quantile → optional manual HMI threshold." if result.metric!="water_extent" else "Water extent is a site-specific hydroperiod/footprint metric; no false 100% spatial benchmark is used."
             results.append(status)
         return results
 

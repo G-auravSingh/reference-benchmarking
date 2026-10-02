@@ -19,10 +19,8 @@ class AdaptivePipeline:
         self.config=config
         errors=config.validate()
         if errors: raise ValueError('Invalid config: '+ '; '.join(errors))
-    def run(self,site_file,external_evidence_file=None,tier1_reference_file=None,tier1_reference_csv=None):
+    def run(self,site_file,external_evidence_file=None):
         geom,parts=read_kml(site_file); domains=make_domains(geom,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
-        if tier1_reference_file: self.config.reference.tier1_reference_kml=str(tier1_reference_file)
-        if tier1_reference_csv: self.config.reference.tier1_reference_csv=str(tier1_reference_csv)
         start,end=self.config.temporal.baseline_dates(); realm=self.config.profile.name
         metric_results=[]
         if realm in {'aquatic_lake','mixed'} or self.config.profile.allow_terrestrial_metrics is False:
@@ -34,16 +32,12 @@ class AdaptivePipeline:
         benchmarks=[]
         reference_populations={}
         if metric_results:
-            tier1_geometry = None
-            if tier1_reference_file and self.config.reference.tier1_enabled:
-                tier1_geometry = ReferenceEngine(self.config, LakeMetrics(self.config, WaterDetector(self.config))).build_tier1_geometry(tier1_reference_file)
-
             if realm in {"aquatic_lake","mixed"}:
                 aquatic_metrics=[m for m in metric_results if m.metric in {"water_extent","water_persistence","ndci_proxy","red_reflectance_turbidity_proxy","surface_algal_bloom_frequency","riparian_ndvi","riparian_ndvi_sen_slope","shoreline_disturbance_fraction","landcover_composition"}]
                 if aquatic_metrics:
                     lake_engine=LakeMetrics(self.config,WaterDetector(self.config))
                     lake_ref_engine=ReferenceEngine(self.config,lake_engine)
-                    benchmarks.extend(lake_ref_engine.build(aquatic_metrics,domains["boundary"],tier1_geometry=tier1_geometry,baseline_start=start,baseline_end=end))
+                    benchmarks.extend(lake_ref_engine.build(aquatic_metrics,domains["boundary"],baseline_start=start,baseline_end=end))
                     if lake_ref_engine.last_population is not None:
                         reference_populations["aquatic"] = lake_ref_engine.last_population.to_dict()
 
@@ -52,7 +46,7 @@ class AdaptivePipeline:
                 if terrestrial_metrics:
                     terr_engine=TerrestrialMetrics(self.config)
                     terr_ref_engine=ReferenceEngine(self.config,terr_engine)
-                    if self.config.reference.automatic_enabled and self.config.reference.tier2_enabled:
+                    if self.config.reference.automatic_enabled:
                         pop=terr_ref_engine.auto.terrestrial_candidate(domains["boundary"], start=start, end=end)
                         terr_ref_engine.last_population=pop
                         reference_populations["terrestrial"] = pop.to_dict()
@@ -88,10 +82,13 @@ class AdaptivePipeline:
             extra_manifest={
                 'reference_policy':{
                     'automatic_enabled':self.config.reference.automatic_enabled,
-                    'tier1_enabled':self.config.reference.tier1_enabled,
-                    'tier2_enabled':self.config.reference.tier2_enabled,
-                    'manual_reference_optional':True,
+                    'least_disturbed_enabled':self.config.reference.least_disturbed_enabled,
+                    'least_disturbed_quantile':self.config.reference.least_disturbed_quantile,
+                    'manual_hmi_fallback_enabled':self.config.reference.manual_hmi_fallback_enabled,
+                    'manual_hmi_threshold':self.config.reference.manual_hmi_threshold,
+                    'manual_hmi_reference_state':self.config.reference.manual_hmi_reference_state,
                     'approval_is_QA_gated':True,
+                    'automatic_escalation_is_finite':True,
                 },
                 'reference_populations': reference_populations,
             }

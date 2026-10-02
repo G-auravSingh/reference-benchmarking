@@ -7,8 +7,7 @@ profile:
     Dynamic water, littoral/shoreline and riparian analytical domains are derived from
     standardized EO rules. The automatic reference engine seeks an ecologically matched,
     least-disturbed contemporary reference population using hydrological similarity,
-    RESOLVE ecoregion compatibility and low-pressure screening. Manual reference KML/CSV
-    inputs are optional overrides. eDNA is optional.
+    RESOLVE ecoregion compatibility and low-pressure screening.     inputs are optional overrides. eDNA is optional.
 gee:
   project_id: null
   service_account: null
@@ -55,14 +54,13 @@ reference:
   auto_min_candidate_pixels: 500
   uncertainty_bootstrap_n: 200
   uncertainty_min_reference_n: 30
-  tier1_enabled: true
-  tier2_enabled: true
-  tier1_approved_for_scoring: false
-  tier2_approved_for_scoring: false
-  tier1_reference_kml: null
-  tier1_reference_csv: null
-  tier2_min_water_occurrence: 0.50
-  tier2_min_area_ha: 1.0
+  # Finite three-stage reference selection. Manual fallback is an HMI threshold
+  # entered in the Colab after reviewing the reported HMI diagnostics.
+  least_disturbed_enabled: true
+  least_disturbed_quantile: 0.10
+  manual_hmi_fallback_enabled: true
+  manual_hmi_threshold: null
+  manual_hmi_reference_state: best_attainable
 scoring:
   enabled: true
   composite_son_enabled: false

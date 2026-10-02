@@ -13,13 +13,12 @@
 #
 # These bands are a declared Darukaa product convention, not universal ecological thresholds.
 #
-# References are still metric-specific. For a score to be eligible, the selected reference
-# must be explicitly approved in the profile:
-#
-# reference:
-#   tier1_approved_for_scoring: true
-#   # OR
-#   tier2_approved_for_scoring: true
-#
-# No metric-specific threshold table is necessary for the fixed-band scoring model.
-# Use scoring.reference_ratio_thresholds_by_metric only for legacy migration, not new work.
+
+# Finite reference escalation
+# A: strict low-pressure contemporary; B: least-disturbed contemporary quantile;
+# C: explicit manual HMI threshold entered from the Colab diagnostics.
+least_disturbed_enabled: true
+least_disturbed_quantile: 0.10
+manual_hmi_fallback_enabled: true
+manual_hmi_threshold: null
+manual_hmi_reference_state: best_attainable

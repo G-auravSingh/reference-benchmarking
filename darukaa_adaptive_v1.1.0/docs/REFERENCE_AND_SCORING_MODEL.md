@@ -10,7 +10,7 @@ Reference construction and approval are separate:
 candidate construction → ecological/pressure/temporal/spatial QA → approval → metric benchmark
 ```
 
-Manual reference geometry/CSV remains an optional override.
+Manual reference geometry/CSV uploads are not part of the production workflow.
 
 ## 2. Reference states
 
@@ -23,7 +23,7 @@ Supported reference states are:
 - `paired_control`
 - `published_target`
 
-The default automated state is `least_disturbed_contemporary`.
+The default automated state is `least_disturbed_contemporary`. If both automatic stages fail, Colab exposes a single analyst-entered HMI threshold as the finite Stage-C fallback.
 
 ## 3. Reference distribution
 
@@ -90,4 +90,4 @@ The aquatic profile requires a score-eligible C3 Fauna pillar before an overall 
 
 The live Nandoshi notebook includes a release-blocking check for reference-engine execution errors. A candidate can legitimately be rejected by the QA gates; that is different from a failed dataset/API operation.
 
-Manual Tier-1 reference KML and CSV inputs remain supported. Tier-1 scoring requires the explicit Tier-1 approval configuration.
+The production workflow does not require or accept manual reference KML/CSV uploads. If both automatic contemporary stages fail, the Colab exposes a finite manual HMI-threshold fallback.

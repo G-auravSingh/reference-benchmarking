@@ -34,7 +34,7 @@ This release consolidates the full adaptive assessment workflow into one interna
 - Reference diagnostics distinguish candidate rejection from software execution failure.
 - Legacy `intactness_score_0_100` is retained only as a compatibility alias; production terminology is reference attainment.
 - Water extent is never assigned a false 100% reference.
-- Manual Tier-1 reference KML and CSV inputs are supported; explicit Tier-1 approval remains required for scoring.
+- Replaced manual reference-file fallback with a finite analyst-entered HMI-threshold fallback in Colab.
 
 ### Earth Engine implementation hardening
 
@@ -79,7 +79,8 @@ This release consolidates the full adaptive assessment workflow into one interna
 
 Earlier `darukaa_adaptive_v1.0.0` work remains represented by the historical package and migration documentation. Historical releases should be retained when exact reproducibility of an older assessment is required; they should not be mixed module-by-module with v1.1.0.
 
-### Reference-engine diagnostic hardening
-- Added pre-pressure HMI percentile diagnostics and threshold-retention diagnostics (0.05–0.50) for automatic aquatic reference candidates.
-- Added progressive candidate-area/pixel diagnostics before and after the HMI gate.
-- Corrected the HMI pressure gate so a sufficient low-HMI subset is not rejected merely because the unfiltered candidate population mean exceeds the threshold; downstream population QA remains decisive.
+### Reference escalation hardening
+- Added governed least-disturbed contemporary fallback using a configurable lower HMI quantile after strict minimally-disturbed screening fails.
+- Added terminal explicit manual HMI-threshold reference fallback without reference-file uploads.
+- Added HMI distribution and threshold-sensitivity diagnostics and retained the strict HMI threshold unchanged.
+- Corrected diagnostic naming/handling so candidate pixel counts are not presented as a fixed 10 m count when Earth Engine uses best-effort reduction.

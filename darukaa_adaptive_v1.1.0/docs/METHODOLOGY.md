@@ -39,10 +39,11 @@ The supplied boundary is treated as the **master assessment boundary**. It is no
 
 ### Optional inputs
 
-- Tier-1 reference KML.
-- Tier-1 reference CSV with `metric,value` columns.
 - External/field/acoustic/eDNA evidence CSV.
 - A project-specific Earth Engine configuration.
+- An optional analyst-entered manual HMI threshold in the Colab, used only after both automatic contemporary reference stages fail.
+
+The production workflow does **not** require or support uploading a reference KML/CSV.
 
 The pipeline records the SHA-256 hash of the supplied site file in the assessment manifest.
 
@@ -164,6 +165,28 @@ Supported reference states are:
 The detailed standard is in `docs/REFERENCE_CONDITION_METHODOLOGY.md`.
 
 ---
+
+## 8A. Finite reference escalation and manual HMI fallback
+
+Reference selection is deliberately finite. The production pipeline does not keep widening the search radius or relaxing ecological criteria until a reference is obtained. There are exactly three contemporary selection stages:
+
+### Stage A — strict low-pressure contemporary
+
+The engine first requires the ecologically/hydrologically comparable candidate population to satisfy the configured strict HMI screen (`HMI <= 0.05` by default), together with all population, temporal, spatial and ecological QA gates. If approved, this population becomes the reference.
+
+### Stage B — least-disturbed contemporary
+
+If Stage A cannot produce an approved population, the engine evaluates the same comparable candidate population and identifies its lower-disturbance tail. The default is the lowest 10% HMI quantile. This is a **least-disturbed contemporary** reference, not a pristine or minimally disturbed reference. The quantile is configurable and is not silently changed by the pipeline.
+
+### Stage C — manual HMI-threshold fallback
+
+If Stage B also fails, the Colab exposes `MANUAL_REFERENCE_HMI_THRESHOLD`. This is a single HMI threshold entered explicitly by the analyst after reviewing the reported pre-pressure HMI distribution, quantiles and threshold-retention diagnostics. The threshold is therefore a documented analyst decision, not an automatic relaxation.
+
+The manual threshold must remain within `[0,1]` and still passes the normal candidate area, pixel, ecological, temporal and spatial QA gates. The resulting reference is labelled `best_attainable` by default and records the exact manual threshold and the preceding automatic results in the manifest.
+
+If Stage C is not configured or fails QA, the process terminates with `candidate_rejected_reference_unavailable`. There is no fourth automatic stage and no manual KML/CSV upload mechanism.
+
+This architecture prevents an assessment from manufacturing a reference merely because scoring requires one. It also provides a practical route for highly modified landscapes where a strict low-pressure reference does not exist.
 
 ## 9. Automatic aquatic reference selection
 
@@ -529,3 +552,4 @@ Before a client result is issued, the target Earth Engine project must demonstra
 9. exact Git commit and input hash are retained.
 
 This live acceptance step is part of the release process, not an optional afterthought.
+

@@ -87,27 +87,18 @@ class SpatialConfig:
 @dataclass
 class ReferenceConfig:
     enabled: bool = True
-    tier1_enabled: bool = True
-    tier2_enabled: bool = True
 
-    # Approval is a governance decision: the benchmark may be visible before it is
-    # allowed to influence ecological scoring.
-    tier1_approved_for_scoring: bool = False
-    tier2_approved_for_scoring: bool = False
-
-    tier1_reference_kml: Optional[str] = None
-    tier1_reference_csv: Optional[str] = None
-    tier2_min_water_occurrence: float = 0.50
-    tier2_min_area_ha: float = 1.0
-
-    # Automatic reference population is the default; manual Tier-1 files are optional overrides.
-    # auto_approve means "permit approval after the automated QA gate passes"; it is
-    # NOT an unconditional approval switch.
+    # Finite automatic escalation. There are exactly three contemporary
+    # decision stages: strict low-pressure, least-disturbed quantile, and an
+    # explicitly entered manual HMI threshold. There is no manual reference KML/CSV upload pathway in the production workflow.
     automatic_enabled: bool = True
     auto_approve: bool = True
-    # Reference search is broader than the riparian/context analytical buffer.
-    # This is essential for finding genuinely comparable reference ecosystems rather
-    # than simply reusing the immediate surroundings of a potentially impacted site.
+    least_disturbed_enabled: bool = True
+    least_disturbed_quantile: float = 0.10
+    manual_hmi_fallback_enabled: bool = True
+    manual_hmi_threshold: Optional[float] = None
+    manual_hmi_reference_state: str = "best_attainable"
+
     search_radius_km: float = 25.0
     ecoregion_gee_asset: str = "RESOLVE/ECOREGIONS/2017"
     landcover_asset: str = "GOOGLE/DYNAMICWORLD/V1"
@@ -266,6 +257,12 @@ class AssessmentConfig:
             errors.append("reference.uncertainty_bootstrap_n must be >= 0")
         if self.reference.uncertainty_min_reference_n < 2:
             errors.append("reference.uncertainty_min_reference_n must be >= 2")
+        if not 0 < self.reference.least_disturbed_quantile <= 0.5:
+            errors.append("reference.least_disturbed_quantile must be in (0,0.5]")
+        if self.reference.manual_hmi_threshold is not None and not 0 <= self.reference.manual_hmi_threshold <= 1:
+            errors.append("reference.manual_hmi_threshold must be in [0,1] when supplied")
+        if self.reference.manual_hmi_reference_state not in {"best_attainable", "least_disturbed_contemporary"}:
+            errors.append("reference.manual_hmi_reference_state must be best_attainable or least_disturbed_contemporary")
 
         if self.scoring.min_condition_pillars < 1 or self.scoring.min_condition_pillars > 3:
             errors.append("scoring.min_condition_pillars must be between 1 and 3")
