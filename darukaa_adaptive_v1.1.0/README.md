@@ -58,15 +58,19 @@ C4 Pressure reported separately
 Readiness + report + complete manifest
 ```
 
-## Finite reference selection
+## Generalised finite reference selection
 
-The production reference workflow has exactly three stages:
+The production reference workflow uses one decision contract across aquatic, terrestrial and mixed assessments. It deliberately separates **ecological eligibility** from **disturbance ordering**. HMI can only order candidates that already belong to the ecologically eligible population; it cannot compensate for ecological mismatch.
 
-1. **Strict low-pressure contemporary:** HMI ≤ 0.05 by default, plus ecological/hydrological, temporal, spatial and population QA.
-2. **Least-disturbed contemporary:** if Stage 1 fails, use the configured lowest-disturbance HMI quantile of the same comparable candidate population (10% by default).
-3. **Manual HMI-threshold fallback:** if Stage 2 fails, the Colab can accept one analyst-entered HMI threshold chosen from the reported HMI distribution and threshold-retention diagnostics. The same QA gates still apply.
+There are exactly three contemporary stages:
+
+1. **Strict low-pressure contemporary:** configured HMI threshold, plus mandatory ecological, temporal, spatial and population QA.
+2. **Least-disturbed contemporary:** if Stage 1 fails, use the empirical low-HMI quantile within the *same ecologically eligible population* (10% by default).
+3. **Manual HMI-threshold fallback:** if Stage 2 fails, the Colab can accept one analyst-entered HMI threshold. The same ecological/temporal/spatial/population gates still apply.
 
 If Stage 3 is not configured or fails, the terminal result is `candidate_rejected_reference_unavailable`. The pipeline does not keep relaxing thresholds or searching indefinitely. Manual reference KML/CSV uploads are not part of the production workflow.
+
+Aquatic and terrestrial profiles define different ecological eligibility rules; mixed assessments maintain separate domain-specific reference populations.
 
 ## What v1.1.0 contains
 

@@ -47,6 +47,7 @@ reference:
   hmi_max_for_reference: 0.05
   hmi_context_radius_m: 250
   water_occurrence_tolerance: 0.25
+  # Legacy compatibility field; reference selection now uses hard ecological gates, not a weighted match score.
   min_ecological_match_score: 0.80
   min_reference_observations: 3
   auto_min_water_occurrence: 0.50

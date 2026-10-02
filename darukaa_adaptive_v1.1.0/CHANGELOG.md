@@ -84,3 +84,14 @@ Earlier `darukaa_adaptive_v1.0.0` work remains represented by the historical pac
 - Added terminal explicit manual HMI-threshold reference fallback without reference-file uploads.
 - Added HMI distribution and threshold-sensitivity diagnostics and retained the strict HMI threshold unchanged.
 - Corrected diagnostic naming/handling so candidate pixel counts are not presented as a fixed 10 m count when Earth Engine uses best-effort reduction.
+
+## v1.1.0 — Generalised reference-selection contract
+
+- Generalised reference selection into a realm-agnostic finite decision policy.
+- Separated ecological eligibility from disturbance ordering.
+- Removed the production use of a weighted/aggregate ecological-match score as a trade-off against HMI.
+- Aquatic candidates are now defined by hard ecological eligibility (ecoregion + water-occurrence regime), followed by HMI screening.
+- Terrestrial candidates now use the same finite strict → least-disturbed quantile → manual-HMI decision structure.
+- Mixed assessments retain separate aquatic and terrestrial reference populations.
+- Reduced production-run HMI diagnostics to one distribution calculation per reference stage; removed the expensive multi-threshold area sweep from the live pipeline.
+- Added unit tests for the finite reference-selection policy.

@@ -582,3 +582,83 @@ The adaptive engine does not relax reference criteria indefinitely. It follows a
 4. **Terminal state** — if no manual threshold is configured or it fails QA, the result is `candidate_rejected_reference_unavailable`. The pipeline does not keep widening the search or relaxing thresholds automatically.
 
 The least-disturbed quantile is a governed selection rule, not a claim that the selected population is natural. Raster HMI observations are treated as spatial evidence; they are not counted as independent ecological replicates.
+
+---
+
+## 15. Generalised reference-selection contract (v1.1.0)
+
+The reference engine is **realm-agnostic at the decision level**. Aquatic, terrestrial and mixed assessments use the same finite decision contract; only the ecological eligibility profile changes.
+
+### 15.1 Two different jobs — never one trade-off score
+
+The engine explicitly separates:
+
+**Ecological eligibility** — does the candidate belong to the same ecological reference population?
+
+**Disturbance ordering** — among ecologically eligible candidates, which currently available areas are least modified?
+
+HMI answers the second question. It does **not** compensate for failure of the first.
+
+The production engine therefore does **not** select a reference using a weighted formula such as:
+
+`ecological similarity × HMI preference`
+
+and does not repeatedly add new criteria until one candidate wins.
+
+### 15.2 Universal decision sequence
+
+```text
+Assessment site
+      ↓
+Define ecosystem/domain-specific eligible population
+      ↓
+Apply mandatory ecological + temporal + spatial + population QA
+      ↓
+Within that eligible population, screen/order by HMI
+      ↓
+Stage 1: strict low-pressure
+      ↓ if no approval
+Stage 2: empirical least-disturbed HMI quantile
+      ↓ if no approval
+Stage 3: one explicitly configured HMI threshold
+      ↓
+Approved reference OR reference unavailable
+```
+
+This is a **finite decision tree**, not an iterative optimisation process.
+
+### 15.3 Aquatic ecological profile
+
+For the current lake implementation, ecological eligibility is defined by:
+
+- RESOLVE ecoregion compatibility;
+- a minimum water-occurrence requirement; and
+- pixel-level compatibility with the focal site's water-occurrence regime within the configured tolerance.
+
+The candidate population is then filtered by HMI. The aggregate water-occurrence value is retained as a diagnostic, but it is **not converted into an arbitrary 0–1 ecological match score for trading against HMI**.
+
+### 15.4 Terrestrial ecological profile
+
+For the current terrestrial implementation, ecological eligibility is defined by:
+
+- RESOLVE ecoregion compatibility; and
+- a contemporary Dynamic World habitat stratum matching the focal site's modal class.
+
+The land-cover class is a **comparability stratum**, not evidence that the candidate is natural or intact. HMI then orders the eligible contemporary population by disturbance.
+
+Future forest/grassland/shrubland profiles may add scientifically justified structural, climatic, topographic or habitat variables without changing the decision contract.
+
+### 15.5 Mixed assessments
+
+A mixed assessment does not force aquatic and terrestrial pixels into one reference population. It constructs **separate domain-specific reference populations** and passes them to the relevant metric groups.
+
+This is important for sites containing, for example, forest + grassland + wetland or water + terrestrial margins. The reference engine therefore remains general without pretending that all ecosystem components share one ecological reference state.
+
+### 15.6 What constitutes the endpoint
+
+The algorithm is considered complete when it can do one of two things without analyst rescue:
+
+1. produce an approved reference population satisfying all fixed gates; or
+2. return `reference_unavailable` with a documented reason.
+
+The engine must not be modified simply because one test site fails to produce a reference. A failure at one site is an ecological result unless it exposes a software error or a demonstrably incorrect general rule.
