@@ -22,41 +22,45 @@ For the complete methodology, read:
 
 ## Full architecture
 
+The production architecture is **EMU-first**. KML/KMZ remains a supported input, but Site Selection handoff is the preferred project-scale interface.
+
 ```text
-Project KML/KMZ
+Site Selection handoff / GeoJSON / KML-KMZ / single polygon
       ↓
-Geometry QA + SHA-256 provenance
+Canonical project + EMU model
       ↓
-Standard ecological domains
+Geometry QA + provenance
       ↓
-Raw metric extraction
+Domain routing (terrestrial / aquatic / mixed)
+      ↓
+Ecological characterization + standardized domains
+      ↓
+Raw metric extraction through extensible indicator registry
       ↓
 Measurement QA/QC
       ↓
-Reference-condition construction
-      ├── ecological comparability
-      ├── pressure screening
-      ├── temporal matching
-      ├── spatial quality
-      └── population adequacy
+Domain-specific reference-condition construction
       ↓
 Reference QA / approval
       ↓
 Reference distribution + central estimator
       ↓
-Direction-aware benchmarking
-      ├── relative departure
-      ├── reference attainment
-      └── uncertainty/diagnostics
+Direction-aware metric benchmarking
       ↓
-Score eligibility
+EMU score eligibility / readiness
       ↓
-C1 Extent + C2 Vegetation + C3 Fauna
-      +
-C4 Pressure reported separately
+EMU report + machine-readable outputs
       ↓
-Readiness + report + complete manifest
+Project-level coverage-aware aggregation
+      ↓
+Client report + complete provenance manifest
+
+Project → EMUs → reference populations → metrics → benchmarks → aggregation
 ```
+
+The assessment engine never creates a pooled reference population simply because EMUs belong to one client project. Mixed projects retain separate aquatic and terrestrial reference populations.
+
+For the formal upstream interface, see `docs/EMU_AND_HANDOFF_SPECIFICATION.md`. For the metric/plugin contract, see `docs/METRIC_REGISTRY_AND_EXTENSIBILITY.md`.
 
 ## Generalised finite reference selection
 
@@ -150,6 +154,14 @@ See `docs/REFERENCE_CONDITION_METHODOLOGY.md` for the full standard.
 The configured TNC Global Human Modification v3 static 90 m product is an **Earth Engine ImageCollection**, not a single `ee.Image`. The reference engine loads it accordingly and uses the `All_threats_combined` band.
 
 RESOLVE Ecoregions 2017 is a terrestrial FeatureCollection. For aquatic assessments it is used as a surrounding biogeographic comparability stratum, not as a lake typology.
+
+## Running the generalized production workflow
+
+Open:
+
+`notebooks/Darukaa_Adaptive_Biodiversity_Assessment_Colab.ipynb`
+
+The generalized notebook accepts Site Selection handoff ZIPs, handoff manifests, GeoJSON, KML/KMZ and single polygons. It routes each EMU by domain and writes an auditable EMU output tree plus project-level aggregation tables. The former Nandoshi-specific notebook is retained only as a historical validation workflow during the transition and should not be used as the generalized client interface.
 
 ## Running the Nandoshi validation workflow
 

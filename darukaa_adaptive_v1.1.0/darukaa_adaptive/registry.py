@@ -348,3 +348,43 @@ def get_metric_spec(name: str) -> MetricSpec:
 
 def names() -> List[str]:
     return [x.legacy_name for x in LEGACY_METRIC_SPECS]
+
+# --- Generalized extensibility API -------------------------------------------------
+# The built-in indicators remain immutable metadata, while future EO, acoustic,
+# eDNA, camera-trap, field and model-derived indicators can register through the
+# same contract. Registration is process-local and intentionally explicit.
+
+INDICATOR_REGISTRY: Dict[str, IndicatorSpec] = {x.name: x for x in AQUATIC_INDICATORS}
+
+
+def validate_indicator_spec(spec: IndicatorSpec) -> None:
+    if not spec.name or any(c.isspace() for c in spec.name):
+        raise ValueError("Indicator name must be a non-empty machine-readable identifier")
+    if spec.pillar not in PILLARS:
+        raise ValueError(f"Unknown pillar: {spec.pillar}")
+    if spec.direction not in {"higher_is_better", "lower_is_better", "reference_target", "context_dependent"}:
+        raise ValueError(f"Unsupported direction: {spec.direction}")
+    if spec.default_scoring not in {"reference_relative", "contextual", "raw", "none"}:
+        raise ValueError(f"Unsupported scoring pathway: {spec.default_scoring}")
+    if spec.reference_allowed and spec.reference_type == "none":
+        raise ValueError("reference_allowed=True requires a reference_type")
+
+
+def register_indicator(spec: IndicatorSpec, *, overwrite: bool = False) -> IndicatorSpec:
+    """Register an indicator using the production metadata contract."""
+    validate_indicator_spec(spec)
+    if spec.name in INDICATOR_REGISTRY and not overwrite:
+        raise KeyError(f"Indicator already registered: {spec.name}")
+    INDICATOR_REGISTRY[spec.name] = spec
+    return spec
+
+
+def get_registered_indicator(name: str) -> IndicatorSpec:
+    try:
+        return INDICATOR_REGISTRY[name]
+    except KeyError as exc:
+        raise KeyError(f"Unknown registered indicator: {name}") from exc
+
+
+def registered_indicator_table() -> List[Dict]:
+    return [asdict(x) for x in INDICATOR_REGISTRY.values()]

@@ -1,4 +1,19 @@
-# Changelog — darukaa_adaptive_v1.1.0
+# Changelog
+
+## v1.1.0 — Generalized EMU architecture
+
+- Added canonical project/EMU input model.
+- Added Site Selection handoff contract and handoff validation.
+- Added ZIP, GeoJSON, FeatureCollection, KML/KMZ and single-geometry ingestion paths.
+- Added per-EMU domain routing for terrestrial, aquatic and mixed projects.
+- Added project-level coverage-aware metric and pillar aggregation while retaining EMU-level outputs.
+- Added extensible indicator registry API for future EO, field, acoustic, camera-trap, eDNA and model-derived indicators.
+- Added generalized production Colab notebook.
+- Added formal EMU/handoff and metric-extensibility methodology documents.
+- Retained finite reference-condition policy: ecological eligibility is a gate; HMI orders eligible candidates and does not compensate for ecological mismatch.
+- No manual KML/CSV reference fallback was introduced.
+- Existing Nandoshi aquatic workflow remains available as a historical validation path during transition.
+
 
 ## v1.1.0 — Complete adaptive methodology and pipeline build — 2026-10-01
 

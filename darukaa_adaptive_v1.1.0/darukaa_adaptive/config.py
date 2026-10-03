@@ -133,7 +133,7 @@ class ScoringConfig:
     min_condition_pillars: int = 3
     total_pillars: int = 4
     require_complete_pillars: bool = False
-    require_fauna_for_condition: bool = False
+    require_fauna_for_condition: bool = True
     pressure_separate_from_condition: bool = True
 
     # Retained only for migration compatibility. Production scoring does not use

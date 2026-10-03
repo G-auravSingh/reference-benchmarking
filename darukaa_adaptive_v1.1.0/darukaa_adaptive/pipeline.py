@@ -1,6 +1,7 @@
 """Profile-driven adaptive biodiversity assessment pipeline."""
 from __future__ import annotations
 from pathlib import Path
+import copy
 import pandas as pd
 from .benchmark import ReferenceEngine
 from .config import AssessmentConfig
@@ -11,6 +12,8 @@ from .readiness import assess_readiness
 from .report import write_assessment
 from .scoring import build_scorecard, score_external_observations
 from .site import area_ha, make_domains, read_kml
+from .inputs import load_project_input
+from .aggregation import aggregate_emu_scorecards
 from .terrestrial import TerrestrialMetrics
 from .water import WaterDetector
 
@@ -19,8 +22,12 @@ class AdaptivePipeline:
         self.config=config
         errors=config.validate()
         if errors: raise ValueError('Invalid config: '+ '; '.join(errors))
-    def run(self,site_file,external_evidence_file=None):
-        geom,parts=read_kml(site_file); domains=make_domains(geom,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
+    def _run_single(self,site_file,external_evidence_file=None,geometry=None,emu_id=None):
+        if geometry is None:
+            geom,parts=read_kml(site_file)
+        else:
+            geom=geometry; parts={emu_id or "EMU_001": geometry}
+        domains=make_domains(geom,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
         start,end=self.config.temporal.baseline_dates(); realm=self.config.profile.name
         metric_results=[]
         if realm in {'aquatic_lake','mixed'} or self.config.profile.allow_terrestrial_metrics is False:
@@ -97,5 +104,66 @@ class AdaptivePipeline:
                 'reference_populations':reference_populations,'metric_concern':scored,'pillars':pillars,'overall':overall,
                 'water_periods':water_periods,'landcover':landcover,'boundary_area_ha':area_ha(geom),'readiness':readiness,
                 'evidence':evidence_df,'outputs':paths}
+
+    def run(self, site_file, external_evidence_file=None, *, project_id=None, project_name=None, domain="auto"):
+        """Run either a single supported input or a multi-EMU project.
+
+        Every EMU is assessed independently first. Reference populations and scores
+        are never pooled across incompatible ecological domains. Project aggregation
+        is performed only after EMU-level outputs exist.
+        """
+        project = load_project_input(site_file, project_id=project_id, project_name=project_name, domain=domain)
+        root_output = Path(self.config.output_dir) / project.project_id
+        root_output.mkdir(parents=True, exist_ok=True)
+        emu_results = []
+        metric_rows=[]; pillar_rows=[]
+        project_evidence = None
+        if external_evidence_file:
+            project_evidence = load_evidence_csv(external_evidence_file)
+            if "emu_id" not in project_evidence.columns:
+                raise ValueError("Multi-EMU external evidence must include an 'emu_id' column; otherwise project-level evidence would be duplicated across EMUs.")
+        original_output = self.config.output_dir
+        try:
+            for emu in project.emus:
+                local_cfg = copy.deepcopy(self.config)
+                local_cfg.output_dir = str(root_output / emu.emu_id)
+                resolved_domain = emu.resolved_domain(project.project_domain)
+                # A mixed project is routed at EMU level; profile selection is therefore
+                # explicit per EMU rather than allowing aquatic metrics into terrestrial units.
+                if resolved_domain == "aquatic":
+                    local_cfg.profile.name = "aquatic_lake"
+                elif resolved_domain == "terrestrial":
+                    local_cfg.profile.name = "terrestrial"
+                runner = AdaptivePipeline(local_cfg)
+                emu_evidence_file = None
+                if project_evidence is not None:
+                    # Preserve the existing CSV contract by writing an EMU-scoped temporary
+                    # file; evidence is never duplicated across EMUs.
+                    import tempfile
+                    evidence_tmp = Path(tempfile.mkdtemp(prefix=f"darukaa_evidence_{emu.emu_id}_")) / "external_evidence.csv"
+                    project_evidence[project_evidence["emu_id"].astype(str) == str(emu.emu_id)].to_csv(evidence_tmp, index=False)
+                    emu_evidence_file = str(evidence_tmp)
+                result = runner._run_single(site_file, emu_evidence_file, geometry=emu.geometry, emu_id=emu.emu_id)
+                result["emu_id"] = emu.emu_id
+                result["emu_domain"] = resolved_domain
+                result["emu_area_ha"] = emu.area_ha or area_ha(emu.geometry)
+                result["parent_zone"] = emu.parent_zone
+                result["input_attributes"] = emu.attributes
+                emu_results.append(result)
+                for m in result.get("metrics", []):
+                    metric_rows.append({"emu_id":emu.emu_id,"area_ha":result["emu_area_ha"],"metric":m.metric,"value":m.value,"domain":resolved_domain})
+                for _, row in (result.get("pillars") if hasattr(result.get("pillars"), "iterrows") else pd.DataFrame()).iterrows():
+                    pillar_rows.append({"emu_id":emu.emu_id,"area_ha":result["emu_area_ha"],**row.to_dict()})
+        finally:
+            self.config.output_dir = original_output
+
+        metric_agg=aggregate_emu_scorecards(metric_rows)
+        pillar_agg=__import__("darukaa_adaptive.aggregation",fromlist=["aggregate_pillar_scores"]).aggregate_pillar_scores(pillar_rows)
+        manifest={"project":project.to_dict(),"n_emus":len(project.emus),"emu_results":[{"emu_id":r["emu_id"],"domain":r["emu_domain"],"area_ha":r["emu_area_ha"],"output":r.get("outputs")} for r in emu_results],"aggregation":{"metric_rows":metric_agg.to_dict("records"),"pillar_rows":pillar_agg.to_dict("records")}}
+        manifest_path=root_output/"project_assessment_manifest.json"
+        manifest_path.write_text(__import__("json").dumps(manifest,indent=2,default=str),encoding="utf-8")
+        metric_agg.to_csv(root_output/"project_metric_aggregation.csv",index=False)
+        pillar_agg.to_csv(root_output/"project_pillar_aggregation.csv",index=False)
+        return {"project":project,"emus":emu_results,"metric_aggregation":metric_agg,"pillar_aggregation":pillar_agg,"manifest":manifest,"output_dir":root_output}
 
 LakePipeline=AdaptivePipeline
