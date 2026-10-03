@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import zipfile
 import tempfile
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -132,24 +133,83 @@ def _load_geojson(path: Path) -> Tuple[List[EMU], Dict[str, Any]]:
     return emus, metadata
 
 
+def _resolve_handoff_tile(root: Path, raw_path: str | Path) -> Path:
+    """Resolve a Site Selection tile path inside an extracted handoff.
+
+    The Site Selection pipeline writes absolute paths into ``tile_paths`` because
+    the manifest is primarily consumed in-place. A ZIP handoff necessarily changes
+    the filesystem root, so absolute source paths must be mapped to the corresponding
+    file carried inside the archive. Resolution is deterministic and fails loudly on
+    ambiguity rather than silently choosing a stale tile.
+    """
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        direct = root / candidate
+        if direct.exists():
+            return direct
+        # Be tolerant of manifests whose paths include an outer handoff directory.
+        matches = list(root.rglob(candidate.name))
+    else:
+        # Absolute paths are from the source Site Selection runtime. First try the
+        # suffix beginning at a conventional ``tiles`` directory.
+        parts = candidate.parts
+        if "tiles" in parts:
+            suffix = Path(*parts[parts.index("tiles"):])
+            direct = root / suffix
+            if direct.exists():
+                return direct
+        matches = list(root.rglob(candidate.name))
+    if not matches:
+        raise FileNotFoundError(
+            f"Handoff tile '{raw_path}' is not present in the extracted handoff")
+    if len(matches) > 1:
+        raise ValueError(
+            f"Handoff tile path '{raw_path}' is ambiguous after extraction: "
+            + ", ".join(str(m.relative_to(root)) for m in matches))
+    return matches[0]
+
+
 def _load_handoff_manifest(path: Path) -> ProjectInput:
     data = json.loads(path.read_text(encoding="utf-8"))
     root = path.parent
     tile_manifest = data
-    if "tiles" not in tile_manifest and "tile_manifest" in data:
+    if "tiles" not in tile_manifest and "emus" not in tile_manifest and "features" not in tile_manifest and "tile_paths" not in tile_manifest and "tile_manifest" in data:
         ref = Path(data["tile_manifest"])
         tile_manifest = json.loads((root / ref).read_text(encoding="utf-8"))
-    tiles = tile_manifest.get("tiles") or tile_manifest.get("emus") or tile_manifest.get("features")
+
+    # Native Site Selection contract: tile_paths + tile_labels. Keep this as a
+    # first-class contract rather than requiring a reformat into Adaptive's internal
+    # representation. Optional per-tile metadata can be introduced later without
+    # breaking this base contract.
+    if isinstance(tile_manifest.get("tile_paths"), list):
+        paths = tile_manifest["tile_paths"]
+        labels = tile_manifest.get("tile_labels") or []
+        if not paths:
+            raise ValueError("Handoff manifest 'tile_paths' must be non-empty")
+        if labels and len(labels) != len(paths):
+            raise ValueError("Handoff manifest 'tile_labels' must match 'tile_paths' length")
+        tiles = []
+        for i, raw_path in enumerate(paths):
+            item = {"path": raw_path}
+            if labels:
+                item["emu_id"] = labels[i]
+            tiles.append(item)
+    else:
+        tiles = tile_manifest.get("tiles") or tile_manifest.get("emus") or tile_manifest.get("features")
+
     if not isinstance(tiles, list) or not tiles:
-        raise ValueError("Handoff manifest must contain a non-empty 'tiles' or 'emus' list")
+        raise ValueError(
+            "Handoff manifest must contain the Site Selection 'tile_paths' list "
+            "or a non-empty 'tiles'/'emus' list")
+
     emus: List[EMU] = []
     for i, item in enumerate(tiles, 1):
         if isinstance(item, str):
             item = {"path": item}
-        rel = item.get("path") or item.get("file") or item.get("geojson") or item.get("tile_path")
-        if not rel: raise ValueError(f"Handoff tile {i} has no GeoJSON path")
-        tile_path = root / rel
-        if not tile_path.exists(): raise FileNotFoundError(tile_path)
+        raw_path = item.get("path") or item.get("file") or item.get("geojson") or item.get("tile_path")
+        if not raw_path:
+            raise ValueError(f"Handoff tile {i} has no GeoJSON path")
+        tile_path = _resolve_handoff_tile(root, raw_path)
         tile_emus, _ = _load_geojson(tile_path)
         if len(tile_emus) != 1:
             raise ValueError(f"Handoff tile {tile_path} must contain exactly one EMU feature")
@@ -157,7 +217,8 @@ def _load_handoff_manifest(path: Path) -> ProjectInput:
         emu_id = str(item.get("emu_id") or item.get("id") or e.emu_id)
         domain = str(item.get("domain") or e.domain or "auto").lower()
         parent = item.get("parent_zone") or item.get("parent_zone_id")
-        attrs = dict(e.attributes); attrs.update({k:v for k,v in item.items() if k not in {"path","file","geojson","tile_path"}})
+        attrs = dict(e.attributes)
+        attrs.update({k: v for k, v in item.items() if k not in {"path", "file", "geojson", "tile_path"}})
         emus.append(EMU(emu_id, e.geometry, domain, parent, e.area_ha, item.get("source_project"), attrs))
     project_id = str(data.get("project_id") or data.get("project") or path.stem)
     return ProjectInput(project_id, str(data.get("project_name") or project_id), str(path), emus, str(data.get("domain") or data.get("project_domain") or "auto"), data.get("metadata") or {})
@@ -202,7 +263,7 @@ def load_project_input(source: str | Path | BaseGeometry, *, project_id: Optiona
         elif suffix in {".geojson", ".json"}:
             raw = json.loads(path.read_text(encoding="utf-8"))
             # Explicit handoff manifests are JSON metadata documents, not GeoJSON.
-            if "tiles" in raw or "emus" in raw or "tile_manifest" in raw:
+            if "tiles" in raw or "emus" in raw or "tile_paths" in raw or "tile_manifest" in raw:
                 project = _load_handoff_manifest(path)
             else:
                 emus, meta = _load_geojson(path)

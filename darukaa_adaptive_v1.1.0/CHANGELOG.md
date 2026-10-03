@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-03 — Site Selection handoff compatibility hardening
+
+- Added native ingestion of the Site Selection `tile_manifest.json` contract using `tile_paths` and `tile_labels`.
+- Rebased absolute Site Selection tile paths safely when a handoff is transferred as a ZIP.
+- Added explicit ambiguity/missing-tile failures rather than silently selecting files.
+- Added regression tests for both direct manifests and zipped handoffs.
+
 ## v1.1.0 — Generalized EMU architecture
 
 - Added canonical project/EMU input model.
