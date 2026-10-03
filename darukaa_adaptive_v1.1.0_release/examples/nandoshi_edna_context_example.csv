@@ -1,0 +1,2 @@
+metric,raw_value,pillar,direction,units,reference_value,reference_type,reference_level,reference_approved_for_scoring,status,evidence_source,evidence_type,notes
+edna_persistence_potential,0.1728,C3_fauna,context_dependent,index,,,none,false,contextual,SayTrees-NandoshiLake_Report.pdf,eDNA_context,"Example only: persistence-potential proxy reported by the Nandoshi assessment; not a direct eDNA taxon observation and not score-eligible by default."
