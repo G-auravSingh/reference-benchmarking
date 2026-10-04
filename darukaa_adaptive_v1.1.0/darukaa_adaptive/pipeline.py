@@ -9,7 +9,7 @@ from .evidence import load_evidence_csv
 from .metrics import LakeMetrics
 from .qa import qa_metrics
 from .readiness import assess_readiness
-from .report import write_assessment
+from .report import write_assessment, write_project_html_report
 from .scoring import build_scorecard, score_external_observations
 from .site import area_ha, make_domains, read_kml
 from .inputs import load_project_input
@@ -113,7 +113,10 @@ class AdaptivePipeline:
         is performed only after EMU-level outputs exist.
         """
         project = load_project_input(site_file, project_id=project_id, project_name=project_name, domain=domain)
-        root_output = Path(self.config.output_dir) / project.project_id
+        # Human-readable project folder; preserve project_id inside the manifest.
+        import re
+        project_folder = re.sub(r"[^A-Za-z0-9._-]+", "_", str(project.project_name or project.project_id)).strip("._") or "project"
+        root_output = Path(self.config.output_dir) / project_folder
         root_output.mkdir(parents=True, exist_ok=True)
         emu_results = []
         metric_rows=[]; pillar_rows=[]
@@ -164,6 +167,9 @@ class AdaptivePipeline:
         manifest_path.write_text(__import__("json").dumps(manifest,indent=2,default=str),encoding="utf-8")
         metric_agg.to_csv(root_output/"project_metric_aggregation.csv",index=False)
         pillar_agg.to_csv(root_output/"project_pillar_aggregation.csv",index=False)
-        return {"project":project,"emus":emu_results,"metric_aggregation":metric_agg,"pillar_aggregation":pillar_agg,"manifest":manifest,"output_dir":root_output}
+        project_report = write_project_html_report(root_output, project, emu_results, metric_agg, pillar_agg, manifest)
+        manifest["project_report"] = project_report
+        manifest_path.write_text(__import__('json').dumps(manifest, indent=2, default=str), encoding='utf-8')
+        return {"project":project,"emus":emu_results,"metric_aggregation":metric_agg,"pillar_aggregation":pillar_agg,"manifest":manifest,"output_dir":root_output,"project_report":project_report}
 
 LakePipeline=AdaptivePipeline

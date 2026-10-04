@@ -132,3 +132,82 @@ def write_assessment(output_dir, config, site_path, boundary_area_ha, domains, m
     html_path=write_html_report(out,config,site_path,boundary_area_ha,domains,metric_df,bdf,sdf,pdf,overall or {},pd.DataFrame(water_periods),readiness,edf)
     (out/'README_OUTPUTS.md').write_text('# Assessment outputs\n\nThis directory is the auditable output bundle for the Darukaa Adaptive assessment. It contains raw measurements, measurement QA, reference governance, reference-relative benchmarking, score eligibility, pillar/overall scoring, water-period diagnostics, optional external/eDNA evidence, provenance, and the self-contained Year-0 HTML report. Contextual indicators remain visible but are not silently converted into composite scores.\n\n## Key files\n- `metric_scorecard.csv`: raw metric measurements and data-quality fields.\n- `metric_qa_scorecard.csv`: structural QA/QC.\n- `reference_governance.csv`: reference selection, approval and reference-relative interpretation.\n- `benchmark_scorecard.csv`: complete benchmark records including diagnostics.\n- `metric_concern_scorecard.csv`: score eligibility and concern bands.\n- `pillar_scorecard.csv` / `overall_scorecard.json`: aggregation.\n- `assessment_manifest.json`: exact input hash, configuration, package version and Git commit.\n- `Year0_Biodiversity_Baseline_Report.html`: client-facing report.\n',encoding='utf-8')
     return {"metric_scorecard":str(out/'metric_scorecard.csv'),"benchmark_scorecard":str(out/'benchmark_scorecard.csv'),"reference_governance":str(out/'reference_governance.csv'),"metric_concern_scorecard":str(out/'metric_concern_scorecard.csv'),"pillar_scorecard":str(out/'pillar_scorecard.csv'),"water_periods":str(out/'water_periods.csv'),"readiness":str(out/'readiness.json'),"overall_scorecard":str(out/'overall_scorecard.json'),"manifest":str(out/'assessment_manifest.json'),"html_report":str(html_path),"external_evidence":str(out/'external_evidence.csv')}
+
+
+def _safe_filename(value: str) -> str:
+    import re
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "project"))
+    return text.strip("._") or "project"
+
+
+def write_project_html_report(out, project, emu_results, metric_agg, pillar_agg, manifest):
+    """Write a self-contained project-level HTML report for multi-EMU assessments."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    project_name = str(getattr(project, "project_name", None) or manifest.get("project", {}).get("project_name") or "Darukaa Project")
+    project_id = str(getattr(project, "project_id", None) or manifest.get("project", {}).get("project_id") or "project")
+    total_area = float(sum(float(r.get("emu_area_ha") or 0) for r in emu_results))
+    domains = [str(r.get("emu_domain") or "unknown") for r in emu_results]
+    domain_text = ", ".join(sorted(set(domains)))
+
+    ref_rows = []
+    for r in emu_results:
+        refs = r.get("reference_populations") or {}
+        if refs:
+            for domain, pop in refs.items():
+                ref_rows.append({
+                    "EMU": r.get("emu_id"),
+                    "Domain": domain,
+                    "Area (ha)": round(float(r.get("emu_area_ha") or 0), 3),
+                    "Reference status": pop.get("status"),
+                    "Approved": pop.get("approval"),
+                    "Reference state": pop.get("reference_state"),
+                    "Method": pop.get("method"),
+                    "Candidate area (ha)": pop.get("candidate_area_ha"),
+                    "Candidate pixels": pop.get("candidate_pixels"),
+                })
+        else:
+            ref_rows.append({"EMU": r.get("emu_id"), "Domain": r.get("emu_domain"), "Area (ha)": round(float(r.get("emu_area_ha") or 0), 3), "Reference status": "not available", "Approved": False, "Reference state": "", "Method": "", "Candidate area (ha)": None, "Candidate pixels": None})
+    ref_df = pd.DataFrame(ref_rows)
+    emu_df = pd.DataFrame([{
+        "EMU": r.get("emu_id"),
+        "Domain": r.get("emu_domain"),
+        "Area (ha)": round(float(r.get("emu_area_ha") or 0), 3),
+        "Reference approved": any(bool(v.get("approval")) for v in (r.get("reference_populations") or {}).values()),
+        "Reference state": ", ".join(sorted({str(v.get("reference_state")) for v in (r.get("reference_populations") or {}).values() if v.get("reference_state")})) or "—",
+        "Assessment report": "Year-0 HTML available in EMU output folder",
+    } for r in emu_results])
+    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    metric_df = metric_agg.copy() if isinstance(metric_agg, pd.DataFrame) else pd.DataFrame(metric_agg)
+    pillar_df = pillar_agg.copy() if isinstance(pillar_agg, pd.DataFrame) else pd.DataFrame(pillar_agg)
+    approved = int(emu_df["Reference approved"].sum()) if not emu_df.empty else 0
+    coverage = metric_df["coverage_weight"].mean() * 100 if not metric_df.empty and "coverage_weight" in metric_df.columns else None
+    report_name = f"{_safe_filename(project_name)}_Biodiversity_Baseline_Report.html"
+    coverage_text = f"{coverage:.1f}%" if coverage is not None else "Not available"
+
+    html_doc = f'''<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(project_name)} — Biodiversity Baseline Assessment</title>
+<style>
+body{{font-family:Inter,Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}} .wrap{{max-width:1240px;margin:auto;padding:30px}}
+.hero{{background:#13202b;color:white;padding:42px;border-radius:18px;margin-bottom:22px}} h1{{font-size:34px;margin:0 0 8px}} h2{{margin-top:34px;border-bottom:1px solid #d8dee4;padding-bottom:8px}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}} .card{{background:white;border:1px solid #e0e5ea;border-radius:12px;padding:18px}} .big{{font-size:29px;font-weight:700}} .muted{{color:#65727e}}
+.data{{width:100%;border-collapse:collapse;background:white;font-size:13px}} .data th,.data td{{padding:8px;border-bottom:1px solid #e6eaee;text-align:left}} .data th{{background:#eef2f5}}
+.notice{{background:#fff8e6;border-left:4px solid #c58a18;padding:12px 15px;margin:12px 0}} .empty{{padding:18px;background:#fff;border:1px dashed #b8c1ca;color:#697681}}
+footer{{margin-top:40px;color:#697681;font-size:12px}} code{{background:#eef2f5;padding:2px 4px;border-radius:4px}}
+</style></head><body><div class="wrap">
+<div class="hero"><h1>Biodiversity Baseline Assessment</h1><div>{html.escape(project_name)}</div><div class="muted" style="color:#cbd4da;margin-top:12px">Year-0 • Generalized EMU Framework v1.1.0 • Generated {generated}</div></div>
+<div class="grid"><div class="card"><div class="muted">Assessment area</div><div class="big">{total_area:.2f} ha</div></div><div class="card"><div class="muted">EMUs assessed</div><div class="big">{len(emu_results)}</div></div><div class="card"><div class="muted">Reference-approved EMUs</div><div class="big">{approved} / {len(emu_results)}</div></div><div class="card"><div class="muted">Domains</div><div class="big" style="font-size:20px">{html.escape(domain_text)}</div></div></div>
+<h2>Executive Summary</h2><p>This project-level report consolidates the completed EMU assessments while preserving each EMU as an auditable ecological management unit. Metrics are aggregated only after EMU-level measurement, QA/QC and reference-condition processing. Incompatible ecological domains are not pooled into a common reference population.</p>
+<div class="notice"><b>Interpretation guardrail:</b> project-level aggregation describes the coverage and weighted state of the assessed EMUs. It does not convert incomplete evidence into zero, and it does not create a project-wide condition score unless that score is explicitly supported by the configured scoring architecture.</div>
+<h2>1. Project &amp; Assessment Architecture</h2><div class="grid"><div class="card"><b>Project ID</b><br>{html.escape(project_id)}</div><div class="card"><b>Project domain</b><br>{html.escape(str(getattr(project, 'project_domain', 'auto')))}</div><div class="card"><b>Assessment unit</b><br>EMU; multipart/disconnected geometry retained</div><div class="card"><b>Metric aggregation</b><br>Area-weighted across valid EMU observations</div></div>
+<h2>2. EMU Coverage</h2>{_table(emu_df)}
+<h2>3. Reference-Condition Governance</h2><p>Reference populations are constructed and approved at EMU/domain level. Approval is QA-gated and does not mean ecological perfection; it means the candidate satisfied the configured reference-selection and quality criteria for benchmarking.</p>{_table(ref_df)}
+<h2>4. Project-Level Metric Aggregation</h2>{_table(metric_df)}
+<h2>5. Project-Level Pillar Aggregation</h2>{_table(pillar_df)}
+<h2>6. Coverage &amp; Data Quality</h2><div class="grid"><div class="card"><div class="muted">Mean metric coverage</div><div class="big">{coverage_text}</div></div><div class="card"><div class="muted">Reference governance</div><div class="big">{approved}/{len(emu_results)} approved</div></div></div>
+<p>Coverage weights are retained per metric and pillar. A project value is not interpreted independently of its <code>n_emus</code>, <code>n_emus_total</code> and <code>coverage_weight</code>.</p>
+<h2>7. Deliverables</h2><ul><li>Per-EMU output folders with metric, QA, benchmark, reference governance and Year-0 reports.</li><li><code>project_metric_aggregation.csv</code> and <code>project_pillar_aggregation.csv</code>.</li><li><code>project_assessment_manifest.json</code> containing the normalized EMU model, outputs and aggregation coverage.</li><li>This project-level HTML report.</li></ul>
+<footer>Darukaa Adaptive Biodiversity Assessment • Project ID: {html.escape(project_id)} • Package v1.1.0</footer>
+</div></body></html>'''
+    path = out / report_name
+    path.write_text(html_doc, encoding="utf-8")
+    return str(path)
