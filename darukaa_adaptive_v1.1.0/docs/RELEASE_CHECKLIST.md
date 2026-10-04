@@ -1,69 +1,73 @@
-# v1.1.0 Release Checklist
+# v1.1.0 Production Release Checklist
 
-## Before replacing the GitHub package folder
+## Package freeze
 
-- [ ] Replace the entire `darukaa_adaptive_v1.1.0` folder from the supplied release archive.
-- [ ] Do not mix individual files with older v1.0.x files.
-- [ ] Run `pytest -q` locally.
+- [ ] Replace the complete `darukaa_adaptive_v1.1.0` folder from the release archive.
+- [ ] Run `pytest -q`.
 - [ ] Run `python -m compileall -q darukaa_adaptive`.
-- [ ] Validate the notebook JSON and Python code cells.
-- [ ] Confirm the package version is `1.1.0`.
-- [ ] Regenerate/verify `docs/ADAPTIVE_RELEASE_SHA256.txt` after the final source tree is frozen.
+- [ ] Validate notebook JSON and Python code-cell syntax.
+- [ ] Confirm package/profile version `1.1.0`.
+- [ ] Generate and record the final ZIP SHA-256.
 
-## GitHub Desktop
+## GitHub / provenance
 
-- [ ] Pull origin before committing.
-- [ ] Review the complete Changes panel.
-- [ ] Commit the complete replacement package as one release commit.
-- [ ] Push to the intended branch/main according to repository workflow.
+- [ ] Commit the complete package replacement.
 - [ ] Record the resulting Git commit SHA.
+- [ ] Pin that SHA in client Colab runs.
 
 ## Colab preflight
 
 - [ ] Start from a clean runtime.
-- [ ] Notebook clones the intended Git ref.
-- [ ] Package import path is inside `darukaa_adaptive_v1.1.0`.
-- [ ] Package version is `1.1.0`.
-- [ ] TNC HM v3 resolves as an ImageCollection.
-- [ ] RESOLVE Ecoregions resolves as a FeatureCollection.
-- [ ] Dynamic World/Sentinel-1/Sentinel-2 resolve.
-- [ ] Profile validation returns no errors.
+- [ ] Confirm the package is imported from the intended release checkout.
+- [ ] Confirm Earth Engine authentication/project.
+- [ ] Confirm Dynamic World, Sentinel-2 and TNC HM v3 datasets resolve.
+- [ ] Confirm RESOLVE Ecoregions resolves as a FeatureCollection.
+- [ ] Confirm profile validation returns no errors.
 
-## Site and temporal QA
+## Input/EMU QA
 
-- [ ] Upload the correct master KML/KMZ.
-- [ ] Record the KML SHA-256.
-- [ ] Confirm boundary area and map domains.
-- [ ] Confirm Year-0 dates.
-- [ ] Confirm historical trend window.
-- [ ] Inspect baseline monthly water series.
-- [ ] Confirm no invented future zero-water months.
+- [ ] Use the standardized Site Selection handoff where available.
+- [ ] Confirm project ID/name and EMU count.
+- [ ] Confirm every EMU has a unique ID and valid geometry.
+- [ ] Confirm multipart EMUs remain intact.
+- [ ] Confirm domain routing for every EMU.
+- [ ] Confirm project and EMU areas.
 
 ## Reference QA
 
-- [ ] Confirm reference search radius.
-- [ ] Confirm assessed site is excluded.
-- [ ] Confirm ecoregion stratum.
-- [ ] Confirm hydrological similarity.
-- [ ] Confirm HMI pressure screen.
-- [ ] Confirm population size.
-- [ ] Confirm temporal observation depth.
-- [ ] Confirm automatic approval is QA-gated.
-- [ ] Confirm reference diagnostics contain no execution error.
-- [ ] Confirm reference central estimator and percentiles.
-- [ ] Confirm `water_extent` is not assigned a false 100% reference.
+- [ ] Confirm strict contemporary reference stage.
+- [ ] Confirm empirical least-disturbed stage where strict fails.
+- [ ] If Stage C is needed, record the explicit manual HMI threshold and reason.
+- [ ] Confirm ecological eligibility precedes HMI ordering.
+- [ ] Confirm population size/area/pixel gates.
+- [ ] Confirm temporal/spatial QA.
+- [ ] Confirm approval is QA-gated.
+- [ ] Confirm execution errors are distinguished from valid reference rejection.
+- [ ] Confirm reference distribution diagnostics and uncertainty.
 
 ## Scoring QA
 
-- [ ] Inspect raw metrics separately from scores.
-- [ ] Inspect benchmark/reference governance separately from scores.
-- [ ] Confirm only approved references become score-eligible.
-- [ ] Confirm C4 pressure remains separate.
-- [ ] Confirm C3 fauna requirement is applied.
-- [ ] Confirm unassessed pillars are not rendered as 100.
-- [ ] Confirm proxy indicators remain correctly labelled.
+- [ ] Confirm metric scoring roles.
+- [ ] Confirm statistical benchmark diagnostics are retained.
+- [ ] Confirm 0–100 reference attainment is the aggregation scale.
+- [ ] Confirm geometric mean is used only within complementary metric groups.
+- [ ] Confirm pillar headline is the limiting subdimension.
+- [ ] Confirm P1/P2/P3 overall condition uses geometric mean when coverage gates pass.
+- [ ] Confirm P4 pressure remains separate.
+- [ ] Confirm missing evidence is not converted to zero or 100.
+- [ ] Confirm limiting pillar → subdimension → metric traceability.
 
-## Final outputs
+## Project aggregation QA
+
+- [ ] Confirm area-weighted project metric summaries.
+- [ ] Confirm area-weighted project pillar summaries.
+- [ ] Confirm EMU coverage statistics.
+- [ ] Confirm limiting EMU.
+- [ ] Confirm `emu_ecological_comparison.csv` is populated when scored EMU evidence exists.
+- [ ] Confirm project condition and pressure scorecards.
+- [ ] Confirm project HTML report.
+
+## Final EMU output bundle
 
 - [ ] `metric_scorecard.csv`
 - [ ] `metric_qa_scorecard.csv`
@@ -74,13 +78,21 @@
 - [ ] `overall_scorecard.json`
 - [ ] `readiness.json`
 - [ ] `assessment_manifest.json`
-- [ ] `water_periods.csv`
-- [ ] `water_monthly.csv`
-- [ ] `landcover_composition.csv`
+- [ ] `water_periods.csv` where aquatic processing applies
+- [ ] `landcover_composition.csv` where available
 - [ ] `external_evidence.csv`
 - [ ] `indicator_registry.csv`
-- [ ] `legacy_metric_crosswalk.csv`
 - [ ] `Year0_Biodiversity_Baseline_Report.html`
 - [ ] `README_OUTPUTS.md`
 
-Retain the complete output ZIP together with the master KML/KMZ and exact Git commit.
+## Project output bundle
+
+- [ ] `project_assessment_manifest.json`
+- [ ] `project_overall_scorecard.json`
+- [ ] `project_metric_raw_aggregation.csv`
+- [ ] `project_metric_score_aggregation.csv`
+- [ ] `project_pillar_aggregation.csv`
+- [ ] `emu_ecological_comparison.csv`
+- [ ] `Project_Biodiversity_Baseline_Report.html`
+
+Retain the exact input handoff/archive, output bundle, configuration and Git commit together.

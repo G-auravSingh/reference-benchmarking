@@ -1,47 +1,36 @@
-# Validation — darukaa_adaptive_v1.1.0
+# Validation Protocol — v1.1.0
 
-## Automated validation target
+## Automated validation
 
-The release must pass:
+The release gate requires:
 
-- complete pytest suite;
-- Python compilation of all package modules;
-- configuration validation for the aquatic profile;
-- notebook JSON validation;
-- notebook Python-code-cell compilation;
-- package integrity checks;
-- release SHA-256 regeneration after all source/documentation changes.
+```bash
+pytest -q
+python -m compileall -q darukaa_adaptive
+```
 
-## Live Earth Engine validation boundary
+The tests cover the generalized input contract, Site Selection handoff parsing, reference policy, metric scoring, hierarchical aggregation, project aggregation and report-related data structures.
 
-Software tests cannot verify Earth Engine authentication, current dataset availability or live geospatial results. The Nandoshi Colab workflow is therefore the authoritative live acceptance test.
+## Live acceptance
+
+A client-ready run additionally requires a fresh Colab execution against the exact release commit with Earth Engine initialized.
 
 The live run must verify:
 
-1. Dynamic World access;
-2. Sentinel-1 access;
-3. Sentinel-2 access;
-4. TNC HM v3 90 m ImageCollection access and `All_threats_combined` band;
-5. RESOLVE Ecoregions FeatureCollection access;
-6. master KML geometry and hash;
-7. dynamic water detection;
-8. Year-0 monthly water series;
-9. automatic aquatic reference construction;
-10. reference QA diagnostics;
-11. reference candidate geometry/metrics;
-12. reference benchmark generation;
-13. reference approval/score-eligibility gating;
-14. C3 fauna gating;
-15. report/manifest consistency.
+1. package version and Git SHA;
+2. input/EMU count and geometry validity;
+3. domain routing;
+4. reference engine execution without API/runtime errors;
+5. reference candidate rejection vs approval status;
+6. metric QA/QC;
+7. benchmark and score eligibility;
+8. P1/P2/P3/P4 separation;
+9. project aggregation coverage;
+10. EMU ecological comparison;
+11. HTML report and CSV/JSON consistency.
 
-## Scientific validation boundary
+A candidate being rejected by reference QA is a valid scientific outcome. An Earth Engine exception, missing dataset, parser failure or calculation exception is not a scientific outcome and blocks release of that run.
 
-Passing code tests does not validate ecological calibration. NDCI, red reflectance, FAI bloom frequency and NDVI remain EO proxies unless independent evidence supports a stronger interpretation.
+## Scientific verification
 
-An automatically approved contemporary reference is a reference candidate accepted by explicit rules; it is not proof of pristine or pre-human ecological condition.
-
-## Current release-build status
-
-The package has been rebuilt and internally checked in this environment. The remaining acceptance step is the user's live Colab/GEE execution and inspection of the resulting output bundle.
-
-The final package should not be described as live-validated until that step is complete.
+The framework has been checked against TNFD LEAP/State of Nature guidance and SEEA ecosystem-condition guidance. These sources support reference-relative measurement, explicit metric selection, normalization before aggregation, transparent aggregation and visible uncertainty/data gaps. They do not prescribe the Darukaa 0–100 bands or limiting-factor hierarchy as universal ecological laws; those are explicit product/method conventions documented in `docs/METHODOLOGY.md`.

@@ -128,6 +128,7 @@ class ScoringConfig:
         default_factory=lambda: [20.0, 40.0, 60.0, 80.0]
     )
 
+    min_valid_metrics_per_subdimension: int = 1
     min_valid_metrics_per_pillar: int = 1
     min_valid_pillars: int = 3
     min_condition_pillars: int = 3
@@ -160,6 +161,8 @@ class AssessmentConfig:
     reference: ReferenceConfig = field(default_factory=ReferenceConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     profile: ProfileConfig = field(default_factory=ProfileConfig)
+    # Optional local/GEE asset overrides consumed by the full legacy calculator adapter.
+    raster_paths: Dict[str, str] = field(default_factory=dict)
     output_dir: str = "outputs"
     site_boundary_type: str = "assessment_boundary"
 
@@ -190,6 +193,7 @@ class AssessmentConfig:
             reference=ReferenceConfig(**raw.get("reference", {})),
             scoring=ScoringConfig(**raw.get("scoring", {})),
             profile=ProfileConfig(**raw.get("profile", {})),
+            raster_paths=dict(raw.get("raster_paths", {})),
             output_dir=raw.get("output_dir", "outputs"),
             site_boundary_type=raw.get("site_boundary_type", "assessment_boundary"),
         )
@@ -229,6 +233,8 @@ class AssessmentConfig:
         if self.scoring.concern_band_upper_percent != [20.0, 40.0, 60.0, 80.0]:
             errors.append("scoring.concern_band_upper_percent must remain [20,40,60,80] as the declared product convention")
 
+        if self.scoring.min_valid_metrics_per_subdimension < 1:
+            errors.append("scoring.min_valid_metrics_per_subdimension must be >= 1")
         if self.scoring.min_valid_metrics_per_pillar < 1:
             errors.append("scoring.min_valid_metrics_per_pillar must be >= 1")
         if self.reference.auto_min_water_occurrence <= 0 or self.reference.auto_min_water_occurrence > 1:

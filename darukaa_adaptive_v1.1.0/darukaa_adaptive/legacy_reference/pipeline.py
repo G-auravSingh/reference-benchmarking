@@ -123,7 +123,48 @@ class Pipeline:
         else:
             indicators = self.registry.all()
 
-        logger.info(f"Running {len(indicators)} indicators: {[i.name for i in indicators]}")
+        # Runtime toggle (Q7): never compute REMOVED (registered=False) or deactivated
+        # indicators. Contextual/screening indicators still run (they are shown, not scored).
+        indicators = [s for s in indicators if getattr(s, "registered", True)
+                      and getattr(s, "active", True)]
+
+        # REAL FIX (round 2): config.realm ("terrestrial" | "aquatic" |
+        # "mixed") was already loaded and logged every run, but never
+        # actually used to filter anything — confirmed directly, not
+        # assumed, before completing it. The FIRST version of this fix
+        # filtered by `module` (core/aquatic/...), which was too coarse:
+        # checked directly against real extraction logic and found 5 of
+        # the 12 currently-scored "core" indicators give a degenerate,
+        # misleading value on open water (chm: canopy height ~0m on a
+        # lake; forest_loss_rate: trivially ~0% on a lake;
+        # natural_habitat: DW_NATURAL_CLASSES excludes water entirely, so
+        # a pristine lake would wrongly show ~0% "natural"; cpland: a
+        # land-vegetation classification layer; bii: PREDICTS is an
+        # explicitly terrestrial model). `applicable_realms` (registry.py)
+        # is the real, per-indicator-verified gate now — every one of the
+        # 12 core-scored indicators and all 9 aquatic-module indicators
+        # were checked individually before being set, not assumed from
+        # their module tag. "mixed" (or an unrecognised realm) keeps
+        # every indicator, preserving the exact prior behaviour for every
+        # existing project/config unless realm is explicitly changed.
+        realm = getattr(self.config, "realm", "terrestrial")
+        if realm in ("terrestrial", "aquatic"):
+            indicators = [s for s in indicators if realm in getattr(s, "applicable_realms", ("terrestrial", "aquatic", "mixed"))]
+        # realm == "mixed" (or anything else): no realm filtering, same as before this fix.
+
+        mode = getattr(self.config, "assessment_mode", "baseline")
+        logger.info(f"Assessment mode: {mode} | realm={realm} "
+                    f"| archetype={getattr(self.config,'archetype','conservation')}")
+        logger.info(f"Realm filter kept {len(indicators)} indicator(s) for realm='{realm}'")
+        if mode == "monitoring":
+            logger.warning(
+                "Monitoring mode: change-vs-baseline scoring requires a stored Year-0 "
+                "baseline artifact and in-situ change metrics (OPEN_DECISIONS OD; not yet "
+                "wired). Running baseline-style computation for this cycle.")
+
+        n_scored = len([s for s in indicators if getattr(s, "scoring_eligible", False)])
+        logger.info(f"Running {len(indicators)} indicators "
+                    f"({n_scored} scored, rest contextual/screening): {[i.name for i in indicators]}")
 
         # --- 4. For each site × indicator: compute references ---
         all_ref_results: List[ReferenceResult] = []
@@ -195,11 +236,12 @@ class Pipeline:
             1 for c in all_comparisons
             if c.tier2_intactness is not None or c.tier1_intactness is not None
         )
+        n_profiles = len(report.get("site_profiles", {}))
         logger.info(f"\n{'=' * 60}")
         logger.info(
             f"Pipeline complete: {n_complete}/{len(all_comparisons)} "
-            f"indicator-site pairs benchmarked"
+            f"indicator-site pairs benchmarked; {n_profiles} site profile(s) scored"
         )
-        logger.info(f"Report: {output_path}")
+        logger.info(f"Reports: {output_path}.json/.csv/.html")
 
         return report

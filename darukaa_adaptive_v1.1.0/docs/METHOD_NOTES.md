@@ -81,7 +81,6 @@ The production path is now:
 
 `geometry → domains → metrics → measurement QA → reference construction → reference QA → benchmarking → score eligibility → pillar/overall scoring → readiness → report → manifest`
 
-The reference engine is required to distinguish a legitimate candidate rejection from a software execution failure. The Nandoshi Colab notebook therefore includes a mandatory reference-validation checkpoint after the full pipeline run.
 
 ### Reference central estimator
 

@@ -9,12 +9,14 @@ from .evidence import load_evidence_csv
 from .metrics import LakeMetrics
 from .qa import qa_metrics
 from .readiness import assess_readiness
-from .report import write_assessment, write_project_html_report
+from .report import write_assessment, write_project_report
 from .scoring import build_scorecard, score_external_observations
 from .site import area_ha, make_domains, read_kml
 from .inputs import load_project_input
-from .aggregation import aggregate_emu_scorecards
+from .aggregation import (aggregate_emu_scorecards, aggregate_project_metric_scores, aggregate_project_pillars, build_emu_comparison_table)
 from .terrestrial import TerrestrialMetrics
+from .full_metrics import FullMetricEngine
+from .registry import FULL_INDICATORS
 from .water import WaterDetector
 
 class AdaptivePipeline:
@@ -35,6 +37,17 @@ class AdaptivePipeline:
                 water=WaterDetector(self.config); engine=LakeMetrics(self.config,water); metric_results=engine.run(domains['boundary'],domains['riparian_fixed'],start,end)
         if realm in {'terrestrial','mixed'} or self.config.profile.allow_terrestrial_metrics:
             metric_results.extend(TerrestrialMetrics(self.config).run(domains['boundary'],start,end))
+
+        # Full 0.2.7 calculator inventory.  These calculators are deliberately
+        # adapted into v1 MetricResult objects; legacy reference/scoring logic is
+        # never called.  Existing v1 profile metrics remain for compatibility.
+        full_realm = 'aquatic' if realm == 'aquatic_lake' else realm
+        if full_realm in {'terrestrial','aquatic','mixed'}:
+            full_engine = FullMetricEngine(self.config)
+            metric_results.extend(full_engine.run(
+                domains['boundary'], realm=full_realm,
+                temporal_window=f"{start}:{end}"
+            ))
         metric_qa=qa_metrics(metric_results)
         benchmarks=[]
         reference_populations={}
@@ -72,6 +85,54 @@ class AdaptivePipeline:
                             reference_approval_basis=("automated_reference_QA" if pop and pop.approval else "not_approved"),
                             reference_diagnostics=(pop.diagnostics if pop else {}),
                         ))
+        # Benchmark all newly migrated scored indicators against the approved
+        # v1 reference population for their realm. Reference values are extracted
+        # with the same calculator on the reference geometry, preserving metric
+        # semantics and avoiding universal ratio assumptions.
+        from .benchmark import benchmark_metric
+        legacy_scored = [m for m in metric_results if m.metric in {x.name for x in FULL_INDICATORS}
+                         and m.status == "calculated" and m.score_eligible]
+        for m in legacy_scored:
+            ref_pop = reference_populations.get("aquatic") if m.domain == "aquatic" else reference_populations.get("terrestrial")
+            # The in-memory population objects are preferred when available.
+            pop_obj = None
+            if m.domain == "aquatic" and 'lake_ref_engine' in locals():
+                pop_obj = getattr(lake_ref_engine, "last_population", None)
+            elif m.domain == "terrestrial" and 'terr_ref_engine' in locals():
+                pop_obj = getattr(terr_ref_engine, "last_population", None)
+            if pop_obj is None or getattr(pop_obj, "geometry", None) is None:
+                benchmarks.append(benchmark_metric(
+                    m.metric, m.value, None, None, allow_tier2=True,
+                    reference_level="none", reference_approval_basis="reference_population_unavailable",
+                    reference_state="", reference_method=""))
+                continue
+            try:
+                ref_result = FullMetricEngine(self.config).run(
+                    pop_obj.geometry, realm=m.domain, temporal_window=f"{start}:{end}"
+                )
+                ref_row = next((x for x in ref_result if x.metric == m.metric), None)
+                rv = ref_row.value if ref_row else None
+                ref_diag = {}
+                if ref_row:
+                    ref_diag = {k: getattr(ref_row, k) for k in
+                                ("std_dev","p05","p10","p25","p50","p75","p90","p95")
+                                if getattr(ref_row,k,None) is not None}
+                benchmarks.append(benchmark_metric(
+                    m.metric, m.value, None, rv, allow_tier2=True,
+                    tier2_approved=bool(getattr(pop_obj, "approval", False)),
+                    reference_level="auto_terrestrial" if m.domain == "terrestrial" else "auto_aquatic",
+                    reference_n=getattr(pop_obj, "candidate_pixels", None),
+                    reference_method=getattr(pop_obj, "method", "automatic_reference"),
+                    reference_state=getattr(pop_obj, "reference_state", ""),
+                    reference_approval_basis=("automated_reference_QA" if getattr(pop_obj, "approval", False) else "not_approved"),
+                    reference_diagnostics=ref_diag,
+                ))
+            except Exception as exc:
+                benchmarks.append(benchmark_metric(
+                    m.metric, m.value, None, None, allow_tier2=True,
+                    reference_level="none", reference_approval_basis=f"reference_metric_failed:{type(exc).__name__}"
+                ))
+
         scored,pillars,overall=build_scorecard(metric_results,benchmarks,self.config)
         evidence_df=pd.DataFrame()
         if external_evidence_file:
@@ -113,10 +174,7 @@ class AdaptivePipeline:
         is performed only after EMU-level outputs exist.
         """
         project = load_project_input(site_file, project_id=project_id, project_name=project_name, domain=domain)
-        # Human-readable project folder; preserve project_id inside the manifest.
-        import re
-        project_folder = re.sub(r"[^A-Za-z0-9._-]+", "_", str(project.project_name or project.project_id)).strip("._") or "project"
-        root_output = Path(self.config.output_dir) / project_folder
+        root_output = Path(self.config.output_dir) / project.project_id
         root_output.mkdir(parents=True, exist_ok=True)
         emu_results = []
         metric_rows=[]; pillar_rows=[]
@@ -155,21 +213,44 @@ class AdaptivePipeline:
                 emu_results.append(result)
                 for m in result.get("metrics", []):
                     metric_rows.append({"emu_id":emu.emu_id,"area_ha":result["emu_area_ha"],"metric":m.metric,"value":m.value,"domain":resolved_domain})
+                scored_rows = result.get("metric_concern")
+                if hasattr(scored_rows, "iterrows"):
+                    for _, row in scored_rows.iterrows():
+                        metric_rows.append({
+                            "emu_id": emu.emu_id, "area_ha": result["emu_area_ha"],
+                            "metric": row.get("metric"), "value": row.get("raw_value"),
+                            "score_0_to_100": row.get("intactness_score_0_100"),
+                            "score_eligible": row.get("score_eligible", False),
+                            "domain": resolved_domain, "pillar": row.get("pillar"),
+                            "subdimension": row.get("subdimension"),
+                        })
                 for _, row in (result.get("pillars") if hasattr(result.get("pillars"), "iterrows") else pd.DataFrame()).iterrows():
-                    pillar_rows.append({"emu_id":emu.emu_id,"area_ha":result["emu_area_ha"],**row.to_dict()})
+                    pillar_rows.append({"emu_id":emu.emu_id,"area_ha":result["emu_area_ha"],"domain":resolved_domain,**row.to_dict()})
         finally:
             self.config.output_dir = original_output
 
-        metric_agg=aggregate_emu_scorecards(metric_rows)
-        pillar_agg=__import__("darukaa_adaptive.aggregation",fromlist=["aggregate_pillar_scores"]).aggregate_pillar_scores(pillar_rows)
-        manifest={"project":project.to_dict(),"n_emus":len(project.emus),"emu_results":[{"emu_id":r["emu_id"],"domain":r["emu_domain"],"area_ha":r["emu_area_ha"],"output":r.get("outputs")} for r in emu_results],"aggregation":{"metric_rows":metric_agg.to_dict("records"),"pillar_rows":pillar_agg.to_dict("records")}}
+        raw_metric_agg=aggregate_emu_scorecards([r for r in metric_rows if "score_0_to_100" not in r])
+        scored_metric_agg=aggregate_project_metric_scores([r for r in metric_rows if r.get("score_eligible", False)])
+        pillar_agg=aggregate_project_pillars(pillar_rows)
+        comparison=build_emu_comparison_table(pillar_rows,[r for r in metric_rows if "score_0_to_100" in r])
+        condition_pillars=pillar_agg[pillar_agg["pillar"].isin(["P1_extent_configuration","P2_ecosystem_condition","P3_biodiversity_integrity"]) & pillar_agg["project_score_0_to_100"].notna()] if not pillar_agg.empty else pd.DataFrame()
+        pressure=pillar_agg[pillar_agg["pillar"]=="P4_pressure" & pillar_agg["project_score_0_to_100"].notna()] if not pillar_agg.empty else pd.DataFrame()
+        project_overall={"status":"insufficient_condition_coverage","condition_score_0_to_100":None,"condition_concern_label":None,"pressure_score_0_to_100":None,"pressure_concern_label":None,"limiting_pillar":None,"limiting_emu":None}
+        if not pressure.empty:
+            ps=float(pressure.iloc[0]["project_score_0_to_100"]); project_overall.update({"pressure_score_0_to_100":ps,"pressure_concern_label":__import__('darukaa_adaptive.scoring',fromlist=['concern_label']).concern_label(ps)})
+        if len(condition_pillars)==3:
+            from .scoring import geometric_mean, concern_label
+            cs=geometric_mean(condition_pillars["project_score_0_to_100"].astype(float).tolist()); project_overall.update({"status":"condition_scored","condition_score_0_to_100":cs,"condition_concern_label":concern_label(cs)})
+            idx=condition_pillars["project_score_0_to_100"].astype(float).idxmin(); project_overall["limiting_pillar"]=str(condition_pillars.loc[idx,"pillar"]); project_overall["limiting_emu"]=condition_pillars.loc[idx,"limiting_emu"]
+        manifest={"project":project.to_dict(),"n_emus":len(project.emus),"emu_results":[{"emu_id":r["emu_id"],"domain":r["emu_domain"],"area_ha":r["emu_area_ha"],"output":r.get("outputs")} for r in emu_results],"aggregation":{"raw_metric_rows":raw_metric_agg.to_dict("records"),"scored_metric_rows":scored_metric_agg.to_dict("records"),"pillar_rows":pillar_agg.to_dict("records"),"emu_comparison":comparison.to_dict("records"),"project_overall":project_overall}}
         manifest_path=root_output/"project_assessment_manifest.json"
         manifest_path.write_text(__import__("json").dumps(manifest,indent=2,default=str),encoding="utf-8")
-        metric_agg.to_csv(root_output/"project_metric_aggregation.csv",index=False)
+        raw_metric_agg.to_csv(root_output/"project_metric_raw_aggregation.csv",index=False)
+        scored_metric_agg.to_csv(root_output/"project_metric_score_aggregation.csv",index=False)
         pillar_agg.to_csv(root_output/"project_pillar_aggregation.csv",index=False)
-        project_report = write_project_html_report(root_output, project, emu_results, metric_agg, pillar_agg, manifest)
-        manifest["project_report"] = project_report
-        manifest_path.write_text(__import__('json').dumps(manifest, indent=2, default=str), encoding='utf-8')
-        return {"project":project,"emus":emu_results,"metric_aggregation":metric_agg,"pillar_aggregation":pillar_agg,"manifest":manifest,"output_dir":root_output,"project_report":project_report}
+        comparison.to_csv(root_output/"emu_ecological_comparison.csv",index=False)
+        (root_output/"project_overall_scorecard.json").write_text(__import__("json").dumps(project_overall,indent=2,default=str),encoding="utf-8")
+        project_report=write_project_report(root_output, project, project_overall, pillar_agg, scored_metric_agg, comparison, emu_results, self.config)
+        return {"project":project,"emus":emu_results,"metric_aggregation":scored_metric_agg,"raw_metric_aggregation":raw_metric_agg,"pillar_aggregation":pillar_agg,"emu_comparison":comparison,"project_overall":project_overall,"project_report":str(project_report),"manifest":manifest,"output_dir":root_output}
 
 LakePipeline=AdaptivePipeline

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -54,9 +54,21 @@ class ComparisonResult:
     tier1_reference: Optional[float] = None
     tier2_reference: Optional[float] = None
 
-    # Intactness ratios
+    # Intactness ratios (LEGACY capped — deprecated; see reference.estimators)
     tier1_intactness: Optional[float] = None
     tier2_intactness: Optional[float] = None
+
+    # Responsive benchmark (v0.2.0, CS-3) — signed & uncapped; propagated from
+    # ReferenceResult so the profile-first scorer consumes it instead of the ratio.
+    tier1_benchmark: Optional[float] = None
+    tier2_benchmark: Optional[float] = None
+    tier1_benchmark_estimator: Optional[str] = None
+    tier2_benchmark_estimator: Optional[str] = None
+    tier2_percentile_in_reference: Optional[float] = None
+    tier2_display_pct_of_reference: Optional[float] = None
+    reference_type: Optional[str] = None
+    reference_hmi_realised: Optional[float] = None
+    stratification_diagnostics: Dict[str, Any] = field(default_factory=dict)  # v0.2.0
 
     # Hedges' g (site vs Tier 2 reference pixels)
     hedges_g: Optional[float] = None
@@ -110,6 +122,16 @@ class StatisticalComparison:
             tier2_reference=ref_result.tier2_median,
             tier1_intactness=ref_result.tier1_intactness,
             tier2_intactness=ref_result.tier2_intactness,
+            # Propagate the responsive benchmark (CS-3) so scoring uses it, not the ratio.
+            tier1_benchmark=getattr(ref_result, "tier1_benchmark", None),
+            tier2_benchmark=getattr(ref_result, "tier2_benchmark", None),
+            tier1_benchmark_estimator=getattr(ref_result, "tier1_benchmark_estimator", None),
+            tier2_benchmark_estimator=getattr(ref_result, "tier2_benchmark_estimator", None),
+            tier2_percentile_in_reference=getattr(ref_result, "tier2_percentile_in_reference", None),
+            tier2_display_pct_of_reference=getattr(ref_result, "tier2_display_pct_of_reference", None),
+            reference_type=getattr(ref_result, "reference_type", None),
+            reference_hmi_realised=getattr(ref_result, "reference_hmi_realised", None),
+            stratification_diagnostics=getattr(ref_result, "stratification_diagnostics", {}) or {},
             metadata=getattr(ref_result, "extraction_metadata", {}) or {},   # added now
         )
 

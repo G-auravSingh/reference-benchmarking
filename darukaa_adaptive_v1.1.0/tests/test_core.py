@@ -7,7 +7,7 @@ from darukaa_adaptive.benchmark import benchmark_metric, benchmark_observation, 
 from darukaa_adaptive.config import AssessmentConfig
 from darukaa_adaptive.evidence import load_evidence_csv
 from darukaa_adaptive.periods import annual_periods, month_periods
-from darukaa_adaptive.registry import AQUATIC_INDICATORS, PILLARS, indicator_table
+from darukaa_adaptive.registry import AQUATIC_INDICATORS, TERRESTRIAL_INDICATORS, PILLARS, indicator_table
 from darukaa_adaptive.site import area_ha, make_shapely_domains, read_kml, validate_site_geometry
 from darukaa_adaptive.scoring import aggregate_overall, aggregate_pillars, concern_label, geometric_mean, build_scorecard, score_external_observations
 from darukaa_adaptive.trajectory import compare
@@ -26,10 +26,10 @@ def test_geomean(): assert abs(geometric_mean([25,100])-50.0)<1e-9
 
 def test_condition_pressure_are_separate():
     cfg=AssessmentConfig(); scored=pd.DataFrame([
-      {'metric':'a','pillar':'C1_extent','intactness_score_0_100':90,'score_eligible':True},
-      {'metric':'b','pillar':'C2_vegetation','intactness_score_0_100':80,'score_eligible':True},
-      {'metric':'c','pillar':'C3_fauna','intactness_score_0_100':70,'score_eligible':True},
-      {'metric':'p','pillar':'C4_pressure','intactness_score_0_100':20,'score_eligible':True}])
+      {'metric':'a','pillar':'P1_extent_configuration','intactness_score_0_100':90,'score_eligible':True},
+      {'metric':'b','pillar':'P2_ecosystem_condition','intactness_score_0_100':80,'score_eligible':True},
+      {'metric':'c','pillar':'P3_biodiversity_integrity','intactness_score_0_100':70,'score_eligible':True},
+      {'metric':'p','pillar':'P4_pressure','intactness_score_0_100':20,'score_eligible':True}])
     p=aggregate_pillars(scored,cfg); o=aggregate_overall(p,cfg)
     assert abs(o['condition_score_0_to_100']-geometric_mean([90,80,70]))<1e-9; assert abs(o['pressure_score_0_to_100']-20)<1e-9
     assert o['son_score_0_to_100'] is None
@@ -38,16 +38,16 @@ def test_condition_requires_fauna_when_profile_requires_it():
     cfg=AssessmentConfig()
     cfg.scoring.require_fauna_for_condition=True
     scored=pd.DataFrame([
-      {'metric':'a','pillar':'C1_extent','intactness_score_0_100':90,'score_eligible':True},
-      {'metric':'b','pillar':'C2_vegetation','intactness_score_0_100':80,'score_eligible':True},
-      {'metric':'p','pillar':'C4_pressure','intactness_score_0_100':70,'score_eligible':True}])
+      {'metric':'a','pillar':'P1_extent_configuration','intactness_score_0_100':90,'score_eligible':True},
+      {'metric':'b','pillar':'P2_ecosystem_condition','intactness_score_0_100':80,'score_eligible':True},
+      {'metric':'p','pillar':'P4_pressure','intactness_score_0_100':70,'score_eligible':True}])
     p=aggregate_pillars(scored,cfg); o=aggregate_overall(p,cfg)
     assert o['condition_score_0_to_100'] is None
     assert o['status']=='insufficient_fauna_coverage'
 
 
 def test_external_evidence_same_path():
-    cfg=AssessmentConfig(); df=pd.DataFrame([{'metric':'edna_fish_richness','pillar':'C3_fauna','raw_value':8,'direction':'higher_is_better','reference_value':10,'reference_approved_for_scoring':True,'evidence_type':'eDNA'}])
+    cfg=AssessmentConfig(); df=pd.DataFrame([{'metric':'edna_fish_richness','pillar':'P3_biodiversity_integrity','raw_value':8,'direction':'higher_is_better','reference_value':10,'reference_approved_for_scoring':True,'evidence_type':'eDNA'}])
     m,p,o=score_external_observations(df,cfg); assert float(m.iloc[0].intactness_score_0_100)==80; assert m.iloc[0].evidence_type=='eDNA'
 
 def test_geometry_and_kml():
@@ -63,11 +63,11 @@ def test_config_dates_and_validation():
 def test_periods():
     assert len(month_periods('2025-08-01','2026-08-31'))==13; assert len(annual_periods(2018,2026))==9
 
-def test_registry_and_legacy_count():
-    assert set(PILLARS)=={'C1_extent','C2_vegetation','C3_fauna','C4_pressure'}; assert {'water_extent','edna_fish_richness','built_fraction'}.issubset({x.name for x in AQUATIC_INDICATORS}); assert len(indicator_table())==len(AQUATIC_INDICATORS)
+def test_registry_count():
+    assert set(PILLARS)=={'P1_extent_configuration','P2_ecosystem_condition','P3_biodiversity_integrity','P4_pressure'}; assert {'water_extent','edna_fish_richness'}.issubset({x.name for x in AQUATIC_INDICATORS}) and 'built_fraction' in {x.name for x in TERRESTRIAL_INDICATORS}; assert len(indicator_table())>=len(AQUATIC_INDICATORS)+len(TERRESTRIAL_INDICATORS)
 
 def test_evidence_csv(tmp_path):
-    p=tmp_path/'e.csv'; pd.DataFrame([{'metric':'edna_fish_richness','raw_value':8,'pillar':'C3_fauna','direction':'higher_is_better'}]).to_csv(p,index=False); d=load_evidence_csv(p); assert d.iloc[0]['evidence_type']=='external'
+    p=tmp_path/'e.csv'; pd.DataFrame([{'metric':'edna_fish_richness','raw_value':8,'pillar':'P3_biodiversity_integrity','direction':'higher_is_better'}]).to_csv(p,index=False); d=load_evidence_csv(p); assert d.iloc[0]['evidence_type']=='external'
 
 def test_trajectory(tmp_path):
     base=pd.DataFrame([{'metric':'x','value':10,'units':'u','direction':'higher_is_better','temporal_window':'same','status':'ok'}]); cur=base.copy(); cur.loc[0,'value']=12

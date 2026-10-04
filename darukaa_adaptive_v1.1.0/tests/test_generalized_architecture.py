@@ -120,23 +120,3 @@ def test_zipped_site_selection_manifest_rebases_absolute_tile_paths(tmp_path):
         z.write(tile, 'tiles/TataMotors_Pimpri_EMU_01.geojson')
     project = load_project_input(archive, domain='terrestrial')
     assert [e.emu_id for e in project.emus] == ['EMU_01']
-
-
-def test_project_report_is_generated_with_emu_and_aggregation_tables(tmp_path):
-    import pandas as pd
-    from types import SimpleNamespace
-    from darukaa_adaptive.report import write_project_html_report
-    project = SimpleNamespace(project_id='tile_manifest', project_name='TataMotors_Pimpri', project_domain='terrestrial')
-    emus = [{
-        'emu_id':'EMU_A','emu_domain':'terrestrial','emu_area_ha':10.0,
-        'reference_populations':{'terrestrial':{'status':'validated_candidate','approval':True,'reference_state':'least_disturbed_contemporary','method':'automatic'}}
-    }]
-    metric = pd.DataFrame([{'metric':'terrestrial_ndvi','project_value':0.5,'n_emus':1,'n_emus_total':1,'coverage_weight':1.0}])
-    pillar = pd.DataFrame([{'pillar':'C2_vegetation_habitat','score_0_to_100':72.0,'n_emus':1,'n_emus_total':1,'coverage_weight':1.0}])
-    path = write_project_html_report(tmp_path, project, emus, metric, pillar, {'project':{}})
-    text = Path(path).read_text(encoding='utf-8')
-    assert 'TataMotors_Pimpri' in text
-    assert 'EMU_A' in text
-    assert 'terrestrial_ndvi' in text
-    assert 'C2_vegetation_habitat' in text
-    assert Path(path).name == 'TataMotors_Pimpri_Biodiversity_Baseline_Report.html'

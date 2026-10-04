@@ -19,8 +19,6 @@ from typing import List, Union
 
 import geopandas as gpd
 import fiona
-from shapely import wkb, wkt
-from shapely.geometry import shape, mapping
 from shapely.ops import transform as shapely_transform
 
 logger = logging.getLogger(__name__)

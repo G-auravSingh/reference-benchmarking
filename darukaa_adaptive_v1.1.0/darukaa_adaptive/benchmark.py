@@ -40,6 +40,8 @@ class BenchmarkResult:
     relative_departure_pct: Optional[float] = None
     reference_attainment_0_100: Optional[float] = None
     interpretation_status: str = ""
+    standardized_z: Optional[float] = None
+    robust_z: Optional[float] = None
 
     def to_dict(self):
         return asdict(self)
@@ -146,6 +148,19 @@ def benchmark_metric(metric_name, observed, tier1, tier2, allow_tier2=True, tier
     if reference_ci:
         ci_low, ci_high = reference_ci
     interpretation = "at_or_above_reference" if (dep is not None and dep >= 0) else "below_reference"
+    diagnostics = dict(reference_diagnostics or {})
+    ref_sd = diagnostics.get("std_dev")
+    ref_med = diagnostics.get("p50")
+    ref_mad = None
+    if diagnostics.get("p25") is not None and diagnostics.get("p75") is not None:
+        # Approximate robust scale from IQR; retained as a diagnostic, not a score.
+        ref_mad = (float(diagnostics["p75"]) - float(diagnostics["p25"])) / 1.349
+    standardized_z = None
+    robust_z = None
+    if observed is not None and ref_sd not in (None, 0):
+        standardized_z = (float(observed) - float(selected)) / float(ref_sd)
+    if observed is not None and ref_mad not in (None, 0) and ref_med is not None:
+        robust_z = (float(observed) - float(ref_med)) / float(ref_mad)
     if spec.direction == "reference_target" and dep is not None:
         interpretation = "near_reference_target" if dep == 0 else "departed_from_reference_target"
     return BenchmarkResult(metric_name, observed, tier1, tier2, selected, reference_level or level, raw,
@@ -156,7 +171,7 @@ def benchmark_metric(metric_name, observed, tier1, tier2, allow_tier2=True, tier
                            notes="Reference-relative comparison. The legacy intactness field is retained for compatibility; production interpretation uses reference attainment and the explicit reference state.",
                            reference_state=reference_state, reference_approval_basis=reference_approval_basis,
                            reference_diagnostics=reference_diagnostics, relative_departure_pct=None if dep is None else dep*100.0,
-                           reference_attainment_0_100=attainment, interpretation_status=interpretation)
+                           reference_attainment_0_100=attainment, interpretation_status=interpretation, standardized_z=standardized_z, robust_z=robust_z)
 
 def benchmark_observation(metric_name, observed, reference, direction, reference_level="external", reference_approved=True):
     if reference is None:

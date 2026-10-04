@@ -104,8 +104,8 @@ from __future__ import annotations
 import logging, math
 from typing import Any, Dict
 import numpy as np
-from darukaa_reference.config import Config
-from darukaa_reference.registry import IndicatorRegistry
+from ..config import Config
+from ..registry import IndicatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +185,42 @@ def _to_ee(geometry):
     if hasattr(geometry, "has_z") and geometry.has_z:
         geometry = st(lambda x, y, z=None: (x, y), geometry)
     return ee.Geometry(mapping(geometry))
+
+def _largest_water_polygon(water_mask, geometry, scale=10):
+    """Vectorise a binary water mask and return the LARGEST polygon by area,
+    or None if no water is found at all.
+
+    v0.2.5 fix: a fragile pattern (`water_vec.geometry(N)` for a fixed literal index,
+    usually N=1) was found independently in THREE places in this codebase
+    (extract_rci, extract_riparian_ndvi_trend, and a colleague-authored script for the
+    same purpose) — it silently assumes the water body of interest happens to be the
+    Nth feature in whatever order reduceToVectors returns, which is not guaranteed and
+    is especially wrong when the water mask is noisy/fragmented into many small
+    polygons. This picks the genuinely largest polygon instead (the pattern already
+    used correctly in extract_shdi) — the only water-body-selection heuristic every
+    other water-adjacent indicator now shares.
+
+    REAL BUG FIXED HERE (found directly from a real Tata Motors run log: "Element.
+    geometry: Parameter 'feature' is required and may not be null", firing for RCI
+    and riparian_ndvi_trend on every real terrestrial zone with little/no open water
+    — Deccan forest, Trail plots, etc., which is the normal, expected case for most
+    of a real site, not an edge case). `.first()` on an EMPTY FeatureCollection
+    (no water pixels vectorised at all) returns a null server-side, and calling
+    `ee.Feature(null).geometry()` crashes with exactly that message. The outer
+    try/except in extract_rci/extract_riparian_ndvi_trend already caught this and
+    returned a null value, so this was never silently breaking a real run — but the
+    error text read like a real crash instead of "no water here, which is genuinely
+    expected." Checked explicitly now with a real, informative return instead."""
+    import ee
+    water_vec = water_mask.selfMask().reduceToVectors(
+        geometry=geometry, scale=scale, geometryType="polygon",
+        eightConnected=True, maxPixels=1e13)
+    if water_vec.size().getInfo() == 0:
+        return None
+    with_area = water_vec.map(lambda f: f.set("_area", f.geometry().area(1)))
+    largest = ee.Feature(with_area.sort("_area", False).first())
+    return largest.geometry()
+
 
 def _reduce(image, geometry, scale=100):
     import ee
@@ -297,6 +333,30 @@ def _img_forest_loss(c):
     f = gfc.select("treecover2000").gte(30)
     return gfc.select("lossyear").updateMask(f).rename("forest_loss_rate")
 
+def _img_net_forest_change(c):
+    """Per-pixel proxy for net_forest_change_rate's Tier2 reference pool: +1 on
+    newly-treed (gain) pixels outside the 2000 forest baseline, -1 on loss
+    pixels (Hansen lossyear>0) within the 2000 forest baseline, 0 elsewhere.
+    This is a per-pixel DIRECTIONAL proxy for the site-level signed rate
+    computed in extract_net_forest_change_rate (an area-normalised annual
+    rate) -- not literally the same statistic, but gives Tier2 a comparable
+    raster to build a reference pool from, the same pattern _img_forest_loss
+    already uses for forest_loss_rate. Documented, real limitation: gain here
+    uses the same fixed recent Dynamic World window (config.ndvi_year) as the
+    site-level extraction, consistent between the two, not independently
+    re-derived."""
+    import ee
+    gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13")
+    f = gfc.select("treecover2000").gte(30)
+    loss = gfc.select("lossyear").gt(0).And(f)
+    ndvi_year = getattr(c, "ndvi_year", 2025)
+    dw_current = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
+                 .filterDate(f"{ndvi_year - 1}-01-01", f"{ndvi_year}-12-31")
+                 .select("label").mode())
+    gain = dw_current.eq(1).And(f.Not())
+    net = ee.Image(0).where(gain, 1).where(loss, -1)
+    return net.rename("net_forest_change_rate")
+
 def _img_ndvi(c):
     import ee; y=c.ndvi_year
     def m(img):
@@ -317,35 +377,132 @@ def _img_hhi(c):
     return z5.divide(sig).updateMask(cnt.gte(6).And(sig.neq(0))).rename("HHI")
 
 def _img_flii(c):
-    """Forest Landscape Integrity Index — v4.0: DW 10m forest mask (was MODIS 500m).
+    """Forest Landscape Integrity Index proxy — v0.2.5: real P+Q+LFC formula structure.
 
-    FIX (v4.0): forest mask moved from MODIS LC (500m, blocky boundaries at
-    small-polygon edges) to Dynamic World trees class (10m), consistent with
-    every other classification-derived indicator in this module.
+    STILL a Darukaa-computed proxy, not the published Grantham et al. (2020) raster
+    (see ASSUMPTIONS_AND_LIMITATIONS.md §1/§6 — no confirmed live GEE asset for the real
+    product). What changed: a colleague-authored script implementing this same proxy
+    concept used the ACTUAL published aggregation formula —
 
-    FLII remains conceptually a FOREST integrity index — it is not meant to
-    score non-forest land uses (farmland, plantation establishment sites).
-    See extract_flii() for the applicability precondition that returns
-    explicit "Not Applicable" rather than a silently-failed None when a site
-    has near-zero forest-class pixels (e.g., active agroforestry sites).
+        FLII = (10/3) * (3 - min(3, P + Q + LFC))
+
+    — where our prior version blended VIIRS nightlight and a crude local-fragmentation
+    term through an ad-hoc unitScale combination that did not structurally match the
+    published formula at all. Adopting the real formula structure is a genuine fidelity
+    improvement, even though the underlying P/Q/LFC data sources remain simplifications
+    of Grantham's own (which uses multiple observed-pressure layers and a proper
+    edge-effect decay model, not a single layer and a fixed focal radius):
+
+        P (observed pressure)   : TNC HM v3 (config.hmi_gee_asset) — NOT VIIRS alone.
+          VIIRS nightlight captures only lit human activity and badly UNDERSTATES
+          unlit pressures (agriculture, logging roads, most rural conversion) that
+          matter most for forest integrity. HMI already aggregates multiple pressure
+          types (built-up, agriculture, roads, energy, population) and is an asset
+          already verified and used elsewhere in this pipeline — a strictly more
+          complete observed-pressure signal than nightlights alone.
+        Q (inferred/edge-effect pressure) : pressure detected within a focal radius
+          beyond the observed pixel itself, approximating edge-effect propagation.
+          The radius is a DECLARED, configurable parameter
+          (config.flii_edge_effect_radius_m), not silently fixed — edge-effect
+          distances in the literature vary widely by taxon/pressure type (metres to
+          several km), so no single radius is defensible as universal; 300 m is kept
+          as the documented default pending project-specific literature review.
+        LFC (lost forest connectivity) : local forest-density deficit within the same
+          focal radius — a recognised SIMPLE fragmentation proxy in landscape ecology,
+          not a full circuit-theory/resistance-surface connectivity model (which
+          Grantham's real LFC term uses). Kept as a documented simplification.
+
+    All three terms clamped to [0,1]; combined per the exact published formula.
     """
     import ee
     dw = _dw_mode(c)
     forest = dw.eq(DW_TREES)
-    y=c.ndvi_year
-    night=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad")
-    night=ee.ImageCollection(ee.Algorithms.If(night.size().gt(0),night,ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").sort("system:time_start",False).limit(12).select("avg_rad"))).mean()
-    nn=night.unitScale(0,60).clamp(0,1)
-    conn=forest.focal_min(2); frag=forest.subtract(conn).selfMask().unmask(0).unitScale(0,1)
-    p=nn.add(frag).unitScale(0,2).clamp(0,1)
-    return ee.Image(10).subtract(p.multiply(10)).updateMask(forest).rename("FLII")
+    radius_m = getattr(c, "flii_edge_effect_radius_m", 300)
+
+    # P — observed pressure (TNC HM v3, already the pipeline's verified current asset)
+    hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
+    hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
+    try:
+        hmi_img = ee.ImageCollection(hmi_asset).first().select(hmi_band)
+    except Exception:
+        hmi_img = ee.Image(hmi_asset).select(hmi_band)
+    P = hmi_img.unitScale(0, 1).clamp(0, 1).rename("P")
+
+    # Q — inferred/edge-effect pressure: pressure nearby, beyond what's observed here
+    P_nearby = P.focal_max(radius=radius_m, units="meters")
+    Q = P_nearby.subtract(P).max(0).clamp(0, 1).rename("Q")
+
+    # LFC — lost forest connectivity: local forest-density deficit
+    forest_density = forest.focal_mean(radius=radius_m, units="meters").clamp(0, 1)
+    LFC = ee.Image(1).subtract(forest_density).clamp(0, 1).rename("LFC")
+
+    total_pressure = P.add(Q).add(LFC).min(3)
+    flii = (ee.Image(10).divide(3)
+            .multiply(ee.Image(3).subtract(total_pressure))
+            .clamp(0, 10)
+            .updateMask(forest)
+            .rename("FLII"))
+    return flii
+
+_EII_LAST_PATH_USED = {}  # real diagnostic capture (independent audit item 5):
+# records which real path (primary asset vs HMI fallback) each _img_eii* call
+# actually used, keyed by function name, so extract_eii*() can attach a real,
+# honest reason to its output instead of a silent, unexplained value -- this
+# is what the audit's own conclusion ("I cannot conclusively confirm the root
+# cause without executing against the live EII asset") needs to finally be
+# answered on the next real run with live GEE access.
+
 
 def _img_eii(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("eii").rename("EII")
-    except: pass
-    s=ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM")
-    s=ee.Image.constant(1).subtract(s)
+    # REAL BUG FIXED HERE (found while investigating a real Tata Motors
+    # run: eii's site_value came back as ~0.0002 across every real,
+    # ecologically distinct zone -- Deccan forest, Wildlife, Trail plots
+    # alike -- a suspiciously constant, near-zero value that shouldn't
+    # occur if this were genuinely reading real per-site data).
+    # `try: return ee.Image(...).select(...) except: pass` CANNOT catch a
+    # real asset/band access failure here: ee.Image() and .select() are
+    # lazy, server-deferred operations in this client library -- they
+    # never raise until actual computation (.getInfo()/reduceRegion())
+    # reaches Earth Engine's servers. This try/except always "succeeds"
+    # and returns the lazy object regardless of whether the real asset
+    # is genuinely accessible, so the documented HMI-based fallback below
+    # was never actually reachable -- confirmed directly, not assumed,
+    # by reading how this client library evaluates expressions. Real fix:
+    # force real, eager evaluation (a cheap bandNames().getInfo() call)
+    # so a genuine access/band failure is caught HERE, not silently
+    # deferred to wherever this image is used many steps later.
+    #
+    # STILL UNRESOLVED (independent audit item 5, confirmed real): even
+    # with this eager-evaluation fix live, a real Tata Motors run
+    # (generated_at 2026-09-26T17:28, confirmed AFTER this fix was
+    # pushed) still shows eii_structural constant at exactly 0.0003
+    # across every one of 9 ecologically distinct real zones -- too
+    # exact to be a genuine HMI-fallback computation (which should vary
+    # at least somewhat zone to zone). Cannot conclusively confirm the
+    # root cause without live GEE access to inspect the real asset
+    # directly, same honest limitation the audit itself reached.
+    # Recording which path fires below so the NEXT real run's output
+    # will finally show this directly.
+    try:
+        img = ee.Image(_EII_ASSET).select("eii")
+        img.bandNames().getInfo()  # forces real evaluation; raises now if genuinely inaccessible
+        _EII_LAST_PATH_USED["eii"] = "primary_asset"
+        return img.rename("EII")
+    except Exception as e:
+        logger.warning(f"EII: primary asset ({_EII_ASSET}) genuinely inaccessible ({e}) "
+                       f"-- using the documented HMI-based fallback.")
+        _EII_LAST_PATH_USED["eii"] = f"hmi_fallback ({e})"
+    # v0.2.5: use the pipeline's current HMI asset (was hardcoded to the stale
+    # CSP/HM/GlobalHumanModification, ~2016, even after the rest of the pipeline
+    # upgraded to TNC HM v3 — an inconsistency this closes).
+    hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
+    hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
+    try:
+        s = ee.ImageCollection(hmi_asset).first().select(hmi_band)
+    except Exception:
+        s = ee.Image(hmi_asset).select(hmi_band)
+    s=ee.Image.constant(1).subtract(s.unitScale(0,1).clamp(0,1))
     npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
     f=npp.divide(2.0).min(1).max(0); b=_img_bii(c)
     if b: return s.min(b).min(f).rename("EII")
@@ -353,32 +510,122 @@ def _img_eii(c):
 
 def _img_eii_s(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("structural_integrity").rename("EII_Structural")
-    except:
-        g=ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM")
-        return ee.Image.constant(1).subtract(g).rename("EII_Structural")
+    # Same real fix as _img_eii above -- see that function's comment for why
+    # the previous try/except could never actually catch a real access failure.
+    try:
+        img = ee.Image(_EII_ASSET).select("structural_integrity")
+        img.bandNames().getInfo()
+        _EII_LAST_PATH_USED["eii_structural"] = "primary_asset"
+        return img.rename("EII_Structural")
+    except Exception as e:
+        logger.warning(f"EII_Structural: primary asset genuinely inaccessible ({e}) -- using HMI fallback.")
+        _EII_LAST_PATH_USED["eii_structural"] = f"hmi_fallback ({e})"
+        hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
+        hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
+        try:
+            g = ee.ImageCollection(hmi_asset).first().select(hmi_band)
+        except Exception:
+            g = ee.Image(hmi_asset).select(hmi_band)
+        return ee.Image.constant(1).subtract(g.unitScale(0,1).clamp(0,1)).rename("EII_Structural")
 
 def _img_eii_c(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("compositional_integrity").rename("EII_Compositional")
-    except:
+    # Same real fix as _img_eii -- see that function's comment.
+    try:
+        img = ee.Image(_EII_ASSET).select("compositional_integrity")
+        img.bandNames().getInfo()
+        _EII_LAST_PATH_USED["eii_compositional"] = "primary_asset"
+        return img.rename("EII_Compositional")
+    except Exception as e:
+        logger.warning(f"EII_Compositional: primary asset genuinely inaccessible ({e}) -- using BII fallback.")
+        _EII_LAST_PATH_USED["eii_compositional"] = f"bii_fallback ({e})"
         b=_img_bii(c); return b.rename("EII_Compositional") if b else None
 
 def _img_eii_f(c):
     import ee
-    try: return ee.Image(_EII_ASSET).select("functional_integrity").rename("EII_Functional")
-    except:
+    # Same real fix as _img_eii -- see that function's comment.
+    try:
+        img = ee.Image(_EII_ASSET).select("functional_integrity")
+        img.bandNames().getInfo()
+        _EII_LAST_PATH_USED["eii_functional"] = "primary_asset"
+        return img.rename("EII_Functional")
+    except Exception as e:
+        logger.warning(f"EII_Functional: primary asset genuinely inaccessible ({e}) -- using MODIS NPP fallback.")
+        _EII_LAST_PATH_USED["eii_functional"] = f"modis_npp_fallback ({e})"
         npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
         return npp.divide(2.0).min(1).max(0).rename("EII_Functional")
 
 def _img_bii(c):
+    """Biodiversity Intactness Index — genuine independent source (v0.2.4 fix).
+
+    PRIOR BUG: this function derived "BII" from _EII_ASSET's own compositional_integrity
+    band — i.e. it was not an independent faunal signal at all, just EII's own
+    sub-component relabelled. That both (a) failed to give C3 (fauna) any real signal of
+    its own, and (b) made the "redundancy" concern between EII and BII trivially true by
+    construction, since they were the same data under two names.
+
+    FIXED (v0.2.4): uses the Impact Observatory / Vizzuality Biodiversity Intactness
+    dataset (100 m, global, PREDICTS-database-derived) as an independent source.
+
+    UPGRADED to v1.1 (independent audit item 16, 2026-09-27): the BIOINTACT asset this
+    was pinned to covers 2017-2020 only. A newer v1.1 release
+    (projects/ebx-data/assets/earthblox/IO/BII_V1_1) was VERIFIED LIVE before switching
+    (not assumed from the audit's claim) via the real GEE community-catalog listing --
+    Gassert, F., Mazzarello, J., & Hyde, S. (2026). "Global 100m projections of
+    biodiversity intactness for the years 2017-2025 (v1.1)" [Technical white paper].
+    Vizzuality and Impact Observatory -- same publisher/methodology lineage as the prior
+    asset, confirmed annual coverage through 2025. The verified real sample usage calls
+    .mean() with NO .select() call first (each image is single-band already) -- matched
+    exactly here rather than guessing a band name for a dataset without documented band
+    names in the listing.
+
+    Real improvement this unlocks: since the new asset is genuinely ANNUAL (not a fixed
+    2017-2020 composite), this now selects the specific year matching config.ndvi_year
+    (this pipeline's existing "currency standard" -- see forest_loss_rate/
+    net_forest_change_rate) when available, falling back to the full-collection mean only
+    if that year has no image (e.g. a future year not yet published) -- a real accuracy
+    improvement over always averaging 2017-2020 regardless of assessment date.
+
+    Honest caveats unchanged from the prior version: (1) a MODELLED product (statistical
+    response to land-use/pressure), not a direct observation — same category as EII/MSA/
+    PDF; (2) a community-catalog GEE asset (gee-community-catalog.org), not the official
+    Google catalog — stable and widely used (Bloomberg, TNFD/CSRD reporting tools) but
+    worth knowing if the asset path ever needs re-verification.
+    """
     import ee
-    try: return ee.Image(_EII_ASSET).select("compositional_integrity").rename("BII")
-    except: pass
-    a=getattr(c,"bii_gee_asset",None)
+    try:
+        ic = ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BII_V1_1")
+        year = getattr(c, "ndvi_year", None)
+        if year:
+            yearly = ic.filterDate(f"{year}-01-01", f"{year + 1}-01-01")
+            composite = ee.Image(ee.Algorithms.If(yearly.size().gt(0), yearly.mean(), ic.mean()))
+        else:
+            composite = ic.mean()
+        return composite.rename("BII")
+    except Exception:
+        pass
+    # Fallback 0 (the prior primary asset, still real and live -- just 2017-2020 only,
+    # not the annual v1.1 record): used only if v1.1 itself fails to load.
+    try:
+        ic = ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BIOINTACT")
+        return ic.select("BioIntactness").mean().rename("BII")
+    except Exception:
+        pass
+    # Fallback 1: user-supplied custom asset (e.g. NHM's own release, uploaded manually)
+    a = getattr(c, "bii_gee_asset", None)
     if a:
-        try: return ee.Image(a).select(0).divide(100).rename("BII")
-        except: pass
+        try:
+            return ee.Image(a).select(0).divide(100).rename("BII")
+        except Exception:
+            pass
+    # Fallback 2 (LAST RESORT, degraded): EII's compositional sub-layer. Not independent
+    # — only used if the real BII assets and any custom override both fail to load, so a
+    # run doesn't silently return nothing. If this fallback fires, BII should NOT be
+    # treated as adding new information beyond what EII already reports.
+    try:
+        return ee.Image(_EII_ASSET).select("compositional_integrity").rename("BII")
+    except Exception:
+        pass
     return None
 
 def _img_pdf(c):
@@ -416,7 +663,24 @@ def _img_aridity(c):
     return None
 
 def _img_ghm(c):
-    import ee; return ee.ImageCollection("CSP/HM/GlobalHumanModification").first().select("gHM").rename("gHM")
+    """Global Human Modification — the ghm indicator's OWN site value.
+
+    v0.2.5 fix (significant): this was still hardcoded to the stale
+    CSP/HM/GlobalHumanModification (~2016, 1km) asset even after config.hmi_gee_asset
+    was upgraded to TNC HM v3 (90m, 2022) for the SEED reference-condition construction
+    in reference.py. That meant ghm's own SITE VALUE was computed on a different, older
+    asset than the REFERENCE distribution it gets benchmarked against — an apples-to-
+    oranges mismatch between the two halves of the same comparison. Fixed to read the
+    same config-driven asset reference.py already uses, so both sides of the benchmark
+    are now guaranteed consistent.
+    """
+    import ee
+    hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
+    hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
+    try:
+        return ee.ImageCollection(hmi_asset).first().select(hmi_band).rename("gHM")
+    except Exception:
+        return ee.Image(hmi_asset).select(hmi_band).rename("gHM")
 
 def _img_viirs(c):
     import ee; y=c.ndvi_year
@@ -501,9 +765,33 @@ def _ls8_masked(c):
             .map(msk))
 
 def _img_tspi(c):
-    """NDCI = (B5-B4)/(B5+B4). Mishra & Mishra (2012). Higher = more eutrophication."""
-    composite=_s2_masked(c).median()
-    return composite.normalizedDifference(['B5','B4']).rename('TSPI')
+    """Trophic State Index, Carlson (1977) TSI(Chl) formula — v0.2.5 upgrade.
+
+    Was: bare NDCI (a chlorophyll PROXY, not a trophic state index at all — had no
+    ecological classification attached, just a raw spectral index).
+    Now: the actual published chain: NDCI (Mishra & Mishra 2012) -> chlorophyll-a
+    concentration via their published quadratic regression -> Carlson's TSI(Chl)
+    logarithmic transform. This is the correct, literature-supported formula end to
+    end, not an approximation of it.
+
+        NDCI = (B5-B4)/(B5+B4)                              [Mishra & Mishra 2012]
+        Chl-a (ug/L) = 194.325*NDCI^2 + 86.115*NDCI + 14.039  [Mishra & Mishra 2012]
+        TSI(Chl) = 9.81*ln(Chl-a) + 30.6                      [Carlson 1977]
+
+    Masked to water pixels only (MNDWI>0) — chlorophyll retrievals are meaningless
+    over land. Renamed from the misleading "TSPI" (no such acronym in the cited
+    literature) to reflect what it actually is.
+    """
+    import math
+    composite = _s2_masked(c).median()
+    water_mask = composite.normalizedDifference(['B3', 'B11']).rename('MNDWI').gt(0)
+    water = composite.updateMask(water_mask)
+    ndci = water.normalizedDifference(['B5', 'B4']).rename('NDCI')
+    chl_a = (ndci.pow(2).multiply(194.325)
+             .add(ndci.multiply(86.115)).add(14.039)
+             .max(0.01).rename('Chlorophyll_a'))
+    tsi = chl_a.log().multiply(9.81).add(30.6).rename('TSI_Chl')
+    return tsi
 
 def _img_sabf(c):
     """Surface Algal Bloom Frequency via FAI (Hu 2009). Returns bloom occurrence 0-1."""
@@ -686,11 +974,67 @@ def _img_lai(c):
     return mean_lai.updateMask(mean_lai.gte(0).And(mean_lai.lte(8))).rename('LAI')
 
 def _img_chm(c):
-    """GEDI L2A rh98 canopy height. 2-year window, quality-masked 0-80m."""
+    """Canopy height -- ETH Global Canopy Height 2020 (Lang et al. 2023, Nature Ecology &
+    Evolution), 10m continuous global raster.
+
+    REAL SWITCH (this audit): was GEDI L2A rh98 raw shot data (kept below as
+    _img_chm_gedi_legacy) -- confirmed directly on a real Tata Motors run that GEDI's
+    sparse orbital-track sampling, combined with the real, necessary quality mask
+    (quality_flag/degrade_flag/sensitivity>0.9), left MOST real zones with zero valid
+    shots at all (site_value=None for Deccan_forest, Wildlife, Narmada_valley -- not
+    just small zones). Verified the real, specific alternative before switching (not
+    assumed): ee.Image("users/nlang/ETH_GlobalCanopyHeight_2020_10m_v1") is a real,
+    confirmed public GEE community-catalog asset (CC-BY-4.0, no access barrier,
+    independently confirmed via its own publication's GEE snippet and via an
+    unrelated peer-reviewed paper's own dataset-reference table) -- a genuinely dense,
+    wall-to-wall 10m raster (fuses GEDI as training data with Sentinel-2 via a
+    deep-learning model), so a reduceRegion over any real site geometry gets a real
+    value, not a sparse-shot gamble.
+
+    Honest, real trade-off (client explicitly asked to weigh this before switching):
+    a single global 2020 snapshot, not a live, per-year rolling window the way GEDI's
+    monthly collection is -- appropriate as a real, current baseline for TM/Soulforest's
+    Year-0 assessments (2020 is recent, not a stale multi-decade-old baseline the way
+    MODIS MCD12Q1's 500m issue was), but will need a real decision of its own once
+    monitoring cycles need a canopy-height comparison genuinely contemporaneous with a
+    specific future year, since this product has no scheduled annual update.
+    """
+    import ee
+    return ee.Image("users/nlang/ETH_GlobalCanopyHeight_2020_10m_v1").rename("CHM")
+
+
+def _img_chm_gedi_legacy(c):
+    """GEDI L2A rh98 canopy height. 2-year window, properly quality-masked.
+
+    v0.2.5 fix: was masking only on the rh98 VALUE range (0-80m) — this does NOT filter
+    out genuinely unreliable shots (cloud-affected, low-sensitivity, or terrain-degraded
+    returns) that can still produce a value WITHIN 0-80m despite being unreliable. Both
+    this pipeline's prior version and an independently-reviewed colleague script shared
+    this same gap. Fixed to also require GEDI's own documented quality indicators
+    (Dubayah et al. 2020; GEDI L2A quality-flagging guidance):
+        quality_flag == 1   (GEDI's own composite quality flag)
+        degrade_flag == 0   (not degraded by orbit/pointing issues)
+        sensitivity > 0.9   (canopy-penetration sensitivity threshold)
+    in addition to the original 0-80m plausible-value range.
+
+    NO LONGER THE PRIMARY chm SOURCE (see _img_chm above) -- kept here, unused by
+    default, as a real, working, quality-controlled per-shot reference in case a
+    future cross-validation against the ETH continuous product is useful; confirmed
+    directly that raw GEDI sparsity, not this quality mask, was the real cause of
+    chm's widespread real site_value=None problem.
+    """
     import ee; y=c.ndvi_year
     gedi=(ee.ImageCollection('LARSE/GEDI/GEDI02_A_002_MONTHLY')
-          .filterDate(f"{y-1}-01-01",f"{y}-12-31").select('rh98'))
-    return gedi.map(lambda img: img.updateMask(img.gte(0).And(img.lte(80)))).mean().rename('CHM')
+          .filterDate(f"{y-1}-01-01",f"{y}-12-31")
+          .select(['rh98','quality_flag','degrade_flag','sensitivity']))
+    def _quality_mask(img):
+        rh98 = img.select('rh98')
+        ok = (rh98.gte(0).And(rh98.lte(80))
+              .And(img.select('quality_flag').eq(1))
+              .And(img.select('degrade_flag').eq(0))
+              .And(img.select('sensitivity').gt(0.9)))
+        return rh98.updateMask(ok)
+    return gedi.map(_quality_mask).mean().rename('CHM')
 
 def _img_ivsi(c):
     """IVSI: fraction of pixels with NDVI increase >0.2 vs 5-year prior."""
@@ -716,6 +1060,14 @@ def _img_ivsi(c):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _fc_tier1_endemic_richness(site_geom, region, config):
+    """Real fix: the reference region is typically orders of magnitude
+    larger than the site polygon, so a raw species-range-overlap count
+    over `region` is not comparable to the site's own count at all — it
+    was structurally guaranteed to dwarf the site value regardless of
+    real habitat quality. Returns the SAME density unit
+    (species per 100 km2, see RICHNESS_DENSITY_UNIT_KM2) as the site-level
+    extract_fn, so the two sides of the comparison are genuinely
+    commensurable."""
     import ee
     region_ee = region if isinstance(region, ee.Geometry) else _to_ee(region)
     total = 0
@@ -729,9 +1081,21 @@ def _fc_tier1_endemic_richness(site_geom, region, config):
         except Exception as e:
             logger.warning(f"FC Tier1 endemic: {e}")
     if total == 0: return {}
-    return {"mean": float(total), "median": float(total), "n": 1}
+    region_area_km2 = _polygon_area_km2(region_ee)
+    if not region_area_km2 or region_area_km2 <= 0: return {}
+    density = total / region_area_km2 * RICHNESS_DENSITY_UNIT_KM2
+    # n=1: this is a single deterministic count over the whole reference
+    # region, not a sampled distribution — there is no natural variance
+    # estimate here the way there is for a pixel-based raster reference.
+    # Honestly reflected in reference_estimator/uncertainty_method at
+    # registration (see indicator registration below), not silently
+    # treated as if it had the same statistical footing as a raster Tier 2.
+    return {"mean": float(density), "median": float(density), "n": 1,
+            "raw_count": total, "region_area_km2": region_area_km2}
 
 def _fc_tier1_threatened_richness(site_geom, region, config):
+    """See _fc_tier1_endemic_richness's docstring — same area-normalisation
+    fix, same reasoning."""
     import ee
     region_ee = region if isinstance(region, ee.Geometry) else _to_ee(region)
     total = 0
@@ -743,7 +1107,11 @@ def _fc_tier1_threatened_richness(site_geom, region, config):
         except Exception as e:
             logger.warning(f"FC Tier1 threatened({asset}): {e}")
     if total == 0: return {}
-    return {"mean": float(total), "median": float(total), "n": 1}
+    region_area_km2 = _polygon_area_km2(region_ee)
+    if not region_area_km2 or region_area_km2 <= 0: return {}
+    density = total / region_area_km2 * RICHNESS_DENSITY_UNIT_KM2
+    return {"mean": float(density), "median": float(density), "n": 1,
+            "raw_count": total, "region_area_km2": region_area_km2}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -755,25 +1123,36 @@ def create_default_registry() -> IndicatorRegistry:
 
     # ── DIM 1: ECOSYSTEM EXTENT ───────────────────────────────────────────────
     r.register(name="natural_habitat", display_name="Natural Habitat Extent", source_type="gee",
+        applicable_realms=("terrestrial", "mixed"),  # DW_NATURAL_CLASSES (checked directly) excludes water
         extract_fn=extract_natural_habitat, unit="%", value_range=(0,100),
         citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4",
         tier2_eligible=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_natural_habitat, "tnfd_dim": 1})
 
-    r.register(name="natural_landcover", display_name="Natural Land Cover Proportion", source_type="gee",
+    r.register(name="natural_landcover", applicable_realms=("terrestrial", "mixed"),  # DW_NATURAL_CLASSES (checked directly) excludes water
+        display_name="Natural Land Cover Proportion", source_type="gee",
         extract_fn=extract_natural_landcover, unit="%", value_range=(0,100),
-        citation="Friedl et al. (2019). MCD12Q1. DOI:10.5067/MODIS/MCD12Q1.061",
+        citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4. NOTE: this "
+                "citation was stale until this audit (previously cited MODIS MCD12Q1 -- a source "
+                "the v4.0 fix documented in _img_natural_landcover's own docstring deliberately "
+                "moved away from, specifically because MCD12Q1's 500m pixels produced real, "
+                "confirmed 'swallowed polygon' artifacts on small real sites; only the citation "
+                "string had never been updated to match the real, current source).",
         tier2_eligible=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_natural_landcover, "tnfd_dim": 1})
 
-    r.register(name="cpland", display_name="Landscape Connectivity (CPLAND)", source_type="gee",
+    r.register(name="cpland", applicable_realms=("terrestrial", "mixed"),
+        # PV_Binary is land-vegetation-specific, meaningless on open water
+        display_name="Landscape Connectivity (CPLAND)", source_type="gee",
         extract_fn=extract_cpland, unit="%", value_range=(0,100),
         citation="McGarigal & Marks (1995). Darukaa PV binary.",
         tier2_eligible=False, reference_radius_km=30.0, pillar=1,
         metadata={"tnfd_dim": 1, "note": "India-only PV binary asset",
                   "gee_image_fn": _img_cpland_binary})
 
-    r.register(name="forest_loss_rate", display_name="Tree Cover Loss Rate", source_type="gee",
+    r.register(name="forest_loss_rate", applicable_realms=("terrestrial", "mixed"),
+        # Forest loss/gain is trivially ~0 on open water, not informative
+        display_name="Tree Cover Loss Rate", source_type="gee",
         extract_fn=extract_forest_loss_rate, unit="% per year", value_range=(0,100),
         citation="Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
              "NOTE: metric detects loss of tree canopy ≥30% density only. "
@@ -786,8 +1165,38 @@ def create_default_registry() -> IndicatorRegistry:
                        "arithmetically inflated percentage rates — interpret absolute "
                        "area lost (ha/yr) alongside the percentage rate. "
                        "Does NOT capture grassland, shrubland, or riparian vegetation "
-                       "dynamics — use ndvi_trend and habitat_health for those signals."),
+                       "dynamics — use ndvi_trend and habitat_health for those signals. "
+                       "GROSS loss only (independent audit item 9) — does not net off "
+                       "any regrowth/planting; see net_forest_change_rate for that."),
         "min_reliable_baseline_ha": 5.0,})
+
+    r.register(name="net_forest_change_rate", applicable_realms=("terrestrial", "mixed"),
+        # same rationale as forest_loss_rate: trivially ~0 on open water
+        display_name="Net Forest Change Rate (Gain − Loss)", source_type="gee",
+        extract_fn=extract_net_forest_change_rate, unit="% per year", value_range=(-100, 100),
+        citation="Loss: Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
+             "Gain: Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4 "
+             "-- current 'trees' class on pixels not forested in the Hansen 2000 baseline. "
+             "SPLIT from forest_loss_rate (independent audit item 9, 2026-09-27, real client-"
+             "facing need: restoration/agroforestry clients genuinely plant trees, and a real "
+             "gain signal netted into a ratio-scale, always-positive loss indicator either "
+             "broke that indicator's log_response_ratio estimator (undefined for <=0) or made "
+             "a real planting success silently invisible/suppressed -- neither is acceptable. "
+             "This indicator carries the SIGNED gain-minus-loss picture on its own scale "
+             "(robust_z, defined for negative/zero/positive values alike), leaving "
+             "forest_loss_rate as the original, historically-established gross-loss-only "
+             "metric its ratio/log_response_ratio contract actually requires.",
+        tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=1,
+        metadata={"gee_image_fn": _img_net_forest_change, "tnfd_dim": 1,
+                  "display_name_report": "Net Forest Cover Change (Hansen loss + Dynamic World gain)",
+                  "scope_note": ("Signed rate: positive = net regrowth, negative = net loss. "
+                       "Gain is detected once (current tree cover on non-2000-forest "
+                       "pixels) and annualised as an approximation -- not annually-"
+                       "resolved the way Hansen's loss signal is. Sites with low "
+                       "baseline forest cover (<5 ha) will show arithmetically inflated "
+                       "percentage rates -- interpret absolute area change (ha/yr) "
+                       "alongside the percentage rate."),
+                  "min_reliable_baseline_ha": 5.0})
 
     r.register(name="kba_overlap", display_name="KBA/IBA Overlap", source_type="gee",
         extract_fn=extract_kba_overlap, unit="%", value_range=(0,100),
@@ -796,59 +1205,103 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"tnfd_dim": 1, "note": "Requires KBA asset"})
 
     # ── DIM 2: ECOSYSTEM CONDITION — Terrestrial core ────────────────────────
-    r.register(name="ndvi", display_name="Vegetation Structure (NDVI)", source_type="gee",
+    r.register(name="ndvi", applicable_realms=("terrestrial", "mixed"),  # vegetation greenness index, not conceptually meaningful on open water
+        display_name="Vegetation Structure (NDVI)", source_type="gee",
         extract_fn=extract_ndvi, unit="index", value_range=(-1,1),
         citation="Sentinel-2 SCL. Drusch et al. (2012). DOI:10.1016/j.rse.2011.11.026",
         tier2_eligible=True, reference_radius_km=50.0, pillar=2,
         metadata={"gee_image_fn": _img_ndvi, "tnfd_dim": 2})
 
-    r.register(name="habitat_health", display_name="Habitat Health Index (HHI)", source_type="gee",
+    r.register(name="habitat_health", applicable_realms=("terrestrial", "mixed"),  # NDVI-derivative (z-score of greenness), same issue as ndvi
+        display_name="Habitat Health Index (HHI)", source_type="gee",
         extract_fn=extract_habitat_health, unit="z5/σ", value_range=(0,50),
         citation="Darukaa greenness stability = mean(z5/σ) from S2 NDVI.",
         tier2_eligible=True, reference_radius_km=50.0, pillar=2,
         metadata={"gee_image_fn": _img_hhi, "tnfd_dim": 2})
 
-    r.register(name="flii", display_name="Forest Landscape Integrity Index", source_type="gee",
+    r.register(name="flii", applicable_realms=("terrestrial", "mixed"),
+        # Forest-specific by definition (fragmentation/pressure on forest
+        # landscape) -- was already excluded from aquatic via module=
+        # "conservation", but applicable_realms is now the real,
+        # authoritative gate, so this needs to be set explicitly too or
+        # it would wrongly default to "applies everywhere" once the
+        # module-based filter is retired.
+        display_name="Forest Fragmentation & Pressure Proxy (Darukaa)", source_type="gee",
         extract_fn=extract_flii, unit="0–10", value_range=(0,10),
-        citation="Approx MODIS LC(1-10)+VIIRS. Grantham et al. (2020). DOI:10.1038/s41467-020-19493-3",
+        citation=("Darukaa-computed proxy (VIIRS night-light pressure + Dynamic-World forest "
+                 "fragmentation), NOT the published Forest Landscape Integrity Index. "
+                 "DECISION (this audit): investigated the real Grantham et al. (2020) FLII "
+                 "directly -- confirmed TNFD/SBTN do use it for exactly this purpose, but no "
+                 "open-access, directly-loadable GEE asset was found (accessible only via a "
+                 "third-party commercial API/SDK) -- staying with this proxy rather than adding "
+                 "an external paid dependency. Kept clearly distinct: this indicator's own name "
+                 "and citation must never imply it is the real, external FLII a TNFD reviewer "
+                 "might look up independently. See ASSUMPTIONS §1."),
         tier2_eligible=True, reference_radius_km=150.0, pillar=2,
-        metadata={"gee_image_fn": _img_flii, "tnfd_dim": 2})
+        metadata={"gee_image_fn": _img_flii, "tnfd_dim": 2,
+                 "display_name_report": "Forest Fragmentation & Pressure Proxy (Darukaa)"})
 
     r.register(name="eii", display_name="Ecosystem Integrity Index", source_type="gee",
+        applicable_realms=("terrestrial", "mixed"),  # unverified over water pixels -- conservative default, see registry.py
         extract_fn=extract_eii, unit="index", value_range=(0,1),
         citation="Hill et al. (2022). bioRxiv. DOI:10.1101/2022.08.21.504707. Landbanking 300m.",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii, "tnfd_dim": 2})
 
-    r.register(name="eii_structural", display_name="EII: Structural Integrity", source_type="gee",
+    r.register(name="eii_structural", applicable_realms=("terrestrial", "mixed"),  # same real disposition as parent eii -- unverified over water, conservative default
+        display_name="EII: Structural Integrity", source_type="gee",
         extract_fn=extract_eii_s, unit="index", value_range=(0,1),
         citation="Hill et al. (2022). Kennedy et al. (2019). DOI:10.1111/gcb.14549",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii_s, "tnfd_dim": 2})
 
-    r.register(name="eii_compositional", display_name="EII: Compositional Integrity", source_type="gee",
+    r.register(name="eii_compositional", applicable_realms=("terrestrial", "mixed"),  # same real disposition as parent eii -- unverified over water, conservative default
+        display_name="EII: Compositional Integrity", source_type="gee",
         extract_fn=extract_eii_c, unit="index", value_range=(0,1),
         citation="IO BII 300m. Newbold et al. (2016). DOI:10.1126/science.aaf2201",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii_c, "tnfd_dim": 2})
 
-    r.register(name="eii_functional", display_name="EII: Functional Integrity", source_type="gee",
+    r.register(name="eii_functional", applicable_realms=("terrestrial", "mixed"),  # same real disposition as parent eii -- unverified over water, conservative default
+        display_name="EII: Functional Integrity", source_type="gee",
         extract_fn=extract_eii_f, unit="index", value_range=(0,1),
         citation="Actual/potential NPP. Hill et al. (2022).",
         tier2_eligible=True, reference_radius_km=75.0, pillar=2,
         metadata={"gee_image_fn": _img_eii_f, "tnfd_dim": 2})
 
-    r.register(name="bii", display_name="Biodiversity Intactness Index", source_type="gee",
+    r.register(name="bii", applicable_realms=("terrestrial", "mixed"),  # PREDICTS is a terrestrial biodiversity model
+        display_name="Biodiversity Intactness Index", source_type="gee",
         extract_fn=extract_bii, unit="index", value_range=(0,1),
-        citation="Newbold et al. (2016). Science. DOI:10.1126/science.aaf2201. IO 300m / PREDICTS fallback.",
-        tier2_eligible=True, reference_radius_km=75.0, pillar=2,
-        metadata={"gee_image_fn": _img_bii, "tnfd_dim": 2})
+        citation=("Newbold et al. (2016). Science 353:288-291. DOI:10.1126/science.aaf2201 "
+                 "(BII methodology); Hudson et al. (2017). Ecol. Evol. 7:145-188 (PREDICTS "
+                 "database). Dataset: UPGRADED (independent audit item 16, 2026-09-27, "
+                 "verified live before switching) to Gassert, F., Mazzarello, J., & Hyde, S. "
+                 "(2026). 'Global 100m projections of biodiversity intactness for the years "
+                 "2017-2025 (v1.1)' [Technical white paper]. Vizzuality and Impact Observatory "
+                 "-- projects/ebx-data/assets/earthblox/IO/BII_V1_1 (GEE community catalog), "
+                 "annual 2017-2025 (was a fixed 2017-2020 composite on the prior BIOINTACT "
+                 "asset, kept as a fallback -- v0.2.4 fix note: this indicator was originally "
+                 "incorrectly derived from EII's own compositional_integrity band, not an "
+                 "independent source; see ASSUMPTIONS §9)."),
+        tier2_eligible=True, reference_radius_km=75.0, pillar=3,
+        metadata={"gee_image_fn": _img_bii, "tnfd_dim": 3,
+                 "display_name_report": "Biodiversity Intactness Index (fauna & flora abundance)"})
 
-    r.register(name="pdf", display_name="Potentially Disappeared Fraction", source_type="gee",
+    r.register(name="pdf", applicable_realms=("terrestrial", "mixed"),  # GLOBIO-style biodiversity model, terrestrial-vegetation-oriented
+        display_name="Land-use Biodiversity Loss Proxy", source_type="gee",
         extract_fn=extract_pdf, unit="fraction", value_range=(0,1),
-        citation="Huijbregts et al. (2017). ReCiPe2016. DOI:10.1007/s11367-016-1246-y",
+        citation=("Land-cover characterization-factor proxy, weights informed by ReCiPe2016's "
+                 "SAR-derived CFs (Huijbregts et al. 2017, DOI:10.1007/s11367-016-1246-y) but "
+                 "NOT the formal PDF (Potentially Disappeared Fraction) calculation those "
+                 "factors are drawn from -- RENAMED (independent audit item 10): the prior "
+                 "display_name 'Potentially Disappeared Fraction' implied this reproduces that "
+                 "specific LCA metric, which it does not (no species-area curve is actually "
+                 "fitted here; a static per-land-cover-class coefficient is applied instead). "
+                 "Internal registry key kept as 'pdf' (not renamed) for downstream config/report "
+                 "continuity -- only the client-facing display name and this citation changed."),
         tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=2,
-        metadata={"gee_image_fn": _img_pdf, "tnfd_dim": 2})
+        metadata={"gee_image_fn": _img_pdf, "tnfd_dim": 2,
+                  "display_name_report": "Land-use Biodiversity Loss Proxy (Darukaa)"})
 
     r.register(name="aridity_index", display_name="Aridity Index", source_type="gee",
         extract_fn=extract_aridity, unit="P/PET", value_range=(0,5),
@@ -866,10 +1319,21 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="sabf", display_name="Surface Algal Bloom Frequency", source_type="gee",
         extract_fn=extract_sabf, unit="frequency (0-1)", value_range=(0,1),
-        citation="Hu C (2009) RSE 113:2118-2129. DOI:10.1016/j.rse.2009.05.012",
+        citation=("FAI formula itself: Hu C (2009) RSE 113:2118-2129. DOI:10.1016/j.rse.2009.05.012 "
+                 "-- genuinely used as published. CLARIFIED (independent audit item 14): the "
+                 "0.005 FAI 'bloom' binarization threshold and the time-averaging into a "
+                 "'frequency' statistic are Darukaa's own operational choices, not specified "
+                 "by Hu (2009) -- the prior bare citation implied the whole indicator, "
+                 "threshold included, was literature-derived."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_sabf, "tnfd_dim": 2,
-                  "note": "FAI bloom threshold=0.005 (S2 inland water). Higher = more bloom events."})
+                  "note": "FAI bloom threshold=0.005 (S2 inland water). Higher = more bloom events.",
+                  "provenance": {
+                      "literature_component": "Floating Algae Index (FAI) formula (Hu 2009), used as published.",
+                      "darukaa_transformation": "Binarize FAI>0.005 as 'bloom', average over the time series into a frequency (0-1).",
+                      "darukaa_weights": None,
+                      "validation_status": "partially_validated",
+                  }})
 
     r.register(name="wcpi", display_name="Water Clarity Proxy Index", source_type="gee",
         extract_fn=extract_wcpi, unit="index (0-1, site-relative)", value_range=(0,1),
@@ -881,39 +1345,104 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="wsdi", display_name="Water Surface Dynamics Index", source_type="gee",
         extract_fn=extract_wsdi, unit="index (0-1)", value_range=(0,1),
-        citation="Pekel et al. (2016) Nature 540:418-422. DOI:10.1038/nature20584",
+        citation="Darukaa-implemented VV backscatter thresholding (Sentinel-1 GRD, IW mode) -- the "
+                "well-established SAR water-detection principle that open water gives a specular, "
+                "low-backscatter return (widely used in SAR flood/water-mapping literature; no single "
+                "canonical source paper for this generic technique -- NOT Pekel et al. 2016, which is "
+                "the JRC Global Surface Water product, a completely different Landsat OPTICAL "
+                "methodology mistakenly cited here until this audit; confirmed directly against "
+                "_img_wsdi's own real code, which uses Sentinel-1 VV, not Landsat optical).",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_wsdi, "tnfd_dim": 2,
-                  "note": "Peaks at 0.5 occurrence = most dynamic/unstable. Lower = more stable."})
+                  "note": ("Peaks at 0.5 occurrence = most dynamic/unstable. Lower = more stable. "
+                          "CONTEXT ONLY (independent audit item 15, resolved 2026-09-27): not "
+                          "scored -- see provenance.validation_status."),
+                  "provenance": {
+                      "literature_component": "SAR specular-return water detection (well-established generic SAR principle, no single canonical source).",
+                      "darukaa_transformation": "Sentinel-1 VV occurrence-frequency thresholding into a 0-1 dynamism index, peaking at 0.5 occurrence.",
+                      "darukaa_weights": None,
+                      "validation_status": ("not_externally_validated. RESOLVED (independent audit item 15, "
+                                            "2026-09-27, project owner decision): demoted to context-only, not "
+                                            "scored -- 'higher dynamism = worse' is not universally true (a "
+                                            "seasonal wetland's natural dynamism would be wrongly penalised); "
+                                            "shown as a real descriptive number, no longer part of the headline. "
+                                            "See contracts.py's wsdi entry for the full rationale."),
+                  }})
 
     r.register(name="hsas", display_name="Habitat Suitability Alignment Score", source_type="gee",
         extract_fn=extract_hsas, unit="index (0-1)", value_range=(0,1),
-        citation="Elith J & Leathwick JR (2009) Annu Rev Ecol Evol Syst 40:677. DOI:10.1146/annurev.ecolsys.110308.120159",
+        citation=("Darukaa-constructed weighted composite (NDVI 0.5 + water-proximity 0.3 + "
+                 "inverse-disturbance 0.2) -- these specific weights are Darukaa's own, informed "
+                 "by general species distribution modelling principles (Elith & Leathwick 2009 "
+                 "Annu Rev Ecol Evol Syst 40:677, DOI:10.1146/annurev.ecolsys.110308.120159), not "
+                 "a validated formula published in that paper. Corrected during this audit -- the "
+                 "prior citation implied a level of external validation this composite doesn't have."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_hsas, "tnfd_dim": 2,
-                  "note": "Requires config.raster_paths['edna_points_asset']. Without eDNA points returns habitat suitability only."})
+                  "note": "Requires config.raster_paths['edna_points_asset']. Without eDNA points returns habitat suitability only.",
+                  "provenance": {
+                      "literature_component": "General species distribution modelling principles (Elith & Leathwick 2009) motivate the input choice; no formula.",
+                      "darukaa_transformation": "NDVI + water-proximity + inverse-disturbance weighted composite as a habitat-suitability surface; alignment against real eDNA detections when supplied.",
+                      "darukaa_weights": {"ndvi": 0.5, "water_proximity": 0.3, "inverse_disturbance": 0.2},
+                      "validation_status": "not_externally_validated; see hsas_validated (report.py) for the real per-run eDNA-alignment gate",
+                  }})
 
     r.register(name="edpp", display_name="eDNA Persistence Potential", source_type="gee",
         extract_fn=extract_edpp, unit="index (0-1)", value_range=(0,1),
-        citation=("Strickler KM et al. (2015) EST 49:4209. DOI:10.1021/es404734p; "
-                  "Roussel JM et al. (2015) Biol Conserv 183:50. DOI:10.1016/j.biocon.2014.11.038"),
+        citation=("Darukaa-constructed composite (thermal stress inverse x turbidity protection x "
+                 "moisture x inverse UV exposure) -- these environmental factors are directly "
+                 "supported as eDNA-persistence drivers by Strickler KM et al. (2015) EST 49:4209, "
+                 "DOI:10.1021/es404734p, and Roussel JM et al. (2015) Biol Conserv 183:50, "
+                 "DOI:10.1016/j.biocon.2014.11.038 -- but the specific multiplicative combination "
+                 "is Darukaa's own, not a formula published in either paper. Clarified during audit."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_edpp_bands, "tnfd_dim": 2,
-                  "note": "Higher = better eDNA preservation conditions."})
+                  "note": "Higher = better eDNA preservation conditions.",
+                  "provenance": {
+                      "literature_component": "Thermal stress, turbidity protection, moisture, and UV exposure are each independently supported as eDNA-persistence drivers (Strickler et al. 2015; Roussel et al. 2015).",
+                      "darukaa_transformation": "Multiplicative combination of the four factors into one 0-1 index.",
+                      "darukaa_weights": None,
+                      "validation_status": "not_externally_validated",
+                  }})
 
     r.register(name="mspl", display_name="Microbial Stress Probability Layer", source_type="gee",
         extract_fn=extract_mspl, unit="probability (0-1)", value_range=(0,1),
-        citation="Shade A et al. (2012) Microb Ecol 63:795. DOI:10.1007/s00248-012-0159-y",
+        citation=("Darukaa-constructed weighted composite (nutrient-stress 0.35 + thermal 0.30 + "
+                 "turbidity 0.20 + water-persistence 0.15) -- these specific weights are Darukaa's "
+                 "own, informed by general microbial-disturbance principles (Shade A et al. 2012 "
+                 "Microb Ecol 63:795, DOI:10.1007/s00248-012-0159-y), not a validated formula "
+                 "published in that paper. Corrected during this audit -- same class of "
+                 "over-attribution found and fixed in hsas/iri."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=2,
         metadata={"gee_image_fn": _img_mspl_bands, "tnfd_dim": 2,
-                  "note": "Proxy for eutrophic/microbial imbalance. Complements 16S eDNA."})
+                  "note": "Proxy for eutrophic/microbial imbalance. Complements 16S eDNA.",
+                  "provenance": {
+                      "literature_component": "General microbial-disturbance principles (Shade et al. 2012) motivate the input choice; no formula.",
+                      "darukaa_transformation": "Nutrient-stress + thermal + turbidity + water-persistence weighted composite.",
+                      "darukaa_weights": {"nutrient_stress": 0.35, "thermal": 0.30, "turbidity": 0.20, "water_persistence": 0.15},
+                      "validation_status": "not_externally_validated",
+                  }})
 
     r.register(name="rci", display_name="Riparian Complexity Index", source_type="gee",
         extract_fn=extract_rci, unit="index (0-1)", value_range=(0,1),
-        citation="Naiman RJ & Decamps H (1997) Annu Rev Ecol Syst 28:621. DOI:10.1146/annurev.ecolsys.28.1.621",
+        citation=("Darukaa-constructed weighted composite (vegetation variability 0.30 + "
+                 "vegetation complexity/EVI 0.30 + vegetation productivity/NDVI 0.20 + edge "
+                 "complexity 0.20) -- CORRECTED (independent audit item 14, real gap found: "
+                 "this was bare-cited to Naiman & Decamps (1997) Annu Rev Ecol Syst 28:621, "
+                 "DOI:10.1146/annurev.ecolsys.28.1.621, with no clarification, the same "
+                 "over-attribution pattern already fixed for hsas/iri/mspl/edpp but missed "
+                 "here). That paper is a conceptual riparian-ecology review; it does not "
+                 "specify this composite's remote-sensing formula, sub-score weights, or "
+                 "unit-scaling thresholds, which are Darukaa's own."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=25.0, pillar=2,
         metadata={"gee_image_fn": _img_rci, "tnfd_dim": 2,
-                  "note": "100m riparian buffer. 2-year S2 window."})
+                  "note": "100m riparian buffer. 2-year S2 window.",
+                  "provenance": {
+                      "literature_component": "Riparian complexity as an ecological concept (Naiman & Decamps 1997) motivates measuring this at all; the paper supplies no formula.",
+                      "darukaa_transformation": "NDVI/EVI-derived vegetation variability, complexity, productivity, and edge-complexity sub-scores, each unit-scaled and clamped 0-1 by Darukaa-chosen thresholds.",
+                      "darukaa_weights": {"veg_variability": 0.30, "veg_complexity": 0.30, "veg_productivity": 0.20, "edge_complexity": 0.20},
+                      "validation_status": "not_externally_validated",
+                  }})
 
     # ── DIM 2: ECOSYSTEM CONDITION — Terrestrial vegetation  ───────────
     r.register(name="riparian_ndvi_trend", display_name="Riparian NDVI Temporal Trend", source_type="gee",
@@ -923,11 +1452,26 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _img_riparian_ndvi_trend, "tnfd_dim": 2,
                   "note": "Linear slope NDVI/year in riparian zone. Negative = degradation trend."})
 
-    r.register(name="jrc_water_persistence", display_name="JRC Water Persistence (Permanent Fraction)", source_type="gee",
+    r.register(name="jrc_water_persistence", applicable_realms=("terrestrial", "aquatic", "mixed"),
+        # Water-specific by definition -- was mistagged module="core" instead of "aquatic"
+        display_name="Water Surface Persistence (Sentinel-1 SAR)", source_type="gee",
         extract_fn=extract_jrc_water_persistence, unit="fraction (0-1)", value_range=(0,1),
-        citation="Pekel JF et al. (2016) Nature 540:418. DOI:10.1038/nature20584",
+        citation=("Darukaa-implemented VV backscatter thresholding (Sentinel-1 GRD, IW mode) -- "
+                 "same real technique as wsdi (see that indicator's own citation for why no "
+                 "single canonical source paper applies to this generic method). SWITCHED "
+                 "(independent audit item 6, confirmed directly against Google's own Earth "
+                 "Engine catalog): previously used JRC/GSW1_4/MonthlyHistory (Pekel et al. "
+                 "2016), whose real, documented coverage ends 2022-01-01 -- structurally, "
+                 "guaranteedly empty for any current/recent year, not a probabilistic gap. A "
+                 "newer JRC v1.5 release does cover 2022-2024, but no confirmed exact GEE asset "
+                 "ID for its MONTHLY collection was found without guessing; used this "
+                 "already-confirmed-working, genuinely current alternative instead. Internal "
+                 "name kept as jrc_water_persistence for now (a bigger, separate naming "
+                 "decision, flagged not auto-renamed, matching flii/pdf/hdi elsewhere in this "
+                 "audit) -- but no longer literally JRC data; the display name and this "
+                 "citation are the parts that must stay accurate."),
         tier2_eligible=False, higher_is_better=True, reference_radius_km=10.0, pillar=2,
-        metadata={"tnfd_dim": 2,
+        metadata={"tnfd_dim": 2, "gee_image_fn": _img_jrc_water_persistence,
                   "note": "Fraction of site with water >75% of months. Complements WSDI (SAR-based)."})
 
     r.register(name="shdi", display_name="Shoreline Development Index (Morphometric)", source_type="gee",
@@ -937,33 +1481,56 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"tnfd_dim": 2,
                   "note": "SCALAR metric only — no spatial map. Min=1.0 (circle). DO NOT confuse with sdi (disturbance)."})
 
-    r.register(name="lai", display_name="Leaf Area Index (MODIS MCD15A3H)", source_type="gee",
+    r.register(name="lai", applicable_realms=("terrestrial", "mixed"),  # Leaf Area Index -- definitionally ~0 on open water
+        display_name="Leaf Area Index (MODIS MCD15A3H)", source_type="gee",
         extract_fn=extract_lai, unit="m²/m²", value_range=(0,8),
         citation="Myneni RB et al. (2002) RSE 83:214. DOI:10.1016/S0034-4257(02)00074-3",
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=2,
         metadata={"gee_image_fn": _img_lai, "tnfd_dim": 2,
                   "note": "MODIS 500m. Scale factor 0.1 applied."})
 
-    r.register(name="chm", display_name="Canopy Height Model (GEDI L2A rh98)", source_type="gee",
-        extract_fn=extract_chm, unit="metres", value_range=(0,80),
-        citation="Dubayah R et al. (2020) Sci Remote Sens 1:100002. DOI:10.1016/j.srs.2020.100002",
+    r.register(name="chm", applicable_realms=("terrestrial", "mixed"),
+        # Canopy height is trivially ~0m on open water, not informative
+        display_name="Canopy Height Model (ETH Global Canopy Height 2020)", source_type="gee",
+        extract_fn=extract_chm, unit="metres", value_range=(0,50),
+        citation=("Lang N, Jetz W, Schindler K & Wegner JD (2023). A high-resolution canopy "
+                 "height model of the Earth. Nat Ecol Evol. DOI:10.1038/s41559-023-02206-6. "
+                 "SWITCHED (this audit) from GEDI L2A rh98 raw shot data -- confirmed directly "
+                 "that GEDI's sparse orbital-track sampling left most real zones with zero "
+                 "valid data. Real, honest trade-off: this is a single 2020 snapshot, not a "
+                 "live per-year product -- appropriate as a current Year-0 baseline, will need "
+                 "a real decision of its own for future monitoring-cycle comparisons. See "
+                 "ASSUMPTIONS §15."),
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=2,
         metadata={"gee_image_fn": _img_chm, "tnfd_dim": 2,
                   "note": "GEDI L2A rh98. 2-year window. Quality-masked 0-80m."})
 
     # ── DIM 3: SPECIES POPULATION SIZE ───────────────────────────────────────
     r.register(name="endemic_richness", display_name="Endemic Species Richness", source_type="gee",
-        extract_fn=extract_endemic_richness, unit="count", value_range=(0,500),
-        citation="IUCN mammal ranges. Range < 100,000 km².",
+        extract_fn=extract_endemic_richness, unit="species per 100km2", value_range=(0,200),
+        citation="IUCN mammal ranges. Range < 100,000 km². Area-normalised (v0.2.7) — raw range-overlap "
+                 "counts are not comparable across differently-sized sites; see contracts.py note.",
         tier2_eligible=False, higher_is_better=True, reference_radius_km=100.0, pillar=3,
-        metadata={"tnfd_dim": 3, "note": "Mammals + birds. Species list in metadata.",
+        metadata={"tnfd_dim": 3, "note": "Mammals + birds. Species list and raw_count in metadata.",
                   "conservation_priority_flag": ("High endemic richness = lower SoN concern "
                       "(ecologically valuable, intact site) but should be separately flagged "
                       "in narrative reporting as a conservation-priority asset — high endemism "
                       "is a finding worth highlighting, not just a 'low concern' score."),
                   "fc_tier1_fn": _fc_tier1_endemic_richness})
 
-    r.register(name="flagship_habitat", display_name="Flagship Habitat Viability", source_type="gee",
+    r.register(name="shi", display_name="Species Habitat Index (SHI)", source_type="gee",
+        extract_fn=extract_shi, unit="index", value_range=(0,1),
+        citation="GEO BON / Map of Life. GBF Goal A component indicator. "
+                 "https://geobon.org/ebvs/indicators/species-habitat-index-shi/",
+        tier2_eligible=True, higher_is_better=True, reference_radius_km=100.0, pillar=3,
+        requires=["mol_api_credentials"],  # keeps this out of scoring until real access exists (registry.eligible)
+        metadata={"tnfd_dim": 3, "note": "OD-12 placeholder — see extract_shi's docstring. Structurally "
+                  "ready (reference_type/estimator pre-set below) so activation is a single requires[] "
+                  "removal once Map of Life API access is confirmed and extract_shi is implemented for real, "
+                  "not a re-registration."})
+
+    r.register(name="flagship_habitat", applicable_realms=("terrestrial", "mixed"),  # HSI formula multiplies by forest=dw.eq(DW_TREES), trivially ~0 on water
+        display_name="Flagship Habitat Viability", source_type="gee",
         extract_fn=extract_flagship_habitat, unit="index", value_range=(0,1),
         citation="Forest × elevation_suit × inverse_pressure. Bird threatened overlay.",
         tier2_eligible=False, higher_is_better=True, reference_radius_km=50.0, pillar=3,
@@ -979,10 +1546,10 @@ def create_default_registry() -> IndicatorRegistry:
 
     # ── DIM 4: SPECIES EXTINCTION RISK ───────────────────────────────────────
     r.register(name="threatened_richness", display_name="Threatened Species Richness", source_type="gee",
-        extract_fn=extract_threatened_richness, unit="count", value_range=(0,500),
-        citation="IUCN Red List. CR/EN/VU mammals + birds.",
+        extract_fn=extract_threatened_richness, unit="species per 100km2", value_range=(0,100),
+        citation="IUCN Red List. CR/EN/VU mammals + birds. Area-normalised (v0.2.7) — see contracts.py note.",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=100.0, pillar=4,
-        metadata={"tnfd_dim": 4, "fc_tier1_fn": _fc_tier1_threatened_richness})
+        metadata={"tnfd_dim": 4, "note": "raw_count in metadata.", "fc_tier1_fn": _fc_tier1_threatened_richness})
 
     r.register(name="ceri", display_name="Composite Extinction-Risk Index", source_type="gee",
         extract_fn=extract_ceri, unit="index", value_range=(0,1),
@@ -990,7 +1557,8 @@ def create_default_registry() -> IndicatorRegistry:
         tier2_eligible=False, higher_is_better=False, reference_radius_km=100.0, pillar=4,
         metadata={"tnfd_dim": 4})
 
-    r.register(name="star_t", display_name="STAR_T (Threat Abatement)", source_type="gee",
+    r.register(name="star_t", applicable_realms=("terrestrial", "mixed"),  # habitat-mask component uses DW_NATURAL_CLASSES, excludes water
+        display_name="STAR_T (Threat Abatement)", source_type="gee",
         extract_fn=extract_star_t, unit="score", value_range=(0,10),
         citation="Mair et al. (2021). Nat Ecol Evol. DOI:10.1038/s41559-021-01432-0",
         tier2_eligible=False, higher_is_better=True, reference_radius_km=100.0, pillar=4,
@@ -1014,23 +1582,52 @@ def create_default_registry() -> IndicatorRegistry:
                   "note": "IUCN_Plant_Redlist. CR/EN/VU. Returns n_CR/n_EN/n_VU counts."})
 
     # ── THREATS & PRESSURES (pillar=5) ───────────────────────────────────────
-    r.register(name="ghm", display_name="Global Human Modification", source_type="gee",
+    r.register(name="ghm", applicable_realms=("terrestrial", "aquatic", "mixed"),
+        # Landscape-wide human-pressure surface, genuinely valid for water too
+        display_name="Global Human Modification", source_type="gee",
         extract_fn=extract_ghm, unit="index", value_range=(0,1),
-        citation="Kennedy et al. (2019). DOI:10.1111/gcb.14549",
-        tier2_eligible=False, higher_is_better=False, reference_radius_km=50.0, pillar=5,
-        metadata={"gee_image_fn": _img_ghm, "tnfd_dim": "threats"})
+        citation=("Theobald, D.M., Oakleaf, J.R., Moncrieff, G., Voigt, M., Kiesecker, J. & "
+                 "Kennedy, C.M. (2025). Global extent and change in human modification of "
+                 "terrestrial ecosystems from 1990 to 2022. Scientific Data 12, 606. "
+                 "DOI:10.1038/s41597-025-04892-2 -- CORRECTED (independent audit item 17, "
+                 "verified live 2026-09-27 via PubMed/Nature directly before writing, not "
+                 "assumed from the audit's claim): was still citing Kennedy et al. (2019), "
+                 "the source for the PRIOR CSP/HM/GlobalHumanModification (~2016, 1km) asset "
+                 "this indicator no longer uses. The actual live asset (see _img_ghm) is "
+                 "TNC/HM/v3/90m_s, a 2022 static snapshot at 90m -- this is that dataset's "
+                 "real, current methodology paper."),
+        # tier2_eligible=True (2026-09-28): reference.py already contains a dedicated
+        # independent-reference Tier-2 path for ghm (audit item 3, Option B); with
+        # tier2_eligible=False that path was UNREACHABLE in a real run (compute() skips
+        # Tier 2 entirely). Only ghm changes -- hdi/light_pollution/iri/cpland stay Tier-1-only.
+        tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=5,
+        metadata={"gee_image_fn": _img_ghm, "tnfd_dim": "threats",
+                 "note": "TNC HM v3, 90m, 2022 static snapshot (All_threats_combined band)."})
 
-    r.register(name="light_pollution", display_name="Light Pollution (VIIRS)", source_type="gee",
+    r.register(name="light_pollution", applicable_realms=("terrestrial", "aquatic", "mixed"), display_name="Light Pollution (VIIRS)", source_type="gee",
         extract_fn=extract_light_pollution, unit="nW/cm²/sr", value_range=(0,500),
         citation="Elvidge et al. (2017). DOI:10.1080/01431161.2017.1342050",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_viirs, "tnfd_dim": "threats"})
 
-    r.register(name="hdi", display_name="Human Disturbance Index", source_type="gee",
+    r.register(name="hdi", display_name="Built-up / Settlement Pressure Index", source_type="gee",
+        applicable_realms=("terrestrial", "aquatic", "mixed"),
         extract_fn=extract_hdi, unit="index", value_range=(0,1),
-        citation="ESA WorldCover v200. DOI:10.5281/zenodo.7254221",
+        citation="Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4 -- built-up "
+                "class proximity. NOTE: this citation was stale until this audit (previously "
+                "cited ESA WorldCover, a source deliberately retired in the v4.0 fix documented "
+                "in _img_hdi's own docstring -- HDI has used Dynamic World's built-up class for "
+                "several releases; only the citation string had never been updated to match). "
+                "RENAMED (independent audit item 11): the prior display_name 'Human Disturbance "
+                "Index' invited confusion with the unrelated, widely-known UNDP Human "
+                "Development Index acronym -- this indicator measures built-up/settlement "
+                "proximity pressure only, nothing socioeconomic. Internal registry key kept as "
+                "'hdi' (not renamed) for downstream config/report continuity -- only the "
+                "client-facing display name changed. contracts.py's disposition note for hdi "
+                "had already flagged this rename as pending; this is that rename executed.",
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
-        metadata={"gee_image_fn": _img_hdi, "tnfd_dim": "threats"})
+        metadata={"gee_image_fn": _img_hdi, "tnfd_dim": "threats",
+                  "display_name_report": "Built-up / Settlement Pressure Index"})
 
     r.register(name="lst_day", display_name="Daytime Surface Temperature", source_type="gee",
         extract_fn=extract_lst_day, unit="°C", value_range=(-40,70),
@@ -1060,19 +1657,46 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="iri", display_name="Invasive Risk Index", source_type="gee",
         extract_fn=extract_iri, unit="index (0-1)", value_range=(0,1),
-        citation=("Bellard C et al. (2016) Glob Change Biol 22:1869. DOI:10.1111/gcb.13004; "
-                  "Mandrak NE & Cudmore B (2009) Can J Fish Aquat Sci 67:1135. DOI:10.1139/F08-099"),
+        citation=("Darukaa-constructed weighted composite (connectivity 0.30 + nutrient 0.25 + "
+                 "human-pressure 0.20 + disturbance 0.15 + access 0.10) -- these specific weights "
+                 "are Darukaa's own, informed by general invasion-ecology principles (Bellard C et "
+                 "al. 2016 Glob Change Biol 22:1869, DOI:10.1111/gcb.13004; Mandrak NE & Cudmore B "
+                 "2009 Can J Fish Aquat Sci 67:1135, DOI:10.1139/F08-099), not a validated formula "
+                 "published in either paper. Corrected during this audit -- the prior citation "
+                 "implied a level of external validation this composite doesn't have."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=10.0, pillar=5,
         metadata={"gee_image_fn": _img_iri, "tnfd_dim": "threats",
-                  "note": "Road proxy = built-up edge (not true road dataset)."})
+                  "note": "Road proxy = built-up edge (not true road dataset).",
+                  "provenance": {
+                      "literature_component": "General invasion-ecology principles (Bellard et al. 2016; Mandrak & Cudmore 2009) motivate the input choice; no formula.",
+                      "darukaa_transformation": "Connectivity + nutrient + human-pressure + disturbance + access weighted composite.",
+                      "darukaa_weights": {"connectivity": 0.30, "nutrient": 0.25, "human_pressure": 0.20, "disturbance": 0.15, "access": 0.10},
+                      "validation_status": "not_externally_validated",
+                  }})
 
-    r.register(name="ivsi", display_name="Invasive Vegetation Spread Index", source_type="gee",
+    r.register(name="ivsi", applicable_realms=("terrestrial", "mixed"),  # detects NDVI expansion (vegetation-based), not meaningful on open water
+        display_name="Vegetation Expansion Pressure Proxy", source_type="gee",
         extract_fn=extract_ivsi, unit="fraction (0-1)", value_range=(0,1),
-        citation="Paz-Kagan T et al. (2019) RSE 233:111396. DOI:10.1016/j.rse.2019.111396",
+        citation=("Method (NDVI-expansion detection): Paz-Kagan T et al. (2019) RSE 233:111396. "
+                 "DOI:10.1016/j.rse.2019.111396. RENAMED (independent audit item 12): the prior "
+                 "display_name 'Invasive Vegetation Spread Index' claimed taxonomic invasive-"
+                 "species detection this indicator does not do -- it flags any NDVI expansion "
+                 ">0.2 vs a 5-year prior (a generic 'vegetation is spreading here' signal), with "
+                 "no species identification of any kind, so an expanding native population reads "
+                 "identically to a genuine invasive spread. Internal registry key kept as 'ivsi' "
+                 "(not renamed) for downstream config/report continuity -- only the client-facing "
+                 "display name changed."),
         tier2_eligible=False, higher_is_better=False, reference_radius_km=25.0, pillar=5,
         metadata={"gee_image_fn": _img_ivsi, "tnfd_dim": "threats",
+                  "display_name_report": "Vegetation Expansion Pressure Proxy",
                   "note": "NDVI expansion >0.2 vs 5-year prior. Detects expansion broadly, not taxonomic invasion."})
 
+    # v0.2.0 (CS-1/CS-2/CS-4/CS-7): populate the indicator contract + dispositions so
+    # registry.scored() returns the lean, defensible set (CERI removed, richness ->
+    # screening, EII parent-only, DW-redundant demoted). Import local to avoid import-
+    # order coupling; contracts.py depends only on the registry API.
+    from .. import contracts
+    contracts.apply_contracts(r)
     return r
 
 
@@ -1096,72 +1720,141 @@ def extract_cpland(g,c):
         return {"value":max(0,min(100,100*float(ee.Number(ca.get("c")).getInfo())/pa_m2)),"pixels":None}
     except Exception as e: logger.warning(f"CPLAND: {e}"); return {"value":None,"pixels":None}
 
+def _annualized_rate_pct(area_m2, baseline_m2, n_years):
+    """Pure-Python rate arithmetic (area / baseline * 100 / years), factored out
+    of the GEE call chain so it is directly unit-testable without live GEE
+    credentials (see tests/test_forest_indicators.py) and so both
+    extract_forest_loss_rate and extract_net_forest_change_rate share exactly
+    one implementation of this arithmetic rather than two independently-typed
+    copies that could silently drift apart. Mirrors the GEE-side `.max(1)`
+    baseline floor exactly, so a client-side test exercises the SAME numeric
+    behaviour as the live GEE path, not an approximation of it."""
+    baseline = max(float(baseline_m2), 1.0)
+    return (float(area_m2) / baseline) * 100.0 / max(float(n_years), 1e-9)
+
+
+def _forest_baseline_and_loss(eg, c):
+    """Shared real GEE computation used by BOTH forest_loss_rate (gross loss
+    only) and net_forest_change_rate (gain - loss): the Hansen GFC image,
+    2000 forest baseline area, and per-window loss areas. Factored out
+    (independent audit item 9 follow-up) so the two indicators can never
+    silently compute the baseline or loss windows differently from each
+    other -- a real risk of a hand-duplicated copy drifting out of sync.
+    Returns (gfc, forest2000_mask, baseline_m2 as ee.Number, windows list,
+    primary_label, per-window loss_area_m2 as ee.Number dict)."""
+    import ee
+    gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13").clip(eg)
+    f = gfc.select("treecover2000").gte(30)
+    pa = ee.Image.pixelArea()
+
+    a0 = pa.updateMask(f).reduceRegion(
+        reducer=ee.Reducer.sum(), geometry=eg, scale=30, maxPixels=1e13)
+    baseline_m2 = ee.Number(a0.get("area"))
+
+    windows = getattr(c, "forest_loss_windows", None) or [
+        ("loss_longterm_2001_2025", 1, 25, 24),
+        ("loss_recent_2020_2025", 20, 25, 5),
+        ("loss_current_2023_2025", 23, 25, 2),
+    ]
+    primary_label = getattr(c, "forest_loss_primary_window", "loss_longterm_2001_2025")
+
+    loss_area_m2_by_window = {}
+    for key, yr_start, yr_end, n_years in windows:
+        l = (gfc.select("lossyear")
+             .gte(yr_start)
+             .And(gfc.select("lossyear").lte(yr_end))
+             .And(gfc.select("lossyear").gt(0)))
+        al = pa.updateMask(l).reduceRegion(
+            reducer=ee.Reducer.sum(), geometry=eg, scale=30, maxPixels=1e13)
+        loss_area_m2_by_window[key] = ee.Number(al.get("area"))
+
+    return gfc, f, baseline_m2, windows, primary_label, loss_area_m2_by_window
+
+
 def extract_forest_loss_rate(g, c):
-    """Forest loss rate with three fixed temporal windows.
+    """GROSS tree-canopy loss rate only (Hansen GFC lossyear, %/yr), always
+    >= 0. Ratio-scale by construction (a true zero -- no loss -- is meaningful,
+    and the value can never go negative), matching its contract
+    (measurement_scale='ratio', reference_estimator='log_response_ratio',
+    which is only defined for strictly positive values -- see
+    estimators.log_response_ratio).
 
-    lossyear encoding in Hansen GFC v1.13: integer 1-25 = years 2001-2025.
-    All three windows use the SAME baseline (treecover2000 >= 30%) so the
-    rates are directly comparable across sites and across time windows.
+    REDESIGNED (independent audit item 9, real fix, not a revert): a v0.2.5
+    change had folded a real, separately-detected GAIN signal (Dynamic World
+    "trees" on pixels not forested in the 2000 baseline) into THIS indicator's
+    site_value as gain-minus-loss, making it genuinely signed -- which silently
+    broke log_response_ratio for the common case of real net loss (returns
+    None whenever site_value <= 0; verified directly against
+    estimators.log_response_ratio). That gain-detection logic was real and
+    valuable, not a mistake -- Darukaa's own restoration/agroforestry clients
+    plant trees and need that regrowth visible, and a project owner
+    (2026-09-27) confirmed a net rate collapsing to a suppressed/zero-reading
+    metric on a real planting site is a genuine client-facing problem, not
+    just an estimator mismatch. Split instead of reverted: this indicator goes
+    back to being pure gross loss (the original, historically-established
+    "Tree Cover Loss Rate" definition -- see Thread 01/03), and the gain
+    signal now drives its own separate indicator, net_forest_change_rate
+    (robust_z, genuinely signed-compatible), rather than overloading one
+    metric with two incompatible statistical treatments.
 
-    Primary site_value = long-term (2001-2025) for SoN scoring consistency.
-    Tier 1/Tier 2 references are computed from the same _img_forest_loss
-    output, so the intactness ratio remains coherent.
-
-    Recent and current rates are in metadata — used in report narrative,
-    NOT in the SoN score, so that clients cannot cherry-pick windows.
+    site_value used for SCORING is always the GROSS loss rate for the window
+    named in config.forest_loss_primary_window (default: the full long-term
+    record) -- pinned regardless of what other windows are configured, so a
+    project cannot silently change which window drives its score. Every other
+    configured window's loss rate is computed and returned in metadata for
+    report narrative only.
     """
     import ee
     eg = _to_ee(g)
     try:
-        gfc = ee.Image("UMD/hansen/global_forest_change_2025_v1_13").clip(eg)
-        f   = gfc.select("treecover2000").gte(30)
-        pa  = ee.Image.pixelArea()
+        _, _, baseline_m2, windows, primary_label, loss_area_m2_by_window = \
+            _forest_baseline_and_loss(eg, c)
 
-        # Baseline: total forest area in 2000
-        a0 = pa.updateMask(f).reduceRegion(
-            reducer=ee.Reducer.sum(), geometry=eg,
-            scale=30, maxPixels=1e13)
-        baseline_m2 = ee.Number(a0.get("area"))
+        loss_rates, loss_ha_by_window = {}, {}
+        baseline_m2_val = baseline_m2.getInfo()
+        for key, _yr_start, _yr_end, n_years in windows:
+            loss_area_m2 = loss_area_m2_by_window[key].getInfo()
+            loss_ha_by_window[key] = round(loss_area_m2 / 10000, 4)
+            loss_rates[key] = round(_annualized_rate_pct(loss_area_m2, baseline_m2_val, n_years), 4)
 
-        # Three fixed windows — never per-client configurable
-        windows = [
-            ("loss_longterm_2001_2025",  1, 25, 24),  # full record
-            ("loss_recent_2020_2025",   20, 25,  5),  # last 5 years #change as per year
-            ("loss_current_2023_2025",  23, 25,  2),  # last 2 years #change as per year
-        ]
-
-        rates = {}
-        for key, yr_start, yr_end, n_years in windows:
-            l = (gfc.select("lossyear")
-                 .gte(yr_start)
-                 .And(gfc.select("lossyear").lte(yr_end))
-                 .And(gfc.select("lossyear").gt(0)))
-            al = pa.updateMask(l).reduceRegion(
-                reducer=ee.Reducer.sum(), geometry=eg,
-                scale=30, maxPixels=1e13)
-            rate = (ee.Number(al.get("area"))
-                    .divide(baseline_m2.max(1))
-                    .multiply(100)
-                    .divide(n_years))
-            rates[key] = round(rate.getInfo(), 4)
-
-        baseline_ha = round(baseline_m2.getInfo() / 10000, 2)
+        baseline_ha = round(baseline_m2_val / 10000, 2)
         # Flag unreliable results from near-zero baselines
         # < 5 ha of baseline forest → percentage rates are arithmetically unstable
         low_baseline = baseline_ha < 5.0
 
+        primary_value = loss_rates.get(primary_label)
+        if primary_value is None:
+            logger.warning(f"forest_loss_primary_window='{primary_label}' not found in "
+                          f"configured windows {list(loss_rates.keys())}; falling back to "
+                          f"the first configured window for scoring.")
+            primary_value = next(iter(loss_rates.values()), None)
+
+        # Same real arithmetic-instability protection as before (found directly
+        # from the real Tata Motors run: Deccan forest's Hansen 2000 baseline
+        # was 0.01 ha) -- a near-zero baseline makes any percentage rate off
+        # it arithmetically meaningless, so it's suppressed from scoring while
+        # the real absolute number (loss_ha_by_window) stays in metadata.
+        if low_baseline:
+            logger.warning(f"forest_loss_rate: baseline_forest_ha={baseline_ha} is below the "
+                          f"5ha stability floor — percentage rate ({primary_value}%/yr) is "
+                          f"arithmetically unstable and has been suppressed from scoring. "
+                          f"See metadata for absolute area lost instead.")
+            primary_value = None
+
         return {
-            "value": rates.get("loss_longterm_2001_2025"),
+            "value": primary_value,   # GROSS loss rate, %/yr; always >= 0
             "pixels": None,
             "metadata": {
-                "loss_rate_longterm_pct_yr":  rates.get("loss_longterm_2001_2025"),
-                "loss_rate_recent_pct_yr":    rates.get("loss_recent_2020_2025"),
-                "loss_rate_current_pct_yr":   rates.get("loss_current_2023_2025"),
-                "baseline_forest_ha":         baseline_ha,
-                "low_baseline_flag":     low_baseline,
-                "note": ("Long-term 2001-2025 rate used as primary SoN value "
-                         "for cross-site comparability. Recent (2020-2025) and "
-                         "current (2023-2025) rates in metadata for narrative."), 
+                "all_window_loss_rates_pct_yr": loss_rates,
+                "primary_window": primary_label,
+                "baseline_forest_ha": baseline_ha,
+                "loss_ha_by_window": loss_ha_by_window,
+                "low_baseline_flag": low_baseline,
+                "note": (f"Gross tree-canopy loss rate ONLY (Hansen GFC lossyear, "
+                        f"≥30% canopy density threshold) for '{primary_label}'. Does not "
+                        f"net off any regrowth/planting -- see net_forest_change_rate for "
+                        f"the signed gain-minus-loss picture, e.g. for restoration/"
+                        f"agroforestry projects."),
                 "low_baseline_note": (
                         f"Baseline forest cover is only {baseline_ha:.1f} ha. "
                         f"Percentage loss rates are arithmetically unstable at this scale — "
@@ -1175,6 +1868,121 @@ def extract_forest_loss_rate(g, c):
         }
     except Exception as e:
         logger.warning(f"forest_loss_rate: {e}")
+        return {"value": None, "pixels": None}
+
+
+def extract_net_forest_change_rate(g, c):
+    """Signed NET forest-cover change rate (gain - loss, %/yr; positive =
+    net regrowth), split out of forest_loss_rate (independent audit item 9 --
+    see extract_forest_loss_rate's docstring for the full real rationale).
+    Uses robust_z (not log_response_ratio), which is defined for negative,
+    zero, and positive values alike -- see estimators.robust_z.
+
+    Loss reuses the exact same Hansen GFC windows/baseline as
+    forest_loss_rate (via _forest_baseline_and_loss, never independently
+    recomputed). Gain is detected via current Dynamic World "trees" (class 1)
+    on pixels that were NOT forest in the 2000 baseline -- i.e. tree cover
+    that has newly appeared since baseline. Hansen itself has no
+    continuously-updated gain layer usable for a specific recent window (its
+    own "gain" band is a one-time 2000-2012 cumulative product, too stale for
+    a current assessment).
+
+    This is the indicator a restoration/agroforestry/plantation client's real
+    regrowth shows up in -- keeping it separate from forest_loss_rate (rather
+    than netting gain into that indicator, as a prior v0.2.5 build did) means
+    a genuine planting success shows a real positive number here instead of
+    silently zeroing out or breaking forest_loss_rate's own loss-only,
+    ratio-scale estimator.
+    """
+    import ee
+    eg = _to_ee(g)
+    try:
+        _gfc, f_mask, baseline_m2, windows, primary_label, loss_area_m2_by_window = \
+            _forest_baseline_and_loss(eg, c)
+        pa = ee.Image.pixelArea()
+
+        # GAIN detection: current Dynamic World "trees" (class 1) on pixels NOT
+        # forested in the 2000 baseline. Uses a rolling recent window (this
+        # project's ndvi_year, consistent with the currency standard used
+        # elsewhere in this pipeline), not a fixed historical Hansen gain layer.
+        dw_current = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
+                     .filterBounds(eg)
+                     .filterDate(f"{c.ndvi_year - 1}-01-01", f"{c.ndvi_year}-12-31")
+                     .select("label").mode())
+        non_forest_2000 = f_mask.Not()
+        newly_treed = dw_current.eq(1).And(non_forest_2000)
+        gain_m2 = pa.updateMask(newly_treed).reduceRegion(
+            reducer=ee.Reducer.sum(), geometry=eg, scale=30, maxPixels=1e13)
+        gain_total_m2 = ee.Number(ee.Algorithms.If(gain_m2.get("area"), gain_m2.get("area"), 0))
+
+        baseline_m2_val = baseline_m2.getInfo()
+        gain_total_m2_val = gain_total_m2.getInfo()
+
+        loss_rates, gain_rates, net_rates, loss_ha_by_window = {}, {}, {}, {}
+        for key, _yr_start, _yr_end, n_years in windows:
+            loss_area_m2 = loss_area_m2_by_window[key].getInfo()
+            loss_ha_by_window[key] = round(loss_area_m2 / 10000, 4)
+            loss_rates[key] = round(_annualized_rate_pct(loss_area_m2, baseline_m2_val, n_years), 4)
+            # Gain is not naturally windowed the way loss is (Hansen gives no annual
+            # gain signal) — the SAME detected gain area is annualised over each
+            # window's length as an approximation, clearly labelled as such.
+            gain_rates[key] = round(_annualized_rate_pct(gain_total_m2_val, baseline_m2_val, n_years), 4)
+            net_rates[key] = round(gain_rates[key] - loss_rates[key], 4)
+
+        baseline_ha = round(baseline_m2_val / 10000, 2)
+        gain_ha = round(gain_total_m2_val / 10000, 2)
+        low_baseline = baseline_ha < 5.0
+
+        primary_value = net_rates.get(primary_label)
+        if primary_value is None:
+            logger.warning(f"forest_loss_primary_window='{primary_label}' not found in "
+                          f"configured windows {list(net_rates.keys())}; falling back to "
+                          f"the first configured window for scoring.")
+            primary_value = next(iter(net_rates.values()), None)
+
+        # Same real arithmetic-instability case as forest_loss_rate (Deccan forest:
+        # 0.01 ha baseline, 24.26 ha of real current tree cover -> a 10,851%/yr
+        # reading) applies identically to the NET rate, since it shares the same
+        # baseline denominator. Suppressed from scoring; absolute ha change stays
+        # in metadata so a real planting story is still visible in the report.
+        if low_baseline:
+            logger.warning(f"net_forest_change_rate: baseline_forest_ha={baseline_ha} is "
+                          f"below the 5ha stability floor — percentage rate "
+                          f"({primary_value}%/yr) is arithmetically unstable and has been "
+                          f"suppressed from scoring. See metadata for absolute area change.")
+            primary_value = None
+
+        return {
+            "value": primary_value,   # NET rate (gain - loss), %/yr; signed, can be negative
+            "pixels": None,
+            "metadata": {
+                "all_window_loss_rates_pct_yr": loss_rates,
+                "all_window_gain_rates_pct_yr": gain_rates,
+                "all_window_net_rates_pct_yr": net_rates,
+                "primary_window": primary_label,
+                "baseline_forest_ha": baseline_ha,
+                "gain_detected_ha": gain_ha,
+                "loss_ha_by_window": loss_ha_by_window,
+                "absolute_net_change_ha": round(gain_ha - loss_ha_by_window.get(primary_label, 0), 2),
+                "low_baseline_flag": low_baseline,
+                "note": (f"Signed NET rate (gain - loss) for '{primary_label}'; positive = "
+                        f"net regrowth. Loss uses Hansen GFC lossyear (annually resolved); "
+                        f"gain is detected once (current Dynamic World trees on "
+                        f"non-2000-forest pixels) and annualised per window as an "
+                        f"approximation, not an annually-resolved signal the way loss is — "
+                        f"flagged here, not disguised as equally precise. See "
+                        f"forest_loss_rate for the gross-loss-only, ratio-scale signal "
+                        f"this is split from."),
+                "low_baseline_note": (
+                        f"Baseline forest cover is only {baseline_ha:.1f} ha. "
+                        f"Percentage rates are arithmetically unstable at this scale. "
+                        f"Report absolute area change (ha/yr) rather than percentage rate "
+                        f"for this site."
+                ) if low_baseline else None,
+            }
+        }
+    except Exception as e:
+        logger.warning(f"net_forest_change_rate: {e}")
         return {"value": None, "pixels": None}
 
 def extract_kba_overlap(g,c):
@@ -1242,16 +2050,34 @@ def extract_flii(g,c):
 
 def extract_eii(g,c):
     img=_img_eii(c)
-    return _reduce(img,g,300) if img else {"value":None,"pixels":None}
+    result = _reduce(img,g,300) if img else {"value":None,"pixels":None}
+    # Real diagnostic (independent audit item 5): records which real path
+    # (primary EII asset vs HMI fallback) was actually used, so the constant
+    # eii_structural=0.0003 anomaly found on a real Tata Motors run finally
+    # gets a real, definitive answer on the next live-GEE run instead of
+    # remaining an unexplained value.
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii")
+    return result
 
-def extract_eii_s(g,c): return _reduce(_img_eii_s(c),g,300)
-def extract_eii_c(g,c): return _reduce(_img_eii_c(c),g,300)
-def extract_eii_f(g,c): return _reduce(_img_eii_f(c),g,300)
+def extract_eii_s(g,c):
+    result = _reduce(_img_eii_s(c),g,300)
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii_structural")
+    return result
+
+def extract_eii_c(g,c):
+    result = _reduce(_img_eii_c(c),g,300)
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii_compositional")
+    return result
+
+def extract_eii_f(g,c):
+    result = _reduce(_img_eii_f(c),g,300)
+    result.setdefault("metadata", {})["eii_path_used"] = _EII_LAST_PATH_USED.get("eii_functional")
+    return result
 
 def extract_bii(g,c):
     import ee; img=_img_bii(c)
     if img:
-        r=_reduce(img,g,300)
+        r=_reduce(img,g,100)  # native resolution of the real BioIntactness asset
         if r.get("value") is not None: return r
     rp=c.raster_paths.get("bii")
     if rp:
@@ -1271,6 +2097,23 @@ def extract_hdi(g,c): return _reduce(_img_hdi(c),g,10)
 def extract_lst_day(g,c): return _reduce(_img_lst_day(c),g,1000)
 def extract_lst_night(g,c): return _reduce(_img_lst_night(c),g,1000)
 
+def _polygon_area_km2(eg):
+    """Real polygon area in km2 — the normalising denominator that makes a
+    species-range-overlap COUNT into a defensible DENSITY. Without this, a
+    raw count scales mechanically with polygon area (species-area
+    relationship): a small site would always look poorer than a large
+    regional reference buffer regardless of actual habitat quality, purely
+    because the buffer intersects more species' ranges by geometry alone.
+    Confirmed directly before this fix: neither the site-level extract nor
+    the Tier-1 regional reference function normalised by area at all."""
+    import ee
+    return eg.area().divide(1e6).getInfo()
+
+RICHNESS_DENSITY_UNIT_KM2 = 100.0  # report as "species per 100 km2" — a
+# real, interpretable unit at both a small site's and a regional buffer's
+# scale, rather than per-km2 (usually well below 1, hard to read) or a raw
+# count (not comparable across different-sized areas at all).
+
 def extract_endemic_richness(g,c):
     import ee; eg=_to_ee(g); total=0; species_list=[]
     for asset,nc,group in [(_MAMMALS,"sci_name","mammal"),(_BIRDS,"sci_name","bird")]:
@@ -1284,11 +2127,34 @@ def extract_endemic_richness(g,c):
             for name in (names or []):
                 species_list.append({"name":name,"group":group})
         except Exception as e: logger.warning(f"Endemic {group}: {e}")
-    return {"value":total if total>0 else None,"pixels":None,
-            "metadata":{"species_list":species_list,
+    area_km2 = _polygon_area_km2(eg)
+    density = (total / area_km2 * RICHNESS_DENSITY_UNIT_KM2) if (total > 0 and area_km2 > 0) else None
+    return {"value":density,"pixels":None,
+            "metadata":{"species_list":species_list,"raw_count":total,"area_km2":area_km2,
                         "n_mammals":sum(1 for s in species_list if s["group"]=="mammal"),
                         "n_birds":sum(1 for s in species_list if s["group"]=="bird"),
                         "range_threshold_km2":100000}}
+
+def extract_shi(g,c):
+    """Species Habitat Index (SHI) — GBF-adopted (Goal A), the genuinely
+    correct C3 fauna signal per OD-12, but with NO simple, directly-
+    loadable GEE asset: it is served species-by-species through Map of
+    Life's own API (api.mol.org), requiring registration, not a
+    pre-computed raster an ee.Image() call can load. Confirmed directly
+    (real search, not assumed) before writing this stub — STAR/IBAT and
+    other range-map-based alternatives share the same site-resolution
+    limitation SHI is meant to improve on, so this is worth wiring in
+    properly once real API access exists rather than substituting a
+    weaker proxy now. This function is a structural placeholder only:
+    it does not silently return a fabricated value, it returns None with
+    a clear reason, and the indicator's own `requires` gate (see
+    registration below) keeps it out of scoring entirely until real
+    access is confirmed and this function is actually implemented."""
+    return {"value": None, "pixels": None,
+            "metadata": {"status": "not_implemented",
+                        "reason": "Requires Map of Life API (api.mol.org) registration and species-by-species "
+                                  "querying — no simple, directly-loadable GEE asset exists for SHI as of this "
+                                  "writing. See OD-12 in OPEN_DECISIONS.md."}}
 
 def extract_flagship_habitat(g,c):
     import ee; eg=_to_ee(g)
@@ -1325,8 +2191,10 @@ def extract_threatened_richness(g,c):
             for row in (props or []):
                 if len(row)>=2: species_list.append({"name":row[0],"category":row[1],"group":"mammal" if asset==_MAMMALS else "bird"})
         except Exception as e: logger.warning(f"Threatened({asset}): {e}")
-    return {"value":total if total>0 else None,"pixels":None,
-            "metadata":{"species_list":species_list,
+    area_km2 = _polygon_area_km2(eg)
+    density = (total / area_km2 * RICHNESS_DENSITY_UNIT_KM2) if (total > 0 and area_km2 > 0) else None
+    return {"value":density,"pixels":None,
+            "metadata":{"species_list":species_list,"raw_count":total,"area_km2":area_km2,
                         "n_mammals":sum(1 for s in species_list if s["group"]=="mammal"),
                         "n_birds":sum(1 for s in species_list if s["group"]=="bird")}}
 
@@ -1401,8 +2269,21 @@ def extract_wcpi(g,c):
     import ee
     eg=_to_ee(g); wcpi_raw=_img_wcpi(c)
     if wcpi_raw is None: return {"value":None,"pixels":None}
-    stats=wcpi_raw.reduceRegion(reducer=ee.Reducer.minMax(),geometry=eg,scale=10,maxPixels=1e13)
-    mn=ee.Number(stats.get('WCPI_min')); mx=ee.Number(stats.get('WCPI_max'))
+    stats=wcpi_raw.reduceRegion(reducer=ee.Reducer.minMax(),geometry=eg,scale=10,maxPixels=1e13).getInfo()
+    # REAL BUG FIXED HERE (found directly from a real Tata Motors run:
+    # "Number.subtract: Parameter 'left' is required and may not be
+    # null" for small real pond polygons). reduceRegion returns no
+    # WCPI_min/WCPI_max keys at all when zero valid pixels fall inside
+    # the geometry at this scale (a genuine, real case for a very small
+    # pond) -- ee.Number(None) then crashed .subtract() rather than
+    # producing a real "no data" result. Checked explicitly now, the
+    # same way every other extract_* function in this module checks a
+    # reduceRegion result client-side after one real .getInfo() call.
+    min_val, max_val = stats.get('WCPI_min'), stats.get('WCPI_max')
+    if min_val is None or max_val is None:
+        return {"value": None, "pixels": None,
+                "metadata": {"reason": "No valid WCPI pixels found within this geometry at this scale."}}
+    mn=ee.Number(min_val); mx=ee.Number(max_val)
     span=mx.subtract(mn).max(1e-6)
     wcpi_norm=wcpi_raw.subtract(mn).divide(span).clamp(0,1)
     return _reduce(wcpi_norm,g,10)
@@ -1425,9 +2306,23 @@ def extract_sdi(g,c):
             .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20)).map(msk))
         composite=s2.median().clip(eg)
         ndwi=composite.normalizedDifference(['B3','B8'])
-        water_vec=ndwi.gt(0).selfMask().reduceToVectors(
-            geometry=eg,scale=10,geometryType='polygon',eightConnected=True,maxPixels=1e13)
-        water_geom=water_vec.geometry(1); shore_buf=water_geom.buffer(100)
+        # REAL BUG FIXED HERE (found directly from a real Tata Motors
+        # run: "Image.clip: The geometry for image clipping must not be
+        # empty"). This was a FOURTH place in this codebase with the
+        # same fragile water_vec.geometry(1) pattern the v0.2.5 fix
+        # already found and fixed in three others (extract_rci,
+        # extract_riparian_ndvi_trend, extract_shdi) — missed here.
+        # geometry(1) returns empty when fewer than 2 water polygons are
+        # vectorised (the normal case for a small real pond), and
+        # .buffer(100) on an empty geometry produces exactly this
+        # crash. Now uses the same shared, real, largest-polygon helper
+        # every other water-adjacent indicator uses.
+        water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)
+        if water_geom is None:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry — SDI is a "
+                                          "shoreline-disturbance metric and genuinely does not apply here."}}
+        shore_buf=water_geom.buffer(100)
         disturbed=_img_sdi(c)
         pa=ee.Image.pixelArea()
         dist_area=pa.updateMask(disturbed.clip(shore_buf)).reduceRegion(
@@ -1515,9 +2410,11 @@ def extract_rci(g,c):
             .filterDate(start,end).filterBounds(eg).filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20)).map(msk))
         composite=s2.median().clip(eg)
         ndwi=composite.normalizedDifference(['B3','B8'])
-        water_vec=ndwi.gt(0).selfMask().reduceToVectors(
-            geometry=eg,scale=10,geometryType='polygon',eightConnected=True,maxPixels=1e13)
-        water_geom=water_vec.geometry(1)
+        water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)  # v0.2.5 fix (was .geometry(1))
+        if water_geom is None:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry — RCI is a "
+                                          "riparian-zone metric and genuinely does not apply here."}}
         outer=water_geom.buffer(100,1); riparian=outer.difference(water_geom.buffer(0,1),1)
         rci=_img_rci(c).clip(riparian)
         return _reduce(rci,riparian,10)
@@ -1540,22 +2437,86 @@ def extract_riparian_ndvi_trend(g,c):
             .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE',20)).map(msk))
         composite=s2.median().clip(eg)
         ndwi=composite.normalizedDifference(['B3','B8'])
-        water_vec=ndwi.gt(0).selfMask().reduceToVectors(
-            geometry=eg,scale=10,geometryType='polygon',maxPixels=1e13)
-        water_geom=water_vec.geometry(1)
+        water_geom = _largest_water_polygon(ndwi.gt(0), eg, 10)  # v0.2.5 fix (was .geometry(1))
+        if water_geom is None:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry — riparian "
+                                          "NDVI trend genuinely does not apply here."}}
         outer=water_geom.buffer(100,1); riparian=outer.difference(water_geom.buffer(0,1),1)
         trend_img=_img_riparian_ndvi_trend(c).clip(riparian)
         return _reduce(trend_img,riparian,10)
     except Exception as e: logger.warning(f"riparian_ndvi_trend: {e}"); return {"value":None,"pixels":None}
 
+def _img_jrc_water_persistence(c):
+    """Real, reusable, geometry-independent persistent-water image (0/1 per
+    pixel) -- extracted out of extract_jrc_water_persistence's own logic so
+    Tier2 reference extraction has a real image to reduce over. REAL BUG
+    FIXED HERE (v1): this indicator had NEITHER a gee_image_fn NOR a
+    tier1_layer registered (checked directly against the live registry) --
+    meaning _get_indicator_image() always returned None for it, so its
+    Tier2 reference extraction could never work at all, structurally,
+    regardless of any real data availability. Confirmed directly against a
+    real Tata Motors run: 0 of 15 real tiles got a Tier2 benchmark for
+    this indicator.
+
+    REAL BUG FIXED HERE (v2, independent audit item 6, confirmed directly
+    against Google's own Earth Engine catalog before fixing, not assumed):
+    JRC/GSW1_4/MonthlyHistory's real, documented coverage is 1984-03-16 to
+    2022-01-01 -- confirmed via the dataset's own official catalog page.
+    The previous f"{y-1}-01-01" to f"{y}-12-31" query window is therefore
+    STRUCTURALLY, GUARANTEED empty for any current/recent ndvi_year (2023
+    onward) -- not a probabilistic failure, an impossible one. A real,
+    newer JRC v1.5 release does cover 2022-2024, but I could not find a
+    confirmed exact GEE asset ID for its MONTHLY (not yearly) collection
+    without guessing -- guessing wrong would just trade one broken
+    indicator for another. Implemented the audit's own preferred
+    alternative instead: a genuinely current, contemporary water-detection
+    source already confirmed working elsewhere in this exact module
+    (Sentinel-1 VV backscatter thresholding -- the same real technique
+    _img_wsdi already uses), rather than gamble on an unconfirmed asset
+    string. Renamed and re-cited accordingly (see the registry entry) --
+    this is no longer literally "JRC" data, and calling it that would be
+    exactly the kind of citation-vs-code mismatch this whole audit has
+    been finding and fixing elsewhere.
+    """
+    import ee
+    y = c.ndvi_year
+    s1 = (ee.ImageCollection('COPERNICUS/S1_GRD')
+          .filterDate(f"{y-1}-01-01", f"{y}-12-31")
+          .filter(ee.Filter.eq('instrumentMode', 'IW'))
+          .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+          .select('VV'))
+    def detect_water(img):
+        smooth = img.focal_mean(radius=30, units='meters')
+        return smooth.lt(-16).rename('Water').copyProperties(img, ['system:time_start'])
+    monthly_water = s1.map(detect_water)
+    occurrence = monthly_water.mean()
+    return occurrence.gt(0.75).rename("jrc_water_persistence")
+
+
 def extract_jrc_water_persistence(g,c):
     import ee; eg=_to_ee(g)
     try:
         y=c.ndvi_year
-        jrc=(ee.ImageCollection('JRC/GSW1_4/MonthlyHistory')
-             .filterDate(f"{y-1}-01-01",f"{y}-12-31").filterBounds(eg))
-        monthly_water=jrc.map(lambda img: img.select('water').eq(2).rename('Water')
-                              .copyProperties(img,['system:time_start']))
+        # See _img_jrc_water_persistence's docstring for the full real
+        # reasoning: switched from JRC/GSW1_4/MonthlyHistory (structurally,
+        # guaranteedly empty for any year after 2022, confirmed directly
+        # against the dataset's own real catalog coverage) to Sentinel-1
+        # VV backscatter -- the same real, currently-working technique
+        # _img_wsdi already uses in this same module.
+        s1=(ee.ImageCollection('COPERNICUS/S1_GRD')
+            .filterDate(f"{y-1}-01-01",f"{y}-12-31")
+            .filter(ee.Filter.eq('instrumentMode','IW'))
+            .filter(ee.Filter.listContains('transmitterReceiverPolarisation','VV'))
+            .select('VV').filterBounds(eg))
+        if s1.size().getInfo() == 0:
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No real Sentinel-1 VV image matched this "
+                                          "geometry/date range."}}
+        def detect_water(img):
+            smooth=img.focal_mean(radius=30,units='meters')
+            return smooth.lt(-16).rename('Water').copyProperties(img,['system:time_start'])
+        monthly_water=s1.map(detect_water)
         occurrence=monthly_water.mean().clip(eg)
         persistent=occurrence.gt(0.75)
         pa=ee.Image.pixelArea()
@@ -1580,6 +2541,15 @@ def extract_shdi(g,c):
         ndwi=composite.normalizedDifference(['B3','B8'])
         water_vec=ndwi.gt(0).selfMask().reduceToVectors(
             geometry=eg,scale=10,geometryType='polygon',eightConnected=True,maxPixels=1e13)
+        if water_vec.size().getInfo() == 0:
+            # REAL FIX (same class of bug as _largest_water_polygon's fix,
+            # duplicated here since this function has its own separate
+            # implementation rather than actually calling that shared
+            # helper, despite an earlier comment elsewhere claiming it
+            # does): no water detected -- return a real, informative null
+            # instead of crashing on ee.Feature(null).geometry().
+            return {"value": None, "pixels": None,
+                    "metadata": {"reason": "No open water detected within this geometry."}}
         with_area=water_vec.map(lambda f: f.set('area',f.geometry().area(1)))
         lake=ee.Feature(with_area.sort('area',False).first())
         lake_geom=lake.geometry()

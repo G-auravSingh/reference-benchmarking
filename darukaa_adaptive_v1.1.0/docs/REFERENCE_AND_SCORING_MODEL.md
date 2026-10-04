@@ -1,93 +1,49 @@
-# Reference and scoring model
+# Reference, Benchmarking and Scoring Model
 
-## 1. Reference population
+## Reference → benchmark → score → aggregate
 
-The production default constructs an **ecologically matched, least-disturbed contemporary reference population**. It is not defined as the nearest good-looking pixel and it is not automatically synonymous with pristine condition.
-
-Reference construction and approval are separate:
+The production pathway is:
 
 ```text
-candidate construction → ecological/pressure/temporal/spatial QA → approval → metric benchmark
+Ecologically eligible reference population
+        ↓
+Reference distribution + QA
+        ↓
+Observed/reference benchmark
+        ↓
+Indicator-specific 0–100 attainment
+        ↓
+Complementary metrics → geometric mean
+        ↓
+Subdimensions → limiting factor
+        ↓
+P1/P2/P3 → geometric mean + limiting pillar
+        ↓
+Project aggregation + EMU comparison
 ```
 
-Manual reference geometry/CSV uploads are not part of the production workflow.
+P4 pressure is kept separate.
 
-## 2. Reference states
+## Why not aggregate raw z-scores?
 
-Supported reference states are:
+Z-scores and robust z-scores are retained as statistical diagnostics when reference dispersion is available. They are not the client-facing aggregate because their magnitude depends on reference variance and is not naturally comparable as a management score across indicators. The common 0–100 scale is the reporting layer; the statistical benchmark remains visible underneath it.
 
-- `undisturbed_minimally_disturbed`
-- `least_disturbed_contemporary`
-- `historical`
-- `best_attainable`
-- `paired_control`
-- `published_target`
+## Why geometric means?
 
-The default automated state is `least_disturbed_contemporary`. If both automatic stages fail, Colab exposes a single analyst-entered HMI threshold as the finite Stage-C fallback.
+At the complementary-metric level, the geometric mean reduces compensatory behaviour while retaining more information than a minimum. It is applied only after metrics have been normalized to a common ecological attainment scale.
 
-## 3. Reference distribution
+## Why limiting-factor at pillar level?
 
-Where reference values are available, the engine retains:
+Different subdimensions within a pillar can represent genuinely distinct ecological constraints. A high vegetation-greenness score should not erase a severe hydrological deficit. The pillar therefore reports the weakest defensible subdimension and retains the metric responsible for that limitation.
 
-- n;
-- median;
-- mean;
-- SD;
-- MAD;
-- P10/P25/P75/P90;
-- bootstrap median interval and SE.
+## Why not a single universal weighting scheme?
 
-The median is the default central benchmark. Bootstrap uncertainty is descriptive because spatial pixels are not independent replicates.
+The framework does not assign arbitrary weights to individual indicators. Indicator sets can change as better evidence becomes available, and equal weighting of redundant indicators would create hidden double-counting. The registry therefore groups metrics by ecological subdimension and requires an explicit scientific rationale for future additions.
 
-## 4. Benchmarking
+## Project-level score
 
-The benchmark layer produces a direction-aware comparison:
+The project score is produced only after EMU-level assessment. The default common-score aggregation is area-weighted. The project report additionally shows the EMU distribution, coverage, limiting EMU and percentiles. This prevents a project headline from hiding strong internal ecological heterogeneity.
 
-- higher-is-better: observed/reference;
-- lower-is-better: reference/observed;
-- reference-target: bounded departure from target.
+## Reference states
 
-The signed **relative departure** is the primary descriptive comparison.
-
-The legacy `intactness_score_0_100` field is retained as an alias for compatibility. Production interpretation uses **reference attainment** and the declared reference state. A value at/above 100 means the observed metric meets or exceeds the selected reference under the current display convention; it does not mean ecological perfection.
-
-## 5. Scoring eligibility
-
-An indicator is score-eligible only when:
-
-1. measurement is valid;
-2. indicator is referenceable;
-3. comparable reference exists;
-4. reference passes the approval gate;
-5. indicator direction/target is defensible;
-6. evidence tier supports scoring;
-7. proxy limitations do not invalidate the intended ecological interpretation.
-
-Contextual/screening metrics remain visible without being silently converted into a composite score.
-
-## 6. State versus pressure
-
-- C1–C3 = ecosystem/species condition.
-- C4 = pressure.
-
-Pressure remains structurally separate from condition.
-
-## 7. Landscape intactness
-
-The term **landscape intactness** is reserved for spatial configuration concepts such as fragmentation, connectivity, core area and distance-to-collapse constructs. A site/reference ratio for an environmental variable is not called landscape intactness.
-
-## 8. External evidence
-
-Field, acoustic, eDNA and other evidence can enter the same downstream contract, but evidence-specific reference requirements remain explicit. A first baseline does not create a valid self-referential reference merely because the observed data exist.
-
-## 9. v1.1.0 integrated-pipeline controls
-
-The reference layer is now executed as part of the complete `AdaptivePipeline`, not as a separate post-processing step.
-
-The pipeline records the automatic reference population summary and carries reference diagnostics into every benchmark record. The default central estimator for raster-derived reference metrics is the spatial median (`P50`) when available; spatial percentiles are retained for audit.
-
-The aquatic profile requires a score-eligible C3 Fauna pillar before an overall condition score is emitted. C4 Pressure remains separate.
-
-The live Nandoshi notebook includes a release-blocking check for reference-engine execution errors. A candidate can legitimately be rejected by the QA gates; that is different from a failed dataset/API operation.
-
-The production workflow does not require or accept manual reference KML/CSV uploads. If both automatic contemporary stages fail, the Colab exposes a finite manual HMI-threshold fallback.
+Reference state labels are explicit. `strict_contemporary`, `least_disturbed_contemporary` and `best_attainable` are not synonyms for pristine condition. They describe the governance basis for the comparison population.

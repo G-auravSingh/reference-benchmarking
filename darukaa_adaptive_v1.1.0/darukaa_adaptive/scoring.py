@@ -1,24 +1,37 @@
-"""Shared condition/pressure scoring for EO, field, acoustic, eDNA and modelled evidence."""
+"""Evidence-aware metric, subdimension, pillar and condition scoring.
+
+The scoring layer deliberately separates:
+1. statistical/reference benchmarking at metric level;
+2. common 0–100 attainment for aggregation;
+3. within-subdimension geometric aggregation;
+4. pillar limiting-factor selection; and
+5. overall condition geometric aggregation with the limiting pillar reported.
+
+Pressure is never mixed into the State-of-Nature condition score.
+"""
 from __future__ import annotations
 from types import SimpleNamespace
-from typing import Any, Dict, Iterable, Optional
+from typing import Any
 import math
 import pandas as pd
 from .benchmark import benchmark_observation
-from .registry import PILLARS
+from .registry import PILLARS, get_indicator_spec
 
 BANDS = ((0,20,"Very High"),(20,40,"High"),(40,60,"Moderate"),(60,80,"Low"),(80,100.000001,"Very Low"))
 
-def clamp_intactness(value):
+
+def clamp_score(value):
     if value is None or not math.isfinite(float(value)): return None
     return max(0.0, min(100.0, float(value)))
 
+
 def concern_label(score):
-    if score is None or not math.isfinite(float(score)): return None
-    x=clamp_intactness(score)
-    for lo,hi,label in BANDS:
-        if lo <= x < hi: return label
+    score = clamp_score(score)
+    if score is None: return None
+    for lo, hi, label in BANDS:
+        if lo <= score < hi: return label
     return "Very Low"
+
 
 def geometric_mean(values):
     vals=[float(v) for v in values if v is not None and math.isfinite(float(v))]
@@ -26,104 +39,150 @@ def geometric_mean(values):
     if any(v < 0 for v in vals): raise ValueError("geometric mean requires non-negative values")
     return float(math.exp(sum(math.log(max(v,1e-12)) for v in vals)/len(vals)))
 
+
 def _metadata(record):
+    spec = get_indicator_spec(record.metric)
     return {
-        "metric": record.metric, "pillar": record.pillar, "raw_value": getattr(record,"value",None),
-        "units": getattr(record,"units",""), "direction": getattr(record,"direction",None),
-        "reference_allowed": getattr(record,"reference_allowed",False), "status": getattr(record,"status","ok"),
-        "notes": getattr(record,"notes","")
+        "metric": record.metric, "pillar": spec.pillar, "construct": spec.construct,
+        "subdimension": spec.subdimension, "raw_value": getattr(record,"value",None),
+        "units": getattr(record,"units",spec.units), "direction": getattr(record,"direction",spec.direction),
+        "reference_allowed": getattr(record,"reference_allowed",spec.reference_allowed),
+        "status": getattr(record,"status","ok"), "scoring_role": spec.scoring_role,
+        "notes": getattr(record,"notes",""), "domain": getattr(record,"domain",spec.domain),
     }
+
 
 def score_metric(metric_result, benchmark_result, config):
     meta=_metadata(metric_result); b=benchmark_result
-    out={"metric":meta["metric"],"pillar":meta["pillar"],"raw_value":meta["raw_value"],"units":meta["units"],
-         "reference_value":getattr(b,"selected_reference",None) if b else None,
-         "reference_level":getattr(b,"selected_reference_level","none") if b else "none",
-         "reference_n":getattr(b,"reference_n",None) if b else None,
-         "reference_uncertainty":getattr(b,"reference_uncertainty",None) if b else None,
-         "raw_relative_ratio":getattr(b,"raw_relative_ratio",None) if b else None,
-         "intactness_score_0_100":getattr(b,"intactness_score_0_100",None) if b else None,
-         "reference_attainment_0_100":getattr(b,"reference_attainment_0_100",None) if b else None,
-         "relative_departure_pct":getattr(b,"relative_departure_pct",None) if b else None,
-         "reference_state":getattr(b,"reference_state","") if b else "",
-         "reference_approval_basis":getattr(b,"reference_approval_basis","") if b else "",
-         "reference_diagnostics":getattr(b,"reference_diagnostics",None) if b else None,
-         "interpretation_status":getattr(b,"interpretation_status","") if b else "",
-         "concern_label":None,"score_eligible":False,"score_status":"not_eligible",
-         "reference_approved_for_scoring":bool(getattr(b,"reference_approved_for_scoring",False)) if b else False,
-         "evidence_type":getattr(metric_result,"evidence_type","EO"),"domain":getattr(metric_result,"domain",""),"notes":meta["notes"]}
+    attainment = getattr(b,"reference_attainment_0_100",None) if b else None
+    out={
+        "metric":meta["metric"],"pillar":meta["pillar"],"construct":meta["construct"],"subdimension":meta["subdimension"],
+        "raw_value":meta["raw_value"],"units":meta["units"],
+        "reference_value":getattr(b,"selected_reference",None) if b else None,
+        "reference_level":getattr(b,"selected_reference_level","none") if b else "none",
+        "reference_n":getattr(b,"reference_n",None) if b else None,
+        "reference_uncertainty":getattr(b,"reference_uncertainty",None) if b else None,
+        "reference_ci_low":getattr(b,"reference_ci_low",None) if b else None,
+        "reference_ci_high":getattr(b,"reference_ci_high",None) if b else None,
+        "raw_relative_ratio":getattr(b,"raw_relative_ratio",None) if b else None,
+        "relative_departure_pct":getattr(b,"relative_departure_pct",None) if b else None,
+        "reference_attainment_0_100":clamp_score(attainment),
+        "intactness_score_0_100":clamp_score(attainment),
+        "reference_state":getattr(b,"reference_state","") if b else "",
+        "reference_approval_basis":getattr(b,"reference_approval_basis","") if b else "",
+        "reference_diagnostics":getattr(b,"reference_diagnostics",None) if b else None,
+        "standardized_z":getattr(b,"standardized_z",None) if b else None,
+        "robust_z":getattr(b,"robust_z",None) if b else None,
+        "interpretation_status":getattr(b,"interpretation_status","") if b else "",
+        "concern_label":None,"score_eligible":False,"score_status":"not_eligible",
+        "reference_approved_for_scoring":bool(getattr(b,"reference_approved_for_scoring",False)) if b else False,
+        "scoring_role":meta["scoring_role"],"evidence_type":getattr(metric_result,"evidence_type","EO"),
+        "domain":meta["domain"],"notes":meta["notes"],
+    }
     if not config.scoring.enabled: out["score_status"]="scoring_disabled"; return out
+    if meta["scoring_role"] in {"CONTEXTUAL","DIAGNOSTIC","PENDING"}: out["score_status"]="contextual_not_scored"; return out
     if meta["raw_value"] is None or meta["status"] not in {"ok","usable"}: out["score_status"]="invalid_metric"; return out
     if not meta["reference_allowed"]: out["score_status"]="not_referenceable"; return out
-    intact=getattr(b,"reference_attainment_0_100",None) if b else getattr(b,"intactness_score_0_100",None) if b else None
-    if intact is None: out["score_status"]="reference_unavailable"; return out
+    if attainment is None: out["score_status"]="reference_unavailable"; return out
     if not getattr(b,"reference_approved_for_scoring",False): out["score_status"]="reference_not_approved_for_scoring"; return out
-    out.update({"reference_attainment_0_100":clamp_intactness(intact),"intactness_score_0_100":clamp_intactness(intact),"concern_label":concern_label(intact),"score_eligible":True,"score_status":"scored"})
+    out.update({"reference_attainment_0_100":clamp_score(attainment),"intactness_score_0_100":clamp_score(attainment),
+                "concern_label":concern_label(attainment),"score_eligible":True,"score_status":"scored"})
     return out
 
-def _limiting_metric(df):
-    if df.empty: return None,None
-    r=df.loc[df["intactness_score_0_100"].astype(float).idxmin()]
-    return str(r["metric"]),float(r["intactness_score_0_100"])
 
-def aggregate_pillars(scored_df, config):
+def _valid_scored(df):
+    if df is None or df.empty: return pd.DataFrame()
+    out=df.copy()
+    aliases={"C1_extent":"P1_extent_configuration","C2_vegetation":"P2_ecosystem_condition","C3_fauna":"P3_biodiversity_integrity","C4_pressure":"P4_pressure"}
+    out["pillar"]=out["pillar"].map(lambda x: aliases.get(x,x))
+    if "subdimension" not in out.columns:
+        out["subdimension"]=out["metric"].astype(str)
+    else:
+        out["subdimension"]=out["subdimension"].fillna(out["metric"].astype(str))
+    if "score_eligible" not in out.columns:
+        out["score_eligible"]=True
+    return out[out["score_eligible"] & out["intactness_score_0_100"].notna()].copy()
+
+
+def aggregate_subdimensions(scored_df, config):
+    """Geometric mean complementary metrics within each ecological subdimension."""
+    sdf=_valid_scored(scored_df)
     rows=[]
-    for pillar,name in PILLARS.items():
-        sub=scored_df[(scored_df["pillar"]==pillar)&(scored_df["score_eligible"])&scored_df["intactness_score_0_100"].notna()].copy() if not scored_df.empty else pd.DataFrame()
-        vals=sub["intactness_score_0_100"].astype(float).tolist() if not sub.empty else []
-        score=geometric_mean(vals) if len(vals)>=config.scoring.min_valid_metrics_per_pillar else None
-        lm,lv=_limiting_metric(sub)
-        rows.append({"pillar":pillar,"pillar_name":name,"score_0_to_100":score,"concern_label":concern_label(score),
-                     "n_scored_metrics":len(vals),"minimum_metrics_required":config.scoring.min_valid_metrics_per_pillar,
-                     "limiting_metric":lm,"limiting_metric_score_0_to_100":lv,
-                     "status":"scored" if score is not None else "insufficient_metric_coverage","aggregation_method":"geometric_mean"})
+    for (pillar, subdimension), g in sdf.groupby(["pillar","subdimension"], dropna=False):
+        vals=g["intactness_score_0_100"].astype(float).tolist()
+        if len(vals) < config.scoring.min_valid_metrics_per_subdimension:
+            score=None; status="insufficient_metric_coverage"
+        else:
+            score=geometric_mean(vals); status="scored"
+        lm=None; lv=None
+        if vals:
+            idx=g["intactness_score_0_100"].astype(float).idxmin(); lm=str(g.loc[idx,"metric"]); lv=float(g.loc[idx,"intactness_score_0_100"])
+        rows.append({"pillar":pillar,"pillar_name":PILLARS.get(pillar,pillar),"subdimension":subdimension,
+                     "score_0_to_100":score,"concern_label":concern_label(score),"n_scored_metrics":len(vals),
+                     "limiting_metric":lm,"limiting_metric_score_0_to_100":lv,"status":status,
+                     "aggregation_method":"geometric_mean"})
     return pd.DataFrame(rows)
 
-def aggregate_overall(pillar_df, config):
-    """Return separate condition and pressure summaries.
 
-    Condition is C1+C2+C3. C4 is pressure and is never silently mixed into condition.
-    An overall condition composite is shown only when the configured minimum condition
-    pillar coverage is met. A complete four-pillar SoN is optional and disabled by default.
-    """
+def aggregate_pillars(scored_df, config):
+    """Pillar headline = weakest defensible subdimension, with metric traceability."""
+    subdf=aggregate_subdimensions(scored_df,config)
+    rows=[]
+    for pillar,name in PILLARS.items():
+        g=subdf[(subdf["pillar"]==pillar) & subdf["score_0_to_100"].notna()] if not subdf.empty else pd.DataFrame()
+        if g.empty:
+            rows.append({"pillar":pillar,"pillar_name":name,"score_0_to_100":None,"concern_label":None,
+                         "n_scored_metrics":0,"n_scored_subdimensions":0,"minimum_metrics_required":config.scoring.min_valid_metrics_per_pillar,
+                         "limiting_subdimension":None,"limiting_metric":None,"limiting_metric_score_0_to_100":None,
+                         "status":"insufficient_metric_coverage","aggregation_method":"limiting_factor"})
+            continue
+        idx=g["score_0_to_100"].astype(float).idxmin(); r=g.loc[idx]
+        rows.append({"pillar":pillar,"pillar_name":name,"score_0_to_100":float(r["score_0_to_100"]),
+                     "concern_label":concern_label(r["score_0_to_100"]),"n_scored_metrics":int(g["n_scored_metrics"].sum()),
+                     "n_scored_subdimensions":int(len(g)),"minimum_metrics_required":config.scoring.min_valid_metrics_per_pillar,
+                     "limiting_subdimension":str(r["subdimension"]),"limiting_metric":r["limiting_metric"],
+                     "limiting_metric_score_0_to_100":r["limiting_metric_score_0_to_100"],"status":"scored",
+                     "aggregation_method":"limiting_factor_over_geometric_mean_subdimensions"})
+    return pd.DataFrame(rows)
+
+
+def aggregate_overall(pillar_df, config):
     row={"status":"insufficient_condition_coverage","condition_score_0_to_100":None,"condition_concern_label":None,
-         "pressure_score_0_to_100":None,"pressure_concern_label":None,"condition_pillars":[],"pressure_pillar":"C4_pressure",
+         "pressure_score_0_to_100":None,"pressure_concern_label":None,"condition_pillars":[],"pressure_pillar":"P4_pressure",
          "limiting_pillar":None,"limiting_metric":None,"limiting_metric_score_0_to_100":None,
-         "aggregation_method":"geometric_mean","son_score_0_to_100":None,"son_concern_label":None}
-    if pillar_df.empty: return row
-    cond=pillar_df[pillar_df.pillar.isin(["C1_extent","C2_vegetation","C3_fauna"]) & pillar_df.score_0_to_100.notna()].copy()
-    press=pillar_df[(pillar_df.pillar=="C4_pressure") & pillar_df.score_0_to_100.notna()]
+         "aggregation_method":"geometric_mean_condition_pillars","son_score_0_to_100":None,"son_concern_label":None}
+    if pillar_df is None or pillar_df.empty: return row
+    cond=pillar_df[pillar_df.pillar.isin(["P1_extent_configuration","P2_ecosystem_condition","P3_biodiversity_integrity"]) & pillar_df.score_0_to_100.notna()].copy()
+    press=pillar_df[(pillar_df.pillar=="P4_pressure") & pillar_df.score_0_to_100.notna()]
     if len(press)==1:
         row["pressure_score_0_to_100"]=float(press.iloc[0].score_0_to_100); row["pressure_concern_label"]=concern_label(row["pressure_score_0_to_100"])
     row["condition_pillars"]=cond.pillar.tolist()
-    fauna_required=bool(getattr(config.scoring, "require_fauna_for_condition", False))
-    fauna_present="C3_fauna" in set(cond.pillar)
+    fauna_required=bool(getattr(config.scoring,"require_fauna_for_condition",False))
+    fauna_present="P3_biodiversity_integrity" in set(cond.pillar)
     condition_gate=(len(cond)>=config.scoring.min_condition_pillars and (not fauna_required or fauna_present))
     if condition_gate:
         row["condition_score_0_to_100"]=geometric_mean(cond.score_0_to_100.astype(float).tolist()); row["condition_concern_label"]=concern_label(row["condition_score_0_to_100"]); row["status"]="condition_scored"
-    elif fauna_required and not fauna_present:
-        row["status"]="insufficient_fauna_coverage"
-    if len(cond)>0:
+    elif fauna_required and not fauna_present: row["status"]="insufficient_fauna_coverage"
+    if not cond.empty:
         r=cond.loc[cond.score_0_to_100.astype(float).idxmin()]; row["limiting_pillar"]=str(r.pillar); row["limiting_metric"]=None if pd.isna(r.limiting_metric) else str(r.limiting_metric); row["limiting_metric_score_0_to_100"]=None if pd.isna(r.limiting_metric_score_0_to_100) else float(r.limiting_metric_score_0_to_100)
-    if config.scoring.composite_son_enabled:
-        valid_pillars = pillar_df[pillar_df.score_0_to_100.notna()]
-        complete_gate = len(valid_pillars) == config.scoring.total_pillars if config.scoring.require_complete_pillars else len(valid_pillars) >= config.scoring.min_valid_pillars
-        if not complete_gate:
-            return row
-        vals=valid_pillars.score_0_to_100.astype(float).tolist(); row["son_score_0_to_100"]=geometric_mean(vals); row["son_concern_label"]=concern_label(row["son_score_0_to_100"])
     return row
+
 
 def build_scorecard(metric_results, benchmark_results, config):
     b={x.metric:x for x in benchmark_results}; rows=[score_metric(m,b.get(m.metric),config) for m in metric_results]
-    df=pd.DataFrame(rows); pillars=aggregate_pillars(df,config); overall=aggregate_overall(pillars,config); return df,pillars,overall
+    df=pd.DataFrame(rows); sub=aggregate_subdimensions(df,config); pillars=aggregate_pillars(df,config); overall=aggregate_overall(pillars,config)
+    return df,pillars,overall
+
 
 def score_external_observations(observations: pd.DataFrame, config):
     required={"metric","pillar","raw_value","direction","reference_value"}; missing=required-set(observations.columns)
     if missing: raise ValueError(f"External observations missing columns: {sorted(missing)}")
     rows=[]
     for _,r in observations.iterrows():
-        rec=SimpleNamespace(metric=str(r.metric),pillar=str(r.pillar),value=float(r.raw_value) if pd.notna(r.raw_value) else None,
-                            units=str(r.get("units","")),direction=str(r.direction),reference_allowed=True,status=str(r.get("status","ok")),notes=str(r.get("notes","")),domain=str(r.get("domain","external")),evidence_type=str(r.get("evidence_type","external")))
+        spec=get_indicator_spec(str(r.metric))
+        rec=SimpleNamespace(metric=str(r.metric),pillar=spec.pillar,value=float(r.raw_value) if pd.notna(r.raw_value) else None,
+            units=str(r.get("units",spec.units)),direction=spec.direction,reference_allowed=spec.reference_allowed,
+            status=str(r.get("status","ok")),notes=str(r.get("notes",spec.notes)),domain=spec.domain,evidence_type=str(r.get("evidence_type","external")))
         bench=benchmark_observation(rec.metric,rec.value,float(r.reference_value) if pd.notna(r.reference_value) else None,rec.direction,str(r.get("reference_level","external")),bool(r.get("reference_approved_for_scoring",False)))
         rows.append(score_metric(rec,bench,config))
-    df=pd.DataFrame(rows); return df,aggregate_pillars(df,config),aggregate_overall(aggregate_pillars(df,config),config)
+    df=pd.DataFrame(rows); pillars=aggregate_pillars(df,config); return df,pillars,aggregate_overall(pillars,config)
