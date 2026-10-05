@@ -16,7 +16,7 @@ from .inputs import load_project_input
 from .aggregation import (aggregate_emu_scorecards, aggregate_project_metric_scores, aggregate_project_pillars, build_emu_comparison_table)
 from .terrestrial import TerrestrialMetrics
 from .full_metrics import FullMetricEngine
-from .registry import FULL_INDICATORS
+from .registry import FULL_INDICATORS, effective_scoring_role
 from .water import WaterDetector
 
 class AdaptivePipeline:
@@ -70,8 +70,11 @@ class AdaptivePipeline:
                         pop=terr_ref_engine.auto.terrestrial_candidate(domains["boundary"], start=start, end=end)
                         terr_ref_engine.last_population=pop
                         reference_populations["terrestrial"] = pop.to_dict()
+                        pressure_pop=terr_ref_engine.auto.terrestrial_pressure_reference_candidate(domains["boundary"], start=start, end=end)
+                        reference_populations["terrestrial_pressure"] = pressure_pop.to_dict()
                     else:
                         pop=None
+                        pressure_pop=None
                     for m in terrestrial_metrics:
                         rv=terr_ref_engine._metric_reference_value(m.metric,pop.geometry,start,end) if pop is not None and pop.geometry is not None else None
                         from .benchmark import benchmark_metric
@@ -91,47 +94,78 @@ class AdaptivePipeline:
         # semantics and avoiding universal ratio assumptions.
         from .benchmark import benchmark_metric
         legacy_scored = [m for m in metric_results if m.metric in {x.name for x in FULL_INDICATORS}
-                         and m.status == "calculated" and m.score_eligible]
+                         and m.status == "calculated" and effective_scoring_role(next(x for x in FULL_INDICATORS if x.name == m.metric), self.config) in {"SCORED", "PRESSURE"}]
+        # Reference metrics are calculated once per reference population, not once
+        # per metric. The previous nested execution multiplied expensive GEE calls
+        # by the number of scored indicators.
+        ref_metric_cache = {}
         for m in legacy_scored:
-            ref_pop = reference_populations.get("aquatic") if m.domain == "aquatic" else reference_populations.get("terrestrial")
-            # The in-memory population objects are preferred when available.
+            is_pressure = m.pillar == "P4_pressure"
+            ref_pop = (reference_populations.get("aquatic") if m.domain == "aquatic" else
+                       reference_populations.get("terrestrial_pressure" if is_pressure else "terrestrial"))
             pop_obj = None
             if m.domain == "aquatic" and 'lake_ref_engine' in locals():
                 pop_obj = getattr(lake_ref_engine, "last_population", None)
             elif m.domain == "terrestrial" and 'terr_ref_engine' in locals():
-                pop_obj = getattr(terr_ref_engine, "last_population", None)
+                if is_pressure:
+                    pop_obj = locals().get("pressure_pop")
+                else:
+                    pop_obj = getattr(terr_ref_engine, "last_population", None)
+
             if pop_obj is None or getattr(pop_obj, "geometry", None) is None:
                 benchmarks.append(benchmark_metric(
                     m.metric, m.value, None, None, allow_tier2=True,
                     reference_level="none", reference_approval_basis="reference_population_unavailable",
-                    reference_state="", reference_method=""))
-                continue
-            try:
-                ref_result = FullMetricEngine(self.config).run(
-                    pop_obj.geometry, realm=m.domain, temporal_window=f"{start}:{end}"
-                )
-                ref_row = next((x for x in ref_result if x.metric == m.metric), None)
-                rv = ref_row.value if ref_row else None
-                ref_diag = {}
-                if ref_row:
-                    ref_diag = {k: getattr(ref_row, k) for k in
-                                ("std_dev","p05","p10","p25","p50","p75","p90","p95")
-                                if getattr(ref_row,k,None) is not None}
-                benchmarks.append(benchmark_metric(
-                    m.metric, m.value, None, rv, allow_tier2=True,
-                    tier2_approved=bool(getattr(pop_obj, "approval", False)),
-                    reference_level="auto_terrestrial" if m.domain == "terrestrial" else "auto_aquatic",
-                    reference_n=getattr(pop_obj, "candidate_pixels", None),
-                    reference_method=getattr(pop_obj, "method", "automatic_reference"),
-                    reference_state=getattr(pop_obj, "reference_state", ""),
-                    reference_approval_basis=("automated_reference_QA" if getattr(pop_obj, "approval", False) else "not_approved"),
-                    reference_diagnostics=ref_diag,
+                    reference_state="", reference_method=""
                 ))
-            except Exception as exc:
+                continue
+
+            cache_key = (m.domain, id(pop_obj))
+            if cache_key not in ref_metric_cache:
+                try:
+                    scored_names = [x.metric for x in legacy_scored if x.domain == m.domain]
+                    ref_result = FullMetricEngine(self.config).run(
+                        pop_obj.geometry, realm=m.domain, temporal_window=f"{start}:{end}",
+                        metric_names=scored_names
+                    )
+                    ref_metric_cache[cache_key] = {x.metric: x for x in ref_result}
+                except Exception as exc:
+                    ref_metric_cache[cache_key] = {"__error__": exc}
+
+            ref_rows = ref_metric_cache[cache_key]
+            if "__error__" in ref_rows:
+                exc = ref_rows["__error__"]
                 benchmarks.append(benchmark_metric(
                     m.metric, m.value, None, None, allow_tier2=True,
-                    reference_level="none", reference_approval_basis=f"reference_metric_failed:{type(exc).__name__}"
+                    reference_level="none",
+                    reference_approval_basis=f"reference_metric_failed:{type(exc).__name__}"
                 ))
+                continue
+
+            ref_row = ref_rows.get(m.metric)
+            rv = ref_row.value if ref_row else None
+            ref_diag = {}
+            if ref_row:
+                ref_diag = {k: getattr(ref_row, k) for k in
+                            ("std_dev","p05","p10","p25","p50","p75","p90","p95","valid_pixels")
+                            if getattr(ref_row,k,None) is not None}
+                # Robust-reference indicators use the median of the reference spatial
+                # distribution as the central comparator; ratio-scale log-response
+                # indicators retain the spatial mean. In both cases the distribution
+                # diagnostics remain attached to the benchmark.
+                ref_spec = next((x for x in FULL_INDICATORS if x.name == m.metric), None)
+                if ref_spec is not None and ref_spec.reference_estimator == "robust_z" and getattr(ref_row, "p50", None) is not None:
+                    rv = ref_row.p50
+            benchmarks.append(benchmark_metric(
+                m.metric, m.value, None, rv, allow_tier2=True,
+                tier2_approved=bool(getattr(pop_obj, "approval", False)),
+                reference_level=("auto_terrestrial_pressure" if (m.domain == "terrestrial" and is_pressure) else ("auto_terrestrial" if m.domain == "terrestrial" else "auto_aquatic")),
+                reference_n=getattr(pop_obj, "candidate_pixels", None),
+                reference_method=getattr(pop_obj, "method", "automatic_reference"),
+                reference_state=getattr(pop_obj, "reference_state", ""),
+                reference_approval_basis=("automated_reference_QA" if getattr(pop_obj, "approval", False) else "not_approved"),
+                reference_diagnostics=ref_diag,
+            ))
 
         scored,pillars,overall=build_scorecard(metric_results,benchmarks,self.config)
         evidence_df=pd.DataFrame()

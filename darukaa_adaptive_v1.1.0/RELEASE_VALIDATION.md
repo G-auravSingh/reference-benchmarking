@@ -7,7 +7,7 @@ Source:
 - attached `darukaa_reference_v0.2.7` source as authoritative legacy calculator implementation
 
 Validation:
-- pytest: 51 passed
+- pytest: 52 passed
 - compileall: passed
 - legacy live registrations: 46
 - migrated FULL_INDICATORS: 46

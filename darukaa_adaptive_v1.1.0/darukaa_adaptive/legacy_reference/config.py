@@ -31,10 +31,9 @@ class Config:
     ecoregion_source: str = "gee"  # "gee" or path to local shapefile
     ecoregion_gee_asset: str = "RESOLVE/ECOREGIONS/2017"
 
-    # BII GEE asset — upload NHM PREDICTS BII to your GEE project
-    # NHM v2.1.1: https://data.nhm.ac.uk/dataset/bii-developed-by-nhm-v2-1-1-limited-release
-    # Values stored as 0–100; pipeline divides by 100 automatically.
-    bii_gee_asset: Optional[str] = None  # e.g., "projects/your-gee-project-id/assets/bii-2020_v2-1-1"
+    # Optional client-supplied BII override. The production primary is the public
+    # Impact Observatory/Vizzuality BII v1.1 ImageCollection used by _img_bii.
+    bii_gee_asset: Optional[str] = None
 
     # Tier 2 reference selection parameters
     reference_buffer_km: float = 100.0  # search radius for reference patches
@@ -70,6 +69,7 @@ class Config:
     # depending on taxon and pressure type) — 300 m is a documented default pending
     # project-specific literature review, not a claim of universal validity.
     flii_edge_effect_radius_m: float = 300.0
+    cpland_edge_depth_m: float = 10.0
 
     landcover_gee_asset: str = "COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019"
     # NOTE: retained only for reference_stratification="legacy_landcover_elevation" (see
@@ -102,8 +102,8 @@ class Config:
     # do it deliberately and document why if you do.
     forest_loss_windows: List[Tuple[str, int, int, int]] = field(default_factory=lambda: [
         ("loss_longterm_2001_2025", 1, 25, 24),   # full Hansen record
-        ("loss_recent_2020_2025",  20, 25,  5),   # last 5 years
-        ("loss_current_2023_2025", 23, 25,  2),   # last 2 years
+        ("loss_recent_2020_2025",  20, 25,  6),   # last 5 years
+        ("loss_current_2023_2025", 23, 25,  3),   # last 2 years
     ])
     forest_loss_primary_window: str = "loss_longterm_2001_2025"
 

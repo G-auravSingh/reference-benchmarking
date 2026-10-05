@@ -137,6 +137,22 @@ class ScoringConfig:
     require_fauna_for_condition: bool = True
     pressure_separate_from_condition: bool = True
 
+    # Metric selection is deliberately separate from metric calculation. By default,
+    # every metric classified as scoreable by the scientific registry is eligible for
+    # scoring. Users can demote any scoreable metric to contextual in the notebook
+    # without changing calculator code. Hard-context, diagnostic and removed metrics
+    # cannot be promoted by this setting.
+    score_all_scoreable_metrics: bool = True
+    metric_overrides: Dict[str, str] = field(default_factory=dict)
+
+    # EII hierarchy gate. The parent EII is a provider-level composite of
+    # structural, compositional and functional integrity; it must not be
+    # aggregated together with those same components. "components" is the
+    # default because it preserves diagnostic visibility into the limiting
+    # EII dimension. "parent" is available when a single published EII headline
+    # is explicitly preferred. "none" keeps all EII layers contextual.
+    eii_mode: str = "components"
+
     # Retained only for migration compatibility. Production scoring does not use
     # raw-value thresholds; it uses reference-relative intactness and the fixed
     # 0–100 concern bands.
@@ -232,6 +248,13 @@ class AssessmentConfig:
             errors.append("scoring.aggregation_method must be 'geometric_mean'")
         if self.scoring.concern_band_upper_percent != [20.0, 40.0, 60.0, 80.0]:
             errors.append("scoring.concern_band_upper_percent must remain [20,40,60,80] as the declared product convention")
+
+        if self.scoring.metric_overrides:
+            for name, mode in self.scoring.metric_overrides.items():
+                if mode not in {"scored", "contextual"}:
+                    errors.append(f"scoring.metric_overrides[{name}] must be 'scored' or 'contextual'")
+        if str(self.scoring.eii_mode).lower() not in {"components", "parent", "none"}:
+            errors.append("scoring.eii_mode must be 'components', 'parent', or 'none'")
 
         if self.scoring.min_valid_metrics_per_subdimension < 1:
             errors.append("scoring.min_valid_metrics_per_subdimension must be >= 1")

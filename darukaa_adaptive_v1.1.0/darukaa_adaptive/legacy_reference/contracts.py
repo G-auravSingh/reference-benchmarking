@@ -67,7 +67,7 @@ C: Dict[str, dict] = {
          "for the signed picture, on its own robust_z-based contract.")),
  "net_forest_change_rate": dict(construct="C1_landscape", subdimension="restoration_trajectory",
     measurement_scale="interval", reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[HANSEN, DW],
+    disposition="context", input_layers=[HANSEN, DW],
     note=("NEW (independent audit item 9, 2026-09-27): split out of forest_loss_rate. Signed "
          "gain-minus-loss rate (interval-scale -- can be negative, zero, or positive; no true "
          "zero the way a ratio-scale quantity has), so robust_z (not log_response_ratio, which "
@@ -80,24 +80,24 @@ C: Dict[str, dict] = {
          "gross-loss indicator.")),
  "kba_overlap": dict(construct="C1_landscape", subdimension="extent", measurement_scale="bounded",
     disposition="screening", input_layers=["kba"], note="Proximity/overlap = screening, not site condition (F-style)."),
- "flii": dict(construct="C1_landscape", subdimension="forest_integrity", measurement_scale="bounded",
+ "flii": dict(construct="C2_vegetation", subdimension="forest_integrity", measurement_scale="bounded",
     reference_type="contemporary_best_on_offer", reference_estimator="robust_z",
     disposition="retain", input_layers=[FLII_LAYER], module="conservation",
     note=("Forest realm only. v0.2.1: renamed from 'FLII' — this is a Darukaa-computed "
          "proxy (VIIRS + fragmentation), NOT the published Grantham et al. 2020 product "
          "(prior citation was corrected as a citation-integrity fix). reference_type "
          "changed from published_threshold accordingly; see ASSUMPTIONS §1.")),
- "jrc_water_persistence": dict(construct="C1_landscape", subdimension="hydrology", measurement_scale="ratio",
+ "jrc_water_persistence": dict(construct="C2_vegetation", subdimension="hydrology", measurement_scale="ratio",
     reference_type="regional_distribution", reference_estimator="log_response_ratio",
     disposition="retain", input_layers=[JRC], note="Hydrology/surface-water permanence."),
- "rci": dict(construct="C1_landscape", subdimension="riparian_complexity", measurement_scale="bounded",
+ "rci": dict(construct="C2_vegetation", subdimension="riparian_complexity", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[NDVI], module="conservation",
+    disposition="context", input_layers=[NDVI], module="conservation",
     note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension -- "
          "originally shared 'hydrology' with jrc_water_persistence (already scored there), "
          "which would have averaged the two together; corrected. Citation corrected "
          "(Naiman & Decamps 1997).")),
- "riparian_ndvi_trend": dict(construct="C1_landscape", subdimension="hydrology", measurement_scale="interval",
+ "riparian_ndvi_trend": dict(construct="C2_vegetation", subdimension="hydrology", measurement_scale="interval",
     disposition="context", input_layers=[NDVI], note="Trend-based (correct NDVI use); contextual at cycle-1."),
 
  # ---------------- C2 vegetation condition ----------------
@@ -162,7 +162,7 @@ C: Dict[str, dict] = {
     disposition="context", input_layers=["modis_lai"], note="Shares greenness with NDVI; MODIS grain too coarse for these sites."),
  "chm": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="ratio",
     reference_type="contemporary_best_on_offer", reference_estimator="log_response_ratio",
-    disposition="retain", input_layers=[GEDI], note="Genuinely additive: GEDI canopy height, independent of NDVI/DW cluster."),
+    disposition="retain", input_layers=["eth_global_canopy_height_2020"], note="Genuinely additive structural metric from ETH Global Canopy Height 2020; 10m GSD, 2020 snapshot."),
  # aquatic condition module (only active for aquatic/mixed realm)
  "tspi": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="interval",
     reference_type="published_threshold", reference_estimator="robust_z",
@@ -174,7 +174,7 @@ C: Dict[str, dict] = {
          "son_score.LITERATURE_BREAKPOINTS). Aquatic module only (needs a water body).")),
  "sabf": dict(construct="C2_vegetation", subdimension="algal_bloom_frequency", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[S2], module="aquatic",
+    disposition="context", input_layers=[S2], module="aquatic",
     note=("PROMOTED (this audit, default-to-scored strategy): given its own distinct "
          "subdimension rather than sharing 'water_quality' with the 5 other aquatic C2 "
          "indicators below -- they were all one shared subdimension before, which would "
@@ -183,7 +183,7 @@ C: Dict[str, dict] = {
          "Distinct subdimensions preserve limiting-factor logic across all of them.")),
  "wcpi": dict(construct="C2_vegetation", subdimension="water_clarity", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[S2], module="aquatic",
+    disposition="context", input_layers=[S2], module="aquatic",
     note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why."),
  "wsdi": dict(construct="C2_vegetation", subdimension="water_surface_dynamics", measurement_scale="bounded",
     disposition="context", input_layers=[S2], module="aquatic",
@@ -204,7 +204,7 @@ C: Dict[str, dict] = {
          "direction flag.")),
  "hsas": dict(construct="C2_vegetation", subdimension="habitat_suitability", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=["edna_points"], module="aquatic",
+    disposition="context", input_layers=["edna_points"], module="aquatic",
     note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension. "
          "Real, honest caveat retained: this is a Darukaa-constructed composite (see "
          "indicators/__init__.py citation), not yet eDNA-validated -- scored now under the "
@@ -217,11 +217,11 @@ C: Dict[str, dict] = {
          "habitat-suitability-only value as context.")),
  "edpp": dict(construct="C2_vegetation", subdimension="edna_persistence", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[S2], module="aquatic",
+    disposition="context", input_layers=[S2], module="aquatic",
     note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why. Darukaa composite, environmental drivers literature-supported (see citation), formula itself not externally validated."),
  "mspl": dict(construct="C2_vegetation", subdimension="microbial_stress", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[S2], module="aquatic",
+    disposition="context", input_layers=[S2], module="aquatic",
     note="PROMOTED (this audit): own distinct subdimension, see sabf's note above for why. Darukaa composite, see citation."),
  "shdi": dict(construct="C2_vegetation", subdimension="water_quality", measurement_scale="ratio",
     disposition="context", input_layers=[S2], module="aquatic", note="Scalar-only morphometry; not cross-site comparable. Real structural reason (not caution) to keep context -- Tier2 needs a spatially benchmarkable value, which this single-number-per-site metric cannot provide."),
@@ -296,7 +296,7 @@ C: Dict[str, dict] = {
     disposition="context", input_layers=["chirps_terraclimate"], note="Climate context; moved from C2 to C4 climate exposure."),
  "sdi": dict(construct="C4_pressure", subdimension="shoreline_disturbance", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[S2], module="aquatic",
+    disposition="context", input_layers=[S2], module="aquatic",
     note=("PROMOTED (this audit, default-to-scored strategy): given its own distinct "
          "subdimension rather than sharing 'direct_pressure' with light_pollution (already "
          "scored there) -- promoting into the same subdimension would have suddenly "
@@ -305,7 +305,7 @@ C: Dict[str, dict] = {
     disposition="context", input_layers=[MODIS_LST], note="Site-relative normalisation only; not cross-site comparable."),
  "iri": dict(construct="C4_pressure", subdimension="invasive_risk", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
-    disposition="retain", input_layers=[NDVI],
+    disposition="context", input_layers=[NDVI],
     note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension "
          "(same reasoning as sdi -- avoids averaging with light_pollution). Real, honest "
          "caveat retained: Darukaa-constructed composite (see indicators/__init__.py "

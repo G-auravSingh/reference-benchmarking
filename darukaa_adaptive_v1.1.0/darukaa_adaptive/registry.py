@@ -100,6 +100,89 @@ TERRESTRIAL_INDICATORS: List[IndicatorSpec] = [
 # implementation dependency; v1.1.0 owns applicability, status, reference
 # routing, benchmarking, scoring and aggregation.
 #
+# Metrics that are intrinsically unsuitable for a headline reference-relative score
+# in the current implementation. They remain visible and calculated, but cannot be
+# promoted by a client override. This list is intentionally short. Everything else
+# with a quantitative, monotonic calculation is score-selectable by default.
+HARD_CONTEXT_ONLY = {
+    "landcover_composition", "riparian_ndvi_trend", "net_forest_change_rate",
+    "kba_overlap", "endemic_richness", "endemic_plant_richness",
+    "threatened_richness", "threatened_plant_richness", "ceri",
+    "flagship_habitat", "star_t", "aridity_index", "lst_day", "lst_night",
+    "stsi", "iri", "ivsi",
+}
+
+HARD_DIAGNOSTIC = {
+    "kba_overlap", "endemic_richness", "endemic_plant_richness",
+    "threatened_richness", "threatened_plant_richness",
+}
+
+def metric_scoreability(spec: IndicatorSpec) -> str:
+    """Return the registry-level scoring option for a metric.
+
+    ``default_scored`` means it is included by default but can be demoted.
+    ``context_only`` means it is intentionally not scoreable in this release.
+    ``diagnostic`` and ``removed`` are hard-gated.
+    """
+    if spec.name in {"ceri"}:
+        return "removed"
+    if spec.name in HARD_DIAGNOSTIC or spec.disposition == "screening":
+        return "diagnostic"
+    if spec.name in HARD_CONTEXT_ONLY:
+        return "context_only"
+    return "default_scored"
+
+def effective_scoring_role(spec: IndicatorSpec, config=None) -> str:
+    """Resolve the runtime role without modifying the scientific registry.
+
+    EII is a hierarchical construct: the provider's parent EII and its three
+    component dimensions must never enter the same headline condition score.
+    ``config.scoring.eii_mode`` therefore acts as a hard scientific gate:
+
+    * ``components`` (default): structural/compositional/functional components
+      are score-eligible; the parent EII is diagnostic/contextual.
+    * ``parent``: the parent EII is score-eligible; all three components are
+      diagnostic/contextual.
+    * ``none``: all EII layers are diagnostic/contextual.
+
+    User metric overrides may demote a scoreable metric, but cannot promote an
+    EII layer that is excluded by the selected hierarchy mode.
+    """
+    cls = metric_scoreability(spec)
+    if cls in {"removed", "diagnostic", "context_only"}:
+        return {"removed":"REMOVED", "diagnostic":"DIAGNOSTIC", "context_only":"CONTEXTUAL"}[cls]
+
+    scoring_cfg = getattr(config, "scoring", None)
+    eii_mode = str(getattr(scoring_cfg, "eii_mode", "components")).lower()
+    eii_parent = {"eii"}
+    eii_components = {"eii_structural", "eii_compositional", "eii_functional"}
+
+    if spec.name in eii_parent and eii_mode != "parent":
+        return "CONTEXTUAL"
+    if spec.name in eii_components and eii_mode != "components":
+        return "CONTEXTUAL"
+
+    overrides = getattr(scoring_cfg, "metric_overrides", {}) or {}
+    if spec.name in overrides:
+        return "SCORED" if overrides[spec.name] == "scored" else "CONTEXTUAL"
+    return "SCORED" if getattr(scoring_cfg, "score_all_scoreable_metrics", True) else spec.scoring_role
+
+def metric_selection_table() -> List[Dict]:
+    rows=[]
+    for spec in INDICATORS:
+        rows.append({
+            "metric": spec.name, "display_name": spec.display_name or spec.name,
+            "pillar": spec.pillar, "construct": spec.construct,
+            "domain": spec.domain, "direction": spec.direction,
+            "scoreability": metric_scoreability(spec),
+            "registry_role": spec.scoring_role,
+            "reference_type": spec.reference_type,
+            "source": spec.source_type, "native_scale_m": spec.native_scale_m,
+            "notes": spec.contract_note or spec.notes,
+        })
+    return rows
+
+
 def _legacy_to_adaptive_spec(legacy_spec) -> IndicatorSpec:
     disposition = str((legacy_spec.metadata or {}).get("disposition", ""))
     if disposition in {"retain", "redefine"} and legacy_spec.eligible:
@@ -112,6 +195,14 @@ def _legacy_to_adaptive_spec(legacy_spec) -> IndicatorSpec:
         role = "CONTEXTUAL"
     pillar_map = {1: "P1_extent_configuration", 2: "P2_ecosystem_condition",
                   3: "P3_biodiversity_integrity", 4: "P4_pressure"}
+    # Contract construct placement is authoritative. Legacy numeric pillar values
+    # predate the generalized P1-P4 separation and can be stale for pressure metrics.
+    construct_to_pillar = {
+        "C1_landscape": "P1_extent_configuration",
+        "C2_vegetation": "P2_ecosystem_condition",
+        "C3_fauna": "P3_biodiversity_integrity",
+        "C4_pressure": "P4_pressure",
+    }
     direction = "higher_is_better" if legacy_spec.higher_is_better else "lower_is_better"
     # A contextual metric may have a direction in the legacy registry, but that
     # does not make it score-eligible.
@@ -119,7 +210,7 @@ def _legacy_to_adaptive_spec(legacy_spec) -> IndicatorSpec:
         direction = "lower_is_better"
     return IndicatorSpec(
         name=legacy_spec.name,
-        pillar=pillar_map.get(legacy_spec.pillar, "P2_ecosystem_condition"),
+        pillar=construct_to_pillar.get(legacy_spec.construct, pillar_map.get(legacy_spec.pillar, "P2_ecosystem_condition")),
         construct=legacy_spec.construct or "",
         subdimension=legacy_spec.subdimension or "",
         domain=legacy_spec.realm,
@@ -128,7 +219,7 @@ def _legacy_to_adaptive_spec(legacy_spec) -> IndicatorSpec:
         evidence_tier=legacy_spec.evidence_tier,
         reference_type=legacy_spec.reference_type or "none",
         reference_allowed=bool(legacy_spec.reference_type),
-        default_scoring="reference_relative" if role == "SCORED" else "context_only",
+        default_scoring="reference_relative" if (disposition not in {"screening","remove"} and legacy_spec.name not in HARD_CONTEXT_ONLY) else "context_only",
         ecological_question=legacy_spec.ecological_question or "",
         management_use=legacy_spec.management_use or "",
         notes=str((legacy_spec.metadata or {}).get("contract_note", "")),
@@ -166,6 +257,23 @@ try:
     from .legacy_reference.indicators import create_default_registry as _create_legacy_registry
     _LEGACY_REGISTRY = _create_legacy_registry()
     LEGACY_INDICATORS = [_legacy_to_adaptive_spec(x) for x in _LEGACY_REGISTRY.all()]
+
+    # Source/provenance overrides are maintained here because several legacy
+    # metadata fields predate the v1.1.0 scientific audit. These values describe
+    # the calculators actually shipped in the current package.
+    _SOURCE_OVERRIDES = {
+        "eii": ("landler-open-data/assets/eii/global/eii_global_v1", 300.0, ("landbanking_eii",)),
+        "eii_structural": ("landler-open-data/assets/eii/global/eii_global_v1", 300.0, ("landbanking_eii",)),
+        "eii_compositional": ("landler-open-data/assets/eii/global/eii_global_v1", 300.0, ("landbanking_eii",)),
+        "eii_functional": ("landler-open-data/assets/eii/global/eii_global_v1", 300.0, ("landbanking_eii",)),
+        "bii": ("ebx-data/assets/earthblox/IO/BII_V1_1", 100.0, ("predicts_bii",)),
+        "chm": ("meta-forest-monitoring-okw37/assets/CanopyHeight", 1.0, ("meta_wri_canopy_height",)),
+    }
+    for _name, (_source, _scale, _layers) in _SOURCE_OVERRIDES.items():
+        for _i, _spec in enumerate(LEGACY_INDICATORS):
+            if _spec.name == _name:
+                LEGACY_INDICATORS[_i] = replace(_spec, source_type=_source, native_scale_m=_scale, input_layers=_layers)
+                break
 except Exception:
     # Registry import must remain usable even in environments where optional
     # legacy dependencies are unavailable. The calculator engine will report
@@ -186,6 +294,7 @@ PILLAR_ALIASES = {
     "C3_fauna": "P3_biodiversity_integrity",
     "C4_pressure": "P4_pressure",
 }
+
 
 def register_indicator(spec: IndicatorSpec, overwrite: bool = False) -> IndicatorSpec:
     if spec.name in {x.name for x in INDICATORS} and not overwrite:

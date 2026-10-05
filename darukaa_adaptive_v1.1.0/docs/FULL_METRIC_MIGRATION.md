@@ -76,7 +76,7 @@ information. See the SEEA ecosystem condition framework and indicator-account gu
 ## Acceptance status
 
 - Existing v1.1.0 regression suite: 48 tests passed.
-- Full-migration regression suite: 51 tests passed.
+- Full-migration regression suite: 52 tests passed.
 - Full legacy live registry: 46/46 calculators discovered.
 - Full v1 registry inventory: 46/46 migrated calculator names.
 - Duplicate-name check: passed.

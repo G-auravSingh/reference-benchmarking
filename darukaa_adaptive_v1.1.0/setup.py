@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="darukaa-adaptive",
-    version="1.1.0",
+    version="1.1.1",
     description="Profile-driven biodiversity baseline engine for aquatic, terrestrial and mixed assessments",
     packages=find_packages(),
     install_requires=[

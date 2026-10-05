@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.1 — Scientific metric audit and EII hierarchy gate — 2026-10-05
+
+- Added an explicit EII hierarchy gate: parent EII and its three components are mutually exclusive in headline scoring.
+- Default `eii_mode="components"` scores structural, compositional and functional EII components while retaining parent EII as diagnostic/contextual.
+- Added `eii_mode="parent"` and `"none"` alternatives; metric overrides cannot bypass the hierarchy gate.
+- Corrected adaptive registry provenance for EII (~300 m), independent BII v1.1 (100 m), and Meta/WRI CHM (~1 m primary with ETH 10 m fallback).
+- Preserved the independent Impact Observatory/Vizzuality BII source with no EII-derived fallback.
+- Added regression tests for EII exclusivity, override hard-gating, source contracts and complete 46-metric inventory.
+- Clarified that the active v1.1.0 reference engine does not use the legacy 5,000-pixel sampling/retry ladder; those settings remain only in the vendored historical calculator/reference module.
+
 ## 2026-10-03 — Site Selection handoff compatibility hardening
 
 - Added native ingestion of the Site Selection `tile_manifest.json` contract using `tile_paths` and `tile_labels`.

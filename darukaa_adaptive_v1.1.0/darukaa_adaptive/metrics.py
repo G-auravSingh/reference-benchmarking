@@ -37,6 +37,7 @@ class MetricResult:
     p90: Optional[float] = None
     p95: Optional[float] = None
     notes: str = ""
+    metadata: Dict[str, Any] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

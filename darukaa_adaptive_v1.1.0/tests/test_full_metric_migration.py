@@ -30,3 +30,9 @@ def test_scored_metrics_require_reference_and_uncertainty():
             assert spec.reference_allowed
             assert spec.reference_type
             assert spec.uncertainty_method not in ("", "none")
+
+
+def test_water_specific_legacy_metrics_are_not_applicable_to_terrestrial():
+    from darukaa_adaptive.registry import get_indicator_spec
+    assert "terrestrial" not in get_indicator_spec("rci").applicable_realms
+    assert "terrestrial" not in get_indicator_spec("jrc_water_persistence").applicable_realms

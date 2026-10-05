@@ -421,6 +421,21 @@ class AutomaticReferenceEngine:
         except Exception as exc:
             return ReferencePopulation("auto_terrestrial","terrestrial","terrestrial_reference_policy","error:"+type(exc).__name__,reference_state="least_disturbed_contemporary",diagnostics={"error":str(exc),"exception_type":type(exc).__name__})
 
+    def terrestrial_pressure_reference_candidate(self, master_geometry, start: Optional[str] = None, end: Optional[str] = None):
+        """Build an ecologically matched terrestrial population without an HMI screen.
+
+        Pressure indicators must not select their own low-pressure reference population,
+        because that would condition the benchmark on the variable being assessed (most
+        obviously for GHM). The candidate still uses the focal site's dominant Dynamic
+        World habitat class and dominant RESOLVE ecoregion, plus the normal population
+        size/quality gates.
+        """
+        return self._terrestrial_candidate_once(
+            master_geometry, start, end, 1.0,
+            "ecologically_matched_contemporary_pressure_distribution",
+            "terrestrial_ecological_gate_no_pressure_filter"
+        )
+
     def build(self, master_geometry, realm: str, start: str, end: str) -> ReferencePopulation:
         if realm == "aquatic":
             return self.aquatic_candidate(master_geometry, start, end)

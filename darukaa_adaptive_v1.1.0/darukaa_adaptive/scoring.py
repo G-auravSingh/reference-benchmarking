@@ -15,7 +15,7 @@ from typing import Any
 import math
 import pandas as pd
 from .benchmark import benchmark_observation
-from .registry import PILLARS, get_indicator_spec
+from .registry import PILLARS, get_indicator_spec, effective_scoring_role
 
 BANDS = ((0,20,"Very High"),(20,40,"High"),(40,60,"Moderate"),(60,80,"Low"),(80,100.000001,"Very Low"))
 
@@ -47,13 +47,13 @@ def _metadata(record):
         "subdimension": spec.subdimension, "raw_value": getattr(record,"value",None),
         "units": getattr(record,"units",spec.units), "direction": getattr(record,"direction",spec.direction),
         "reference_allowed": getattr(record,"reference_allowed",spec.reference_allowed),
-        "status": getattr(record,"status","ok"), "scoring_role": spec.scoring_role,
+        "status": getattr(record,"status","ok"), "scoring_role": effective_scoring_role(spec, getattr(record, "_config", None)),
         "notes": getattr(record,"notes",""), "domain": getattr(record,"domain",spec.domain),
     }
 
 
 def score_metric(metric_result, benchmark_result, config):
-    meta=_metadata(metric_result); b=benchmark_result
+    meta=_metadata(metric_result); meta["scoring_role"] = effective_scoring_role(get_indicator_spec(metric_result.metric), config); b=benchmark_result
     attainment = getattr(b,"reference_attainment_0_100",None) if b else None
     out={
         "metric":meta["metric"],"pillar":meta["pillar"],"construct":meta["construct"],"subdimension":meta["subdimension"],

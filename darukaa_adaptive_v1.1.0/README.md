@@ -110,3 +110,9 @@ The package contains automated tests for:
 - package integrity.
 
 A passing software suite does not substitute for live Earth Engine acceptance. Dataset/API failures are technical failures, not ecological findings.
+
+## Metric selection (v1.1.0 scientific production contract)
+
+Metric calculation is independent of metric selection. The registry exposes every registered metric with its pillar, construct, direction, source, reference type, native scale and scoreability class. By default, all `default_scored` metrics are scored. A client can demote any of these to contextual in the Colab notebook using `METRIC_OVERRIDES`, without modifying the calculator or package code. Diagnostic, removed and hard-context metrics remain non-scoreable unless their scientific contract is changed in a future audited release.
+
+The current legacy inventory contains 30 default-scoreable metrics, 10 hard-context metrics, 5 diagnostic metrics and 1 removed metric. The 46 legacy metrics remain registered; aquatic/terrestrial native framework metrics are additional and are also visible in the notebook registry table.

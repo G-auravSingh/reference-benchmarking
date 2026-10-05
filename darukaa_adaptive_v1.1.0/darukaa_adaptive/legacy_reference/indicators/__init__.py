@@ -223,18 +223,49 @@ def _largest_water_polygon(water_mask, geometry, scale=10):
 
 
 def _reduce(image, geometry, scale=100):
+    """Reduce a raster over a site/reference population and retain distribution diagnostics.
+
+    The site value is the spatial mean, while the same reduce operation retains median,
+    spread, percentiles and valid-pixel count for reference-population QA. Pixel-level
+    observations are spatial cells, not independent ecological replicates, so these
+    statistics are descriptive and are not treated as inferential sample replicates.
+    """
     import ee
     g = _to_ee(geometry)
+    reducer = (ee.Reducer.mean()
+               .combine(ee.Reducer.median(), sharedInputs=True)
+               .combine(ee.Reducer.stdDev(), sharedInputs=True)
+               .combine(ee.Reducer.percentile([5,10,25,50,75,90,95]), sharedInputs=True)
+               .combine(ee.Reducer.count(), sharedInputs=True))
     stats = image.reduceRegion(
-        reducer=ee.Reducer.mean().combine(ee.Reducer.median(), sharedInputs=True),
-        geometry=g, scale=scale, maxPixels=1e8, bestEffort=True).getInfo()
-    v = None
-    for k, val in (stats or {}).items():
-        if "mean" in k.lower() and val is not None: v = val; break
+        reducer=reducer, geometry=g, scale=scale, maxPixels=1e8, bestEffort=True).getInfo() or {}
+    def pick(suffixes):
+        for k, val in stats.items():
+            kl=k.lower()
+            if any(kl.endswith(x) or x in kl for x in suffixes) and val is not None:
+                return val
+        return None
+    # Single-band rasters are the normal path; derive the band prefix from the first key.
+    v = pick(["_mean", "mean"])
+    meta = {
+        "spatial_mean": v,
+        "spatial_median": pick(["_median", "median"]),
+        "spatial_stddev": pick(["_stddev", "stddev"]),
+        "spatial_p05": pick(["_p5", "_p05", "percentile_5"]),
+        "spatial_p10": pick(["_p10", "percentile_10"]),
+        "spatial_p25": pick(["_p25", "percentile_25"]),
+        "spatial_p50": pick(["_p50", "percentile_50"]),
+        "spatial_p75": pick(["_p75", "percentile_75"]),
+        "spatial_p90": pick(["_p90", "percentile_90"]),
+        "spatial_p95": pick(["_p95", "percentile_95"]),
+        "spatial_valid_pixel_count": pick(["_count", "count"]),
+        "spatial_distribution_note": "Descriptive spatial-pixel distribution; pixels are not treated as independent ecological replicates."
+    }
     if v is None:
-        for val in (stats or {}).values():
-            if val is not None: v = val; break
-    return {"value": v, "pixels": None}
+        for val in stats.values():
+            if val is not None and isinstance(val, (int,float)):
+                v = val; break
+    return {"value": v, "pixels": None, "metadata": meta}
 
 def _local_raster(path, geometry, band=1, sf=1.0):
     import rasterio
@@ -444,7 +475,8 @@ def _img_flii(c):
             .rename("FLII"))
     return flii
 
-_EII_LAST_PATH_USED = {}  # real diagnostic capture (independent audit item 5):
+_EII_LAST_PATH_USED = {}
+_BII_LAST_SOURCE = {}  # real diagnostic capture (independent audit item 5):
 # records which real path (primary asset vs HMI fallback) each _img_eii* call
 # actually used, keyed by function name, so extract_eii*() can attach a real,
 # honest reason to its output instead of a silent, unexplained value -- this
@@ -490,23 +522,9 @@ def _img_eii(c):
         _EII_LAST_PATH_USED["eii"] = "primary_asset"
         return img.rename("EII")
     except Exception as e:
-        logger.warning(f"EII: primary asset ({_EII_ASSET}) genuinely inaccessible ({e}) "
-                       f"-- using the documented HMI-based fallback.")
+        logger.warning(f"EII: primary asset ({_EII_ASSET}) is unavailable ({e}); no proxy fallback will be scored.")
         _EII_LAST_PATH_USED["eii"] = f"hmi_fallback ({e})"
-    # v0.2.5: use the pipeline's current HMI asset (was hardcoded to the stale
-    # CSP/HM/GlobalHumanModification, ~2016, even after the rest of the pipeline
-    # upgraded to TNC HM v3 — an inconsistency this closes).
-    hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
-    hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
-    try:
-        s = ee.ImageCollection(hmi_asset).first().select(hmi_band)
-    except Exception:
-        s = ee.Image(hmi_asset).select(hmi_band)
-    s=ee.Image.constant(1).subtract(s.unitScale(0,1).clamp(0,1))
-    npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
-    f=npp.divide(2.0).min(1).max(0); b=_img_bii(c)
-    if b: return s.min(b).min(f).rename("EII")
-    return s.min(f).rename("EII")
+    return None
 
 def _img_eii_s(c):
     import ee
@@ -518,15 +536,9 @@ def _img_eii_s(c):
         _EII_LAST_PATH_USED["eii_structural"] = "primary_asset"
         return img.rename("EII_Structural")
     except Exception as e:
-        logger.warning(f"EII_Structural: primary asset genuinely inaccessible ({e}) -- using HMI fallback.")
+        logger.warning(f"EII_Structural: primary asset unavailable ({e}); no proxy fallback will be scored.")
         _EII_LAST_PATH_USED["eii_structural"] = f"hmi_fallback ({e})"
-        hmi_asset = getattr(c, "hmi_gee_asset", "TNC/HM/v3/90m_s")
-        hmi_band = getattr(c, "hmi_gee_band", "All_threats_combined")
-        try:
-            g = ee.ImageCollection(hmi_asset).first().select(hmi_band)
-        except Exception:
-            g = ee.Image(hmi_asset).select(hmi_band)
-        return ee.Image.constant(1).subtract(g.unitScale(0,1).clamp(0,1)).rename("EII_Structural")
+        return None
 
 def _img_eii_c(c):
     import ee
@@ -537,9 +549,9 @@ def _img_eii_c(c):
         _EII_LAST_PATH_USED["eii_compositional"] = "primary_asset"
         return img.rename("EII_Compositional")
     except Exception as e:
-        logger.warning(f"EII_Compositional: primary asset genuinely inaccessible ({e}) -- using BII fallback.")
-        _EII_LAST_PATH_USED["eii_compositional"] = f"bii_fallback ({e})"
-        b=_img_bii(c); return b.rename("EII_Compositional") if b else None
+        logger.warning(f"EII_Compositional: primary asset unavailable ({e}); no proxy fallback will be scored.")
+        _EII_LAST_PATH_USED["eii_compositional"] = f"unavailable ({e})"
+        return None
 
 def _img_eii_f(c):
     import ee
@@ -550,10 +562,9 @@ def _img_eii_f(c):
         _EII_LAST_PATH_USED["eii_functional"] = "primary_asset"
         return img.rename("EII_Functional")
     except Exception as e:
-        logger.warning(f"EII_Functional: primary asset genuinely inaccessible ({e}) -- using MODIS NPP fallback.")
-        _EII_LAST_PATH_USED["eii_functional"] = f"modis_npp_fallback ({e})"
-        npp=ee.ImageCollection("MODIS/061/MOD17A3HGF").sort("system:time_start",False).first().select("Npp").multiply(0.0001)
-        return npp.divide(2.0).min(1).max(0).rename("EII_Functional")
+        logger.warning(f"EII_Functional: primary asset unavailable ({e}); no proxy fallback will be scored.")
+        _EII_LAST_PATH_USED["eii_functional"] = f"unavailable ({e})"
+        return None
 
 def _img_bii(c):
     """Biodiversity Intactness Index — genuine independent source (v0.2.4 fix).
@@ -593,6 +604,7 @@ def _img_bii(c):
     worth knowing if the asset path ever needs re-verification.
     """
     import ee
+    _BII_LAST_SOURCE["source"] = None
     try:
         ic = ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BII_V1_1")
         year = getattr(c, "ndvi_year", None)
@@ -601,6 +613,7 @@ def _img_bii(c):
             composite = ee.Image(ee.Algorithms.If(yearly.size().gt(0), yearly.mean(), ic.mean()))
         else:
             composite = ic.mean()
+        _BII_LAST_SOURCE["source"] = "biointact_v1_1"
         return composite.rename("BII")
     except Exception:
         pass
@@ -608,6 +621,7 @@ def _img_bii(c):
     # not the annual v1.1 record): used only if v1.1 itself fails to load.
     try:
         ic = ee.ImageCollection("projects/ebx-data/assets/earthblox/IO/BIOINTACT")
+        _BII_LAST_SOURCE["source"] = "biointact_legacy_2017_2020"
         return ic.select("BioIntactness").mean().rename("BII")
     except Exception:
         pass
@@ -615,17 +629,15 @@ def _img_bii(c):
     a = getattr(c, "bii_gee_asset", None)
     if a:
         try:
+            _BII_LAST_SOURCE["source"] = "client_supplied_asset"
             return ee.Image(a).select(0).divide(100).rename("BII")
         except Exception:
             pass
-    # Fallback 2 (LAST RESORT, degraded): EII's compositional sub-layer. Not independent
-    # — only used if the real BII assets and any custom override both fail to load, so a
-    # run doesn't silently return nothing. If this fallback fires, BII should NOT be
-    # treated as adding new information beyond what EII already reports.
-    try:
-        return ee.Image(_EII_ASSET).select("compositional_integrity").rename("BII")
-    except Exception:
-        pass
+    # No EII-derived fallback. BII is an independent biodiversity model and must not
+    # silently become a relabelled EII compositional layer when the canonical BII source
+    # is unavailable. Returning None makes the dependency explicit and prevents double
+    # counting the same information under two indicators.
+    _BII_LAST_SOURCE["source"] = "independent_bii_source_unavailable"
     return None
 
 def _img_pdf(c):
@@ -974,33 +986,26 @@ def _img_lai(c):
     return mean_lai.updateMask(mean_lai.gte(0).And(mean_lai.lte(8))).rename('LAI')
 
 def _img_chm(c):
-    """Canopy height -- ETH Global Canopy Height 2020 (Lang et al. 2023, Nature Ecology &
-    Evolution), 10m continuous global raster.
+    """Global canopy height from the Meta/WRI Forest Monitoring 1 m product.
 
-    REAL SWITCH (this audit): was GEDI L2A rh98 raw shot data (kept below as
-    _img_chm_gedi_legacy) -- confirmed directly on a real Tata Motors run that GEDI's
-    sparse orbital-track sampling, combined with the real, necessary quality mask
-    (quality_flag/degrade_flag/sensitivity>0.9), left MOST real zones with zero valid
-    shots at all (site_value=None for Deccan_forest, Wildlife, Narmada_valley -- not
-    just small zones). Verified the real, specific alternative before switching (not
-    assumed): ee.Image("users/nlang/ETH_GlobalCanopyHeight_2020_10m_v1") is a real,
-    confirmed public GEE community-catalog asset (CC-BY-4.0, no access barrier,
-    independently confirmed via its own publication's GEE snippet and via an
-    unrelated peer-reviewed paper's own dataset-reference table) -- a genuinely dense,
-    wall-to-wall 10m raster (fuses GEDI as training data with Sentinel-2 via a
-    deep-learning model), so a reduceRegion over any real site geometry gets a real
-    value, not a sparse-shot gamble.
+    Primary source: projects/meta-forest-monitoring-okw37/assets/CanopyHeight
+    (ImageCollection, mosaic over the available global observation tiles). The
+    product is a dense, approximately 1 m canopy-height surface derived from
+    high-resolution Maxar/Vantor imagery and ML, with most source imagery
+    concentrated in 2018-2020. This is preferable to sparse GEDI shots for small
+    EMUs because every mapped location can contribute to the spatial summary.
 
-    Honest, real trade-off (client explicitly asked to weigh this before switching):
-    a single global 2020 snapshot, not a live, per-year rolling window the way GEDI's
-    monthly collection is -- appropriate as a real, current baseline for TM/Soulforest's
-    Year-0 assessments (2020 is recent, not a stale multi-decade-old baseline the way
-    MODIS MCD12Q1's 500m issue was), but will need a real decision of its own once
-    monitoring cycles need a canopy-height comparison genuinely contemporaneous with a
-    specific future year, since this product has no scheduled annual update.
+    The ETH 10 m 2020 product is retained as a fallback if the Meta collection is
+    unavailable. CHMv2 (Meta/WRI, 2026) is the newer model, but its public global
+    distribution is currently exposed through AWS/download workflows rather than
+    a verified stable GEE asset in this package, so it is not silently substituted.
     """
     import ee
-    return ee.Image("users/nlang/ETH_GlobalCanopyHeight_2020_10m_v1").rename("CHM")
+    try:
+        ic = ee.ImageCollection("projects/meta-forest-monitoring-okw37/assets/CanopyHeight")
+        return ic.mosaic().rename("CHM")
+    except Exception:
+        return ee.Image("users/nlang/ETH_GlobalCanopyHeight_2020_10m_v1").rename("CHM")
 
 
 def _img_chm_gedi_legacy(c):
@@ -1143,11 +1148,11 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="cpland", applicable_realms=("terrestrial", "mixed"),
         # PV_Binary is land-vegetation-specific, meaningless on open water
-        display_name="Landscape Connectivity (CPLAND)", source_type="gee",
+        display_name="Core Area Percentage of Landscape (CPLAND)", source_type="gee",
         extract_fn=extract_cpland, unit="%", value_range=(0,100),
-        citation="McGarigal & Marks (1995). Darukaa PV binary.",
+        citation="McGarigal & Marks (1995); FRAGSTATS CPLAND definition. Darukaa India PV binary supplies the target habitat class. CPLAND is a core-area metric, not a standalone graph-theoretic connectivity index and is not a Plan Vivo PVBC crediting metric.",
         tier2_eligible=False, reference_radius_km=30.0, pillar=1,
-        metadata={"tnfd_dim": 1, "note": "India-only PV binary asset",
+        metadata={"tnfd_dim": 1, "note": "India-only PV binary target habitat class; standard CPLAND = core area of target class / total landscape area × 100. Edge depth is explicit and configurable.",
                   "gee_image_fn": _img_cpland_binary})
 
     r.register(name="forest_loss_rate", applicable_realms=("terrestrial", "mixed"),
@@ -1172,7 +1177,7 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="net_forest_change_rate", applicable_realms=("terrestrial", "mixed"),
         # same rationale as forest_loss_rate: trivially ~0 on open water
-        display_name="Net Forest Change Rate (Gain − Loss)", source_type="gee",
+        display_name="Net Forest Cover Change Proxy (Gain − Loss)", source_type="gee",
         extract_fn=extract_net_forest_change_rate, unit="% per year", value_range=(-100, 100),
         citation="Loss: Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
              "Gain: Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4 "
@@ -1188,7 +1193,8 @@ def create_default_registry() -> IndicatorRegistry:
              "metric its ratio/log_response_ratio contract actually requires.",
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_net_forest_change, "tnfd_dim": 1,
-                  "display_name_report": "Net Forest Cover Change (Hansen loss + Dynamic World gain)",
+                  "display_name_report": "Net Forest Cover Change Proxy (Hansen loss + Dynamic World current-tree expansion)",
+                  "score_status": "context_only_temporal_proxy",
                   "scope_note": ("Signed rate: positive = net regrowth, negative = net loss. "
                        "Gain is detected once (current tree cover on non-2000-forest "
                        "pixels) and annualised as an approximation -- not annually-"
@@ -1220,26 +1226,16 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _img_hhi, "tnfd_dim": 2})
 
     r.register(name="flii", applicable_realms=("terrestrial", "mixed"),
-        # Forest-specific by definition (fragmentation/pressure on forest
-        # landscape) -- was already excluded from aquatic via module=
-        # "conservation", but applicable_realms is now the real,
-        # authoritative gate, so this needs to be set explicitly too or
-        # it would wrongly default to "applies everywhere" once the
-        # module-based filter is retired.
-        display_name="Forest Fragmentation & Pressure Proxy (Darukaa)", source_type="gee",
+        display_name="Forest Landscape Integrity Index (canonical raster required)", source_type="gee",
         extract_fn=extract_flii, unit="0–10", value_range=(0,10),
-        citation=("Darukaa-computed proxy (VIIRS night-light pressure + Dynamic-World forest "
-                 "fragmentation), NOT the published Forest Landscape Integrity Index. "
-                 "DECISION (this audit): investigated the real Grantham et al. (2020) FLII "
-                 "directly -- confirmed TNFD/SBTN do use it for exactly this purpose, but no "
-                 "open-access, directly-loadable GEE asset was found (accessible only via a "
-                 "third-party commercial API/SDK) -- staying with this proxy rather than adding "
-                 "an external paid dependency. Kept clearly distinct: this indicator's own name "
-                 "and citation must never imply it is the real, external FLII a TNFD reviewer "
-                 "might look up independently. See ASSUMPTIONS §1."),
+        citation=("Grantham et al. (2020). Nature Communications 11:5978. "
+                 "Canonical FLII is a 300m, 2019 forest-integrity raster. The pipeline no longer "
+                 "scores a Darukaa reconstruction under the FLII name; a canonical FLII raster "
+                 "must be supplied through raster_paths['flii'] or an approved GEE asset."),
         tier2_eligible=True, reference_radius_km=150.0, pillar=2,
         metadata={"gee_image_fn": _img_flii, "tnfd_dim": 2,
-                 "display_name_report": "Forest Fragmentation & Pressure Proxy (Darukaa)"})
+                 "canonical_source_required": True,
+                 "display_name_report": "Forest Landscape Integrity Index (Grantham et al. 2020)"})
 
     r.register(name="eii", display_name="Ecosystem Integrity Index", source_type="gee",
         applicable_realms=("terrestrial", "mixed"),  # unverified over water pixels -- conservative default, see registry.py
@@ -1285,7 +1281,7 @@ def create_default_registry() -> IndicatorRegistry:
                  "independent source; see ASSUMPTIONS §9)."),
         tier2_eligible=True, reference_radius_km=75.0, pillar=3,
         metadata={"gee_image_fn": _img_bii, "tnfd_dim": 3,
-                 "display_name_report": "Biodiversity Intactness Index (fauna & flora abundance)"})
+                 "display_name_report": "Biodiversity Intactness Index (PREDICTS-based terrestrial biodiversity intactness)"})
 
     r.register(name="pdf", applicable_realms=("terrestrial", "mixed"),  # GLOBIO-style biodiversity model, terrestrial-vegetation-oriented
         display_name="Land-use Biodiversity Loss Proxy", source_type="gee",
@@ -1423,7 +1419,7 @@ def create_default_registry() -> IndicatorRegistry:
                       "validation_status": "not_externally_validated",
                   }})
 
-    r.register(name="rci", display_name="Riparian Complexity Index", source_type="gee",
+    r.register(name="rci", applicable_realms=("aquatic", "mixed"), display_name="Riparian Complexity Index", source_type="gee",
         extract_fn=extract_rci, unit="index (0-1)", value_range=(0,1),
         citation=("Darukaa-constructed weighted composite (vegetation variability 0.30 + "
                  "vegetation complexity/EVI 0.30 + vegetation productivity/NDVI 0.20 + edge "
@@ -1452,7 +1448,7 @@ def create_default_registry() -> IndicatorRegistry:
         metadata={"gee_image_fn": _img_riparian_ndvi_trend, "tnfd_dim": 2,
                   "note": "Linear slope NDVI/year in riparian zone. Negative = degradation trend."})
 
-    r.register(name="jrc_water_persistence", applicable_realms=("terrestrial", "aquatic", "mixed"),
+    r.register(name="jrc_water_persistence", applicable_realms=("aquatic", "mixed"),
         # Water-specific by definition -- was mistagged module="core" instead of "aquatic"
         display_name="Water Surface Persistence (Sentinel-1 SAR)", source_type="gee",
         extract_fn=extract_jrc_water_persistence, unit="fraction (0-1)", value_range=(0,1),
@@ -1491,19 +1487,17 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="chm", applicable_realms=("terrestrial", "mixed"),
         # Canopy height is trivially ~0m on open water, not informative
-        display_name="Canopy Height Model (ETH Global Canopy Height 2020)", source_type="gee",
+        display_name="Canopy Height Model (Meta/WRI High Resolution Canopy Height Maps)", source_type="gee",
         extract_fn=extract_chm, unit="metres", value_range=(0,50),
-        citation=("Lang N, Jetz W, Schindler K & Wegner JD (2023). A high-resolution canopy "
-                 "height model of the Earth. Nat Ecol Evol. DOI:10.1038/s41559-023-02206-6. "
-                 "SWITCHED (this audit) from GEDI L2A rh98 raw shot data -- confirmed directly "
-                 "that GEDI's sparse orbital-track sampling left most real zones with zero "
-                 "valid data. Real, honest trade-off: this is a single 2020 snapshot, not a "
-                 "live per-year product -- appropriate as a current Year-0 baseline, will need "
-                 "a real decision of its own for future monitoring-cycle comparisons. See "
-                 "ASSUMPTIONS §15."),
+        citation=("Tolan J et al. (2024). Very high resolution canopy height maps from RGB imagery "
+                 "using self-supervised vision transformer and convolutional decoder trained on "
+                 "aerial lidar. Remote Sensing of Environment 300:113888. Meta/WRI High Resolution "
+                 "Canopy Height Maps, GEE Forest Monitoring asset. The product is a high-resolution "
+                 "structural baseline with most source imagery concentrated in 2018-2020. ETH Global "
+                 "Canopy Height 2020 (10m) remains the fallback."),
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=2,
         metadata={"gee_image_fn": _img_chm, "tnfd_dim": 2,
-                  "note": "GEDI L2A rh98. 2-year window. Quality-masked 0-80m."})
+                  "note": "ETH Global Canopy Height 2020, 10m GSD; site value is mean mapped canopy-top height over valid product pixels."})
 
     # ── DIM 3: SPECIES POPULATION SIZE ───────────────────────────────────────
     r.register(name="endemic_richness", display_name="Endemic Species Richness", source_type="gee",
@@ -1712,12 +1706,22 @@ def extract_cpland(g,c):
     try:
         img=ee.Image(pa).select(0); sm=img.projection().nominalScale().getInfo()
         if sm<=0: return {"value":None,"pixels":None}
-        rp=int(math.ceil((10+0.5*sm)/sm))
-        core=img.eq(1).unmask(0).rename("b").reduceNeighborhood(reducer=ee.Reducer.min(),kernel=ee.Kernel.circle(rp,units="pixels")).rename("c")
+        edge_depth_m=float(getattr(c, "cpland_edge_depth_m", 10.0))
+        if edge_depth_m<=0: return {"value":None,"pixels":None,"metadata":{"status":"calculation_failed","reason":"cpland_edge_depth_m must be > 0"}}
+        # Standard CPLAND: sum of core area of the target class divided by
+        # total landscape area. Core is defined by a declared edge depth.
+        core=img.eq(1).unmask(0).rename("b").reduceNeighborhood(
+            reducer=ee.Reducer.min(),
+            kernel=ee.Kernel.circle(edge_depth_m, units="meters")
+        ).rename("c")
         ca=core.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(),geometry=eg,scale=sm,maxPixels=1e13)
-        pa_m2=float(eg.area().getInfo())
+        pa_m2=float(eg.area(maxError=1).getInfo())
         if pa_m2==0: return {"value":None,"pixels":None}
-        return {"value":max(0,min(100,100*float(ee.Number(ca.get("c")).getInfo())/pa_m2)),"pixels":None}
+        return {"value":max(0,min(100,100*float(ee.Number(ca.get("c")).getInfo())/pa_m2)),"pixels":None,
+                "metadata":{"cpland_definition":"core area percentage of landscape",
+                            "target_class":"PV binary class 1",
+                            "edge_depth_m":edge_depth_m,
+                            "native_scale_m":float(sm)}}
     except Exception as e: logger.warning(f"CPLAND: {e}"); return {"value":None,"pixels":None}
 
 def _annualized_rate_pct(area_m2, baseline_m2, n_years):
@@ -1752,9 +1756,9 @@ def _forest_baseline_and_loss(eg, c):
     baseline_m2 = ee.Number(a0.get("area"))
 
     windows = getattr(c, "forest_loss_windows", None) or [
-        ("loss_longterm_2001_2025", 1, 25, 24),
+        ("loss_longterm_2001_2025", 1, 25, 25),
         ("loss_recent_2020_2025", 20, 25, 5),
-        ("loss_current_2023_2025", 23, 25, 2),
+        ("loss_current_2023_2025", 23, 25, 3),
     ]
     primary_label = getattr(c, "forest_loss_primary_window", "loss_longterm_2001_2025")
 
@@ -2002,51 +2006,36 @@ def extract_habitat_health(g,c):
     return _reduce(img,g,10) if img else {"value":None,"pixels":None}
 
 def extract_flii(g,c):
-    """Extract FLII with non-forest applicability precondition.
+    """Extract the canonical Grantham et al. (2020) FLII raster.
 
-    FIX (v4.0): FLII is conceptually a forest-integrity index and should not
-    silently return None on non-forest sites (the old MODIS-masked behavior
-    produced an unexplained null that looked like a pipeline bug rather than
-    an applicability limitation — confirmed on FCF Gujarat agroforestry run).
-    Now explicitly checks forest-class fraction at 10m before computing FLII;
-    if forest fraction is below threshold, returns None WITH metadata flagging
-    this as "Not Applicable — non-forest site" so the report layer can render
-    it correctly instead of treating it as missing/failed data.
-
-    Also fixes reduce scale: was 500 (legacy MODIS pixel size), now 30 —
-    appropriate aggregation scale for a 10m DW-masked, VIIRS/SRTM-informed
-    composite (matches resolution of the coarsest input layer in the FLII
-    computation, VIIRS at ~500m nominal but typically aggregated to 30m
-    tiles in GEE's internal pyramid; 30 is also consistent with forest_loss_rate's
-    Hansen-based scale elsewhere in this module).
+    The published FLII is a 300 m, 2019 forest-integrity raster. A Darukaa
+    reconstruction of its P/Q/LFC formula is deliberately NOT scored under
+    the FLII name. Projects must provide the canonical raster as a local
+    file (raster_paths['flii']) or an approved GEE image asset
+    (raster_paths['flii_gee_asset']).
     """
     import ee
     eg = _to_ee(g)
-    FOREST_FRACTION_MIN = 0.10  # below this, site is "non-forest" for FLII purposes
+    local = c.raster_paths.get("flii") if hasattr(c, "raster_paths") else None
+    gee_asset = c.raster_paths.get("flii_gee_asset") if hasattr(c, "raster_paths") else None
     try:
-        dw = _dw_mode(c)
-        forest_frac = dw.eq(DW_TREES).rename("forest").reduceRegion(
-            reducer=ee.Reducer.mean(), geometry=eg, scale=10, maxPixels=1e13
-        ).get("forest").getInfo()
+        if local:
+            r = _local_raster(local, g, 1, 1.0)
+            r.setdefault("metadata", {}).update({"flii_source":"canonical_grantham_2020_raster", "canonical":True})
+            return r
+        if gee_asset:
+            img = ee.Image(gee_asset).select(0)
+            r = _reduce(img, eg, 300)
+            r.setdefault("metadata", {}).update({"flii_source":"canonical_grantham_2020_gee_asset", "canonical":True})
+            return r
+        return {"value":None,"pixels":None,"status":"pending_input",
+                "metadata":{"applicable":True,"canonical":False,
+                            "flii_source":"canonical_raster_required",
+                            "note":"Canonical Grantham et al. (2020) FLII raster is required; no Darukaa proxy is scored under the FLII name."}}
     except Exception as e:
-        logger.warning(f"FLII forest-fraction precondition check failed: {e}")
-        forest_frac = None
-
-    if forest_frac is not None and forest_frac < FOREST_FRACTION_MIN:
-        return {"value": None, "pixels": None,
-                "metadata": {"applicable": False,
-                             "forest_fraction": round(forest_frac, 4),
-                             "note": (f"Not Applicable — site is {forest_frac:.1%} forest "
-                                      f"(threshold {FOREST_FRACTION_MIN:.0%}). FLII is a "
-                                      f"forest-integrity index and is not meaningful for "
-                                      f"non-forest land uses (e.g., active agroforestry, "
-                                      f"farmland, plantation establishment sites).")}}
-
-    img=_img_flii(c)
-    result = _reduce(img,g,30) if img else {"value":None,"pixels":None}
-    if forest_frac is not None:
-        result["metadata"] = {"applicable": True, "forest_fraction": round(forest_frac, 4)}
-    return result
+        logger.warning(f"FLII canonical raster extraction failed: {e}")
+        return {"value":None,"pixels":None,"status":"calculation_failed",
+                "metadata":{"flii_source":"canonical_raster", "error":str(e)}}
 
 def extract_eii(g,c):
     img=_img_eii(c)
@@ -2076,14 +2065,19 @@ def extract_eii_f(g,c):
 
 def extract_bii(g,c):
     import ee; img=_img_bii(c)
+    source = _BII_LAST_SOURCE.get("source")
     if img:
         r=_reduce(img,g,100)  # native resolution of the real BioIntactness asset
+        r.setdefault("metadata", {})["bii_source"] = source
         if r.get("value") is not None: return r
     rp=c.raster_paths.get("bii")
     if rp:
-        try: return _local_raster(rp,g,1,0.01)
-        except: pass
-    return {"value":None,"pixels":None}
+        try:
+            r = _local_raster(rp,g,1,0.01)
+            r.setdefault("metadata", {})["bii_source"] = "client_supplied_raster"
+            return r
+        except Exception: pass
+    return {"value":None,"pixels":None,"metadata":{"bii_source":source}}
 
 def extract_pdf(g,c): return _reduce(_img_pdf(c),g,10)
 
@@ -2560,7 +2554,7 @@ def extract_shdi(g,c):
     except Exception as e: logger.warning(f"shdi: {e}"); return {"value":None,"pixels":None}
 
 def extract_lai(g,c): return _reduce(_img_lai(c),g,500)
-def extract_chm(g,c): return _reduce(_img_chm(c),g,25)
+def extract_chm(g,c): return _reduce(_img_chm(c),g,10)
 
 def extract_ivsi(g,c):
     import ee; eg=_to_ee(g)
