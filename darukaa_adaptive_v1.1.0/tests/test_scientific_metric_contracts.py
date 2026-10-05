@@ -83,3 +83,19 @@ def test_full_legacy_inventory_is_unique_and_complete():
     names = [x.name for x in __import__("darukaa_adaptive.registry", fromlist=["FULL_INDICATORS"]).FULL_INDICATORS]
     assert len(names) == 46
     assert len(set(names)) == 46
+
+
+def test_net_tree_cover_change_is_contextual_absolute_area_metric():
+    spec = _spec("net_forest_change_rate")
+    assert spec.scoring_role == "CONTEXTUAL"
+    assert spec.default_scoring == "context_only"
+    assert spec.units == "ha per year"
+    assert "Net Tree Cover Change Proxy" in spec.display_name
+    assert spec.name in __import__("darukaa_adaptive.registry", fromlist=["HARD_CONTEXT_ONLY"]).HARD_CONTEXT_ONLY
+
+
+def test_pipeline_pressure_filter_uses_explicit_boolean_parentheses():
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[1] / "darukaa_adaptive" / "pipeline.py"
+    text = source.read_text()
+    assert '(pillar_agg["pillar"] == "P4_pressure") & (pillar_agg["project_score_0_to_100"].notna())' in text

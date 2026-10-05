@@ -1177,8 +1177,8 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="net_forest_change_rate", applicable_realms=("terrestrial", "mixed"),
         # same rationale as forest_loss_rate: trivially ~0 on open water
-        display_name="Net Forest Cover Change Proxy (Gain − Loss)", source_type="gee",
-        extract_fn=extract_net_forest_change_rate, unit="% per year", value_range=(-100, 100),
+        display_name="Net Tree Cover Change Proxy (ha/year)", source_type="gee",
+        extract_fn=extract_net_forest_change_rate, unit="ha per year", value_range=None,
         citation="Loss: Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
              "Gain: Brown et al. (2022). Dynamic World. DOI:10.1038/s41597-022-01307-4 "
              "-- current 'trees' class on pixels not forested in the Hansen 2000 baseline. "
@@ -1193,16 +1193,14 @@ def create_default_registry() -> IndicatorRegistry:
              "metric its ratio/log_response_ratio contract actually requires.",
         tier2_eligible=True, higher_is_better=True, reference_radius_km=50.0, pillar=1,
         metadata={"gee_image_fn": _img_net_forest_change, "tnfd_dim": 1,
-                  "display_name_report": "Net Forest Cover Change Proxy (Hansen loss + Dynamic World current-tree expansion)",
+                  "display_name_report": "Net Tree Cover Change Proxy (Hansen loss + Dynamic World current-tree expansion; ha/year)",
                   "score_status": "context_only_temporal_proxy",
-                  "scope_note": ("Signed rate: positive = net regrowth, negative = net loss. "
-                       "Gain is detected once (current tree cover on non-2000-forest "
-                       "pixels) and annualised as an approximation -- not annually-"
-                       "resolved the way Hansen's loss signal is. Sites with low "
-                       "baseline forest cover (<5 ha) will show arithmetically inflated "
-                       "percentage rates -- interpret absolute area change (ha/yr) "
-                       "alongside the percentage rate."),
-                  "min_reliable_baseline_ha": 5.0})
+                  "scope_note": ("Contextual absolute net tree-cover change proxy in ha/year. "
+                       "Gain is detected once from current Dynamic World tree cover on "
+                       "pixels not forested in the Hansen 2000 baseline, while Hansen "
+                       "loss is annually resolved. Because the two signals are temporally "
+                       "asymmetric, this metric is contextual and is not headline scored."),
+                  "min_reliable_baseline_ha": None})
 
     r.register(name="kba_overlap", display_name="KBA/IBA Overlap", source_type="gee",
         extract_fn=extract_kba_overlap, unit="%", value_range=(0,100),
@@ -1852,27 +1850,12 @@ def extract_forest_loss_rate(g, c):
 
 
 def extract_net_forest_change_rate(g, c):
-    """Signed NET forest-cover change rate (gain - loss, %/yr; positive =
-    net regrowth), split out of forest_loss_rate (independent audit item 9 --
-    see extract_forest_loss_rate's docstring for the full real rationale).
-    Uses robust_z (not log_response_ratio), which is defined for negative,
-    zero, and positive values alike -- see estimators.robust_z.
+    """Contextual net tree-cover change proxy, reported as absolute ha/year.
 
-    Loss reuses the exact same Hansen GFC windows/baseline as
-    forest_loss_rate (via _forest_baseline_and_loss, never independently
-    recomputed). Gain is detected via current Dynamic World "trees" (class 1)
-    on pixels that were NOT forest in the 2000 baseline -- i.e. tree cover
-    that has newly appeared since baseline. Hansen itself has no
-    continuously-updated gain layer usable for a specific recent window (its
-    own "gain" band is a one-time 2000-2012 cumulative product, too stale for
-    a current assessment).
-
-    This is the indicator a restoration/agroforestry/plantation client's real
-    regrowth shows up in -- keeping it separate from forest_loss_rate (rather
-    than netting gain into that indicator, as a prior v0.2.5 build did) means
-    a genuine planting success shows a real positive number here instead of
-    silently zeroing out or breaking forest_loss_rate's own loss-only,
-    ratio-scale estimator.
+    The legacy internal key is retained for compatibility, but the metric is not
+    a percentage-rate score. Hansen annual loss and current Dynamic World tree
+    expansion are temporally asymmetric, so the result is retained as contextual
+    evidence rather than used in the headline condition score.
     """
     import ee
     eg = _to_ee(g)
@@ -1880,11 +1863,6 @@ def extract_net_forest_change_rate(g, c):
         _gfc, f_mask, baseline_m2, windows, primary_label, loss_area_m2_by_window = \
             _forest_baseline_and_loss(eg, c)
         pa = ee.Image.pixelArea()
-
-        # GAIN detection: current Dynamic World "trees" (class 1) on pixels NOT
-        # forested in the 2000 baseline. Uses a rolling recent window (this
-        # project's ndvi_year, consistent with the currency standard used
-        # elsewhere in this pipeline), not a fixed historical Hansen gain layer.
         dw_current = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
                      .filterBounds(eg)
                      .filterDate(f"{c.ndvi_year - 1}-01-01", f"{c.ndvi_year}-12-31")
@@ -1895,70 +1873,37 @@ def extract_net_forest_change_rate(g, c):
             reducer=ee.Reducer.sum(), geometry=eg, scale=30, maxPixels=1e13)
         gain_total_m2 = ee.Number(ee.Algorithms.If(gain_m2.get("area"), gain_m2.get("area"), 0))
 
-        baseline_m2_val = baseline_m2.getInfo()
-        gain_total_m2_val = gain_total_m2.getInfo()
-
-        loss_rates, gain_rates, net_rates, loss_ha_by_window = {}, {}, {}, {}
+        gain_ha = gain_total_m2.getInfo() / 10000.0
+        loss_ha_by_window = {}
+        annual_net_ha_by_window = {}
         for key, _yr_start, _yr_end, n_years in windows:
-            loss_area_m2 = loss_area_m2_by_window[key].getInfo()
-            loss_ha_by_window[key] = round(loss_area_m2 / 10000, 4)
-            loss_rates[key] = round(_annualized_rate_pct(loss_area_m2, baseline_m2_val, n_years), 4)
-            # Gain is not naturally windowed the way loss is (Hansen gives no annual
-            # gain signal) — the SAME detected gain area is annualised over each
-            # window's length as an approximation, clearly labelled as such.
-            gain_rates[key] = round(_annualized_rate_pct(gain_total_m2_val, baseline_m2_val, n_years), 4)
-            net_rates[key] = round(gain_rates[key] - loss_rates[key], 4)
+            loss_ha = loss_area_m2_by_window[key].getInfo() / 10000.0
+            loss_ha_by_window[key] = round(loss_ha, 4)
+            annual_net_ha_by_window[key] = round((gain_ha / n_years) - (loss_ha / n_years), 4)
 
-        baseline_ha = round(baseline_m2_val / 10000, 2)
-        gain_ha = round(gain_total_m2_val / 10000, 2)
-        low_baseline = baseline_ha < 5.0
-
-        primary_value = net_rates.get(primary_label)
-        if primary_value is None:
-            logger.warning(f"forest_loss_primary_window='{primary_label}' not found in "
-                          f"configured windows {list(net_rates.keys())}; falling back to "
-                          f"the first configured window for scoring.")
-            primary_value = next(iter(net_rates.values()), None)
-
-        # Same real arithmetic-instability case as forest_loss_rate (Deccan forest:
-        # 0.01 ha baseline, 24.26 ha of real current tree cover -> a 10,851%/yr
-        # reading) applies identically to the NET rate, since it shares the same
-        # baseline denominator. Suppressed from scoring; absolute ha change stays
-        # in metadata so a real planting story is still visible in the report.
-        if low_baseline:
-            logger.warning(f"net_forest_change_rate: baseline_forest_ha={baseline_ha} is "
-                          f"below the 5ha stability floor — percentage rate "
-                          f"({primary_value}%/yr) is arithmetically unstable and has been "
-                          f"suppressed from scoring. See metadata for absolute area change.")
-            primary_value = None
+        primary_value = annual_net_ha_by_window.get(primary_label)
+        baseline_ha = round(baseline_m2.getInfo() / 10000.0, 4)
+        absolute_net_change_ha = round((gain_ha - loss_ha_by_window.get(primary_label, 0.0)), 4)
 
         return {
-            "value": primary_value,   # NET rate (gain - loss), %/yr; signed, can be negative
+            "value": primary_value,
             "pixels": None,
             "metadata": {
-                "all_window_loss_rates_pct_yr": loss_rates,
-                "all_window_gain_rates_pct_yr": gain_rates,
-                "all_window_net_rates_pct_yr": net_rates,
+                "all_window_annual_net_change_ha_yr": annual_net_ha_by_window,
                 "primary_window": primary_label,
                 "baseline_forest_ha": baseline_ha,
-                "gain_detected_ha": gain_ha,
+                "gain_detected_ha": round(gain_ha, 4),
                 "loss_ha_by_window": loss_ha_by_window,
-                "absolute_net_change_ha": round(gain_ha - loss_ha_by_window.get(primary_label, 0), 2),
-                "low_baseline_flag": low_baseline,
-                "note": (f"Signed NET rate (gain - loss) for '{primary_label}'; positive = "
-                        f"net regrowth. Loss uses Hansen GFC lossyear (annually resolved); "
-                        f"gain is detected once (current Dynamic World trees on "
-                        f"non-2000-forest pixels) and annualised per window as an "
-                        f"approximation, not an annually-resolved signal the way loss is — "
-                        f"flagged here, not disguised as equally precise. See "
-                        f"forest_loss_rate for the gross-loss-only, ratio-scale signal "
-                        f"this is split from."),
-                "low_baseline_note": (
-                        f"Baseline forest cover is only {baseline_ha:.1f} ha. "
-                        f"Percentage rates are arithmetically unstable at this scale. "
-                        f"Report absolute area change (ha/yr) rather than percentage rate "
-                        f"for this site."
-                ) if low_baseline else None,
+                "absolute_net_change_ha": absolute_net_change_ha,
+                "low_baseline_flag": baseline_ha < 5.0,
+                "note": (
+                    "Contextual net tree-cover change proxy reported as absolute ha/year. "
+                    "Loss uses Hansen GFC annual loss; gain is current Dynamic World tree "
+                    "expansion on pixels not forested in the Hansen 2000 baseline. These "
+                    "signals are temporally asymmetric and are therefore not treated as a "
+                    "headline reference-relative score. Percentage-rate normalisation and "
+                    "the former 5 ha stability-floor suppression are intentionally removed."
+                ),
             }
         }
     except Exception as e:

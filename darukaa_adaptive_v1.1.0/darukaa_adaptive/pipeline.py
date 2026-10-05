@@ -268,7 +268,7 @@ class AdaptivePipeline:
         pillar_agg=aggregate_project_pillars(pillar_rows)
         comparison=build_emu_comparison_table(pillar_rows,[r for r in metric_rows if "score_0_to_100" in r])
         condition_pillars=pillar_agg[pillar_agg["pillar"].isin(["P1_extent_configuration","P2_ecosystem_condition","P3_biodiversity_integrity"]) & pillar_agg["project_score_0_to_100"].notna()] if not pillar_agg.empty else pd.DataFrame()
-        pressure=pillar_agg[pillar_agg["pillar"]=="P4_pressure" & pillar_agg["project_score_0_to_100"].notna()] if not pillar_agg.empty else pd.DataFrame()
+        pressure=pillar_agg[(pillar_agg["pillar"] == "P4_pressure") & (pillar_agg["project_score_0_to_100"].notna())] if not pillar_agg.empty else pd.DataFrame()
         project_overall={"status":"insufficient_condition_coverage","condition_score_0_to_100":None,"condition_concern_label":None,"pressure_score_0_to_100":None,"pressure_concern_label":None,"limiting_pillar":None,"limiting_emu":None}
         if not pressure.empty:
             ps=float(pressure.iloc[0]["project_score_0_to_100"]); project_overall.update({"pressure_score_0_to_100":ps,"pressure_concern_label":__import__('darukaa_adaptive.scoring',fromlist=['concern_label']).concern_label(ps)})

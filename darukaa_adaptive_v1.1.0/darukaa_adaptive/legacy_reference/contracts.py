@@ -297,20 +297,17 @@ C: Dict[str, dict] = {
  "sdi": dict(construct="C4_pressure", subdimension="shoreline_disturbance", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="context", input_layers=[S2], module="aquatic",
-    note=("PROMOTED (this audit, default-to-scored strategy): given its own distinct "
-         "subdimension rather than sharing 'direct_pressure' with light_pollution (already "
-         "scored there) -- promoting into the same subdimension would have suddenly "
-         "averaged it with an existing, correctly-functioning scored indicator.")),
+    note=("Retained as context-only in v1.1.0. It has its own shoreline-disturbance "
+         "subdimension, but the current implementation is not promoted into the headline "
+         "pressure score without an explicit scoring decision.")),
  "stsi": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
     disposition="context", input_layers=[MODIS_LST], note="Site-relative normalisation only; not cross-site comparable."),
  "iri": dict(construct="C4_pressure", subdimension="invasive_risk", measurement_scale="bounded",
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="context", input_layers=[NDVI],
-    note=("PROMOTED (this audit, default-to-scored strategy): own distinct subdimension "
-         "(same reasoning as sdi -- avoids averaging with light_pollution). Real, honest "
-         "caveat retained: Darukaa-constructed composite (see indicators/__init__.py "
-         "citation), field-validation still pending -- scored now under 'score by default, "
-         "refine with real evidence later', not because validation is complete.")),
+    note=("Retained as context-only in v1.1.0. It has its own invasive-risk subdimension, "
+         "but field validation of the Darukaa-constructed composite remains pending and it "
+         "is not promoted into the headline pressure score.")),
  "ivsi": dict(construct="C4_pressure", subdimension="direct_pressure", measurement_scale="bounded",
     disposition="context", input_layers=[NDVI], note="Detects NDVI expansion, not taxonomic invasion (own docstring). Must NOT be labelled invasion."),
 }
