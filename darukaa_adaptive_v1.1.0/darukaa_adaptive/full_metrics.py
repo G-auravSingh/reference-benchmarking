@@ -86,7 +86,7 @@ class FullMetricEngine:
                     direction=spec.direction, evidence_tier=spec.evidence_tier,
                     reference_type=spec.reference_type, reference_allowed=spec.reference_allowed,
                     score_eligible=False, notes="Metric not applicable to requested realm.",
-                    metadata={"applicable": False, "status": "not_applicable"}
+                    metadata={"applicable": False, "status": "not_applicable", "dataset_asset": spec.dataset_asset, "spatial_resolution": spec.spatial_resolution, "temporal_resolution": spec.temporal_resolution}
                 ))
                 continue
 

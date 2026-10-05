@@ -10,5 +10,5 @@ from .registry import PILLARS
 from .scoring import geometric_mean, concern_label, score_external_observations
 from .water import WaterDetector, WaterPeriodResult
 from .reference_profiles import ReferenceSelectionPolicy, AQUATIC_LAKE_PROFILE, TERRESTRIAL_PROFILE, MIXED_PROFILE
-__version__="1.1.1"
+__version__="1.1.0"
 __all__=["AssessmentConfig","AdaptivePipeline","LakePipeline","WaterDetector","WaterPeriodResult","LakeMetrics","MetricResult","BenchmarkResult","ReferenceEngine","annual_periods","month_periods","qa_metrics","PILLARS","geometric_mean","concern_label","score_external_observations","load_evidence_csv","load_edna_csv","edna_template","ReferenceSelectionPolicy","AQUATIC_LAKE_PROFILE","TERRESTRIAL_PROFILE","MIXED_PROFILE"]

@@ -48,6 +48,9 @@ class IndicatorSpec:
     measurement_scale: Optional[str] = None
     spatial_grain: str = ""
     native_scale_m: Optional[float] = None
+    dataset_asset: str = ""
+    spatial_resolution: str = ""
+    temporal_resolution: str = ""
     temporal_period: str = ""
     effort_basis: str = ""
     reference_estimator: Optional[str] = None
@@ -84,6 +87,38 @@ AQUATIC_INDICATORS: List[IndicatorSpec] = [
     IndicatorSpec("edna_persistence_potential","P3_biodiversity_integrity","eDNA_context","eDNA_persistence","eDNA_context","index","context_dependent","modelled","none",False,"contextual","Do environmental conditions favour persistence of extracellular DNA?","Interpret eDNA detectability limitations.","Contextual proxy only.",scoring_role="CONTEXTUAL",proxy_status="modelled_proxy"),
 ]
 
+_AQUATIC_META = {
+    "water_extent": ("GOOGLE/DYNAMICWORLD/V1", 10.0, "10 m", "near-daily / configured assessment window", "Dynamic Surface Water Extent"),
+    "water_persistence": ("GOOGLE/DYNAMICWORLD/V1", 10.0, "10 m", "near-daily / configured assessment window", "Water Occurrence / Persistence"),
+    "ndci_proxy": ("COPERNICUS/S2_SR_HARMONIZED", 20.0, "20 m", "configured assessment window", "NDCI Water-Quality Proxy"),
+    "red_reflectance_turbidity_proxy": ("COPERNICUS/S2_SR_HARMONIZED", 20.0, "20 m", "configured assessment window", "Red Reflectance Turbidity Proxy"),
+    "surface_algal_bloom_frequency": ("COPERNICUS/S2_SR_HARMONIZED", 20.0, "20 m", "configured assessment window", "Surface Algal Bloom Frequency"),
+    "riparian_ndvi": ("COPERNICUS/S2_SR_HARMONIZED", 10.0, "10 m", "configured assessment window", "Riparian NDVI"),
+    "riparian_ndvi_sen_slope": ("COPERNICUS/S2_SR_HARMONIZED", 10.0, "10 m", "multi-year trend window", "Riparian NDVI Trend"),
+    "shoreline_disturbance_fraction": ("GOOGLE/DYNAMICWORLD/V1", 10.0, "10 m", "configured assessment window", "Shoreline/Riparian Disturbance Fraction"),
+    "landcover_composition": ("GOOGLE/DYNAMICWORLD/V1", 10.0, "10 m", "configured assessment window", "Land-cover Composition"),
+    "edna_taxon_richness": ("client-supplied eDNA observations", None, "field sampling", "survey-specific", "eDNA Taxon Richness"),
+    "edna_detection_rate": ("client-supplied eDNA observations", None, "field sampling", "survey-specific", "eDNA Detection Rate"),
+    "edna_fish_richness": ("client-supplied eDNA observations", None, "field sampling", "survey-specific", "eDNA Fish Richness"),
+    "edna_persistence_potential": ("modelled/contextual eDNA input", None, "model-dependent", "survey-specific", "eDNA Persistence Potential"),
+}
+_AQUATIC_REALM_ONLY = {
+    "water_extent", "water_persistence", "ndci_proxy", "red_reflectance_turbidity_proxy",
+    "surface_algal_bloom_frequency", "riparian_ndvi", "riparian_ndvi_sen_slope",
+    "shoreline_disturbance_fraction", "landcover_composition", "edna_taxon_richness",
+    "edna_detection_rate", "edna_fish_richness", "edna_persistence_potential"
+}
+AQUATIC_INDICATORS = [
+    replace(s,
+            applicable_realms=("aquatic", "mixed"),
+            dataset_asset=_AQUATIC_META[s.name][0],
+            native_scale_m=_AQUATIC_META[s.name][1],
+            spatial_resolution=_AQUATIC_META[s.name][2],
+            temporal_resolution=_AQUATIC_META[s.name][3],
+            display_name=_AQUATIC_META[s.name][4])
+    for s in AQUATIC_INDICATORS
+]
+
 TERRESTRIAL_INDICATORS: List[IndicatorSpec] = [
     IndicatorSpec("natural_landcover_fraction","P1_extent_configuration","extent","natural_cover","master_boundary","fraction","higher_is_better","baseline","regional_or_matched",True,"reference_relative","What proportion of the assessment boundary remains in natural/semi-natural land cover?","Track habitat extent and conversion.","EO land-cover classification is a screening proxy.",scoring_role="SCORED",proxy_status="EO_proxy"),
     IndicatorSpec("terrestrial_ndvi","P2_ecosystem_condition","vegetation","greenness","master_boundary","NDVI","higher_is_better","baseline","regional_or_matched",True,"reference_relative","What is baseline vegetation greenness?","Track vegetation condition and change.","NDVI is a condition proxy, not a biodiversity observation.",scoring_role="SCORED",proxy_status="EO_proxy"),
@@ -109,7 +144,7 @@ HARD_CONTEXT_ONLY = {
     "kba_overlap", "endemic_richness", "endemic_plant_richness",
     "threatened_richness", "threatened_plant_richness", "ceri",
     "flagship_habitat", "star_t", "aridity_index", "lst_day", "lst_night",
-    "stsi", "iri", "ivsi",
+    "stsi", "iri", "ivsi", "sdi", "wsdi", "jrc_water_persistence",
 }
 
 HARD_DIAGNOSTIC = {
@@ -177,7 +212,9 @@ def metric_selection_table() -> List[Dict]:
             "scoreability": metric_scoreability(spec),
             "registry_role": spec.scoring_role,
             "reference_type": spec.reference_type,
-            "source": spec.source_type, "native_scale_m": spec.native_scale_m,
+            "source": spec.source_type, "dataset_asset": spec.dataset_asset,
+            "native_scale_m": spec.native_scale_m, "spatial_resolution": spec.spatial_resolution,
+            "temporal_resolution": spec.temporal_resolution, "temporal_period": spec.temporal_period,
             "notes": spec.contract_note or spec.notes,
         })
     return rows
@@ -274,6 +311,50 @@ try:
             if _spec.name == _name:
                 LEGACY_INDICATORS[_i] = replace(_spec, source_type=_source, native_scale_m=_scale, input_layers=_layers)
                 break
+    _DATASET_META = {
+        "dynamic_world": ("GOOGLE/DYNAMICWORLD/V1", 10.0, "10 m", "near-daily / configured assessment window"),
+        "hansen_gfc": ("UMD/hansen/global_forest_change_2025_v1_13", 30.0, "30 m", "annual loss-year; 2000 baseline"),
+        "sentinel2": ("COPERNICUS/S2_SR_HARMONIZED", 10.0, "10 m", "configured assessment window"),
+        "sentinel2_ndvi": ("COPERNICUS/S2_SR_HARMONIZED", 10.0, "10 m", "configured assessment/trend window"),
+        "landbanking_eii": ("landler-open-data/assets/eii/global/eii_global_v1", 300.0, "300 m", "annual"),
+        "predicts_bii": ("ebx-data/assets/earthblox/IO/BII_V1_1", 100.0, "100 m", "annual / available year"),
+        "meta_wri_canopy_height": ("projects/meta-forest-monitoring-okw37/assets/CanopyHeight", 1.0, "~1 m", "static canopy-height product"),
+        "chirps_terraclimate": ("CHIRPS + TerraClimate", None, "source-dependent", "annual aggregation"),
+        "modis_lai": ("MODIS/061/MCD15A3H", 500.0, "500 m", "4-day"),
+        "modis_lst": ("MODIS/061/MOD11A1", 1000.0, "1 km", "daily"),
+        "viirs_ntl": ("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG", 500.0, "~500 m", "monthly"),
+        "csp_ghm": ("TNC Global Human Modification v3", 90.0, "90 m", "static"),
+        "dw_builtup": ("GOOGLE/DYNAMICWORLD/V1", 10.0, "10 m", "near-daily / configured assessment window"),
+        "jrc_water": ("COPERNICUS/S1_GRD", 10.0, "10 m", "configured annual window"),
+    }
+    _KNOWN_SCALES = {
+        "natural_habitat":10.0, "hdi":10.0, "forest_loss_rate":30.0,
+        "chm":1.0, "ghm":90.0, "light_pollution":500.0,
+        "tspi":10.0, "sabf":10.0, "wcpi":10.0, "edpp":10.0,
+        "mspl":10.0, "rci":10.0, "wsdi":10.0, "sdi":10.0, "iri":10.0,
+        "net_forest_change_rate":30.0,
+    }
+    _KNOWN_ASSET_FALLBACK = {
+        "kba_overlap":"KBA/IBAT source; exact asset configured/verified at runtime", "flii_asset":"FLII source asset configured in legacy calculator",
+        "india_pv_binary":"India PV binary habitat source configured in legacy calculator", "iucn_range_maps":"IUCN species-range source configured in legacy calculator",
+        "mol_api":"Map of Life API (external; requires credentials/access)", "edna_points":"client-supplied eDNA point asset/input", "lc_impact_pdf":"land-cover biodiversity-impact source configured in legacy calculator",
+    }
+    for _i,_spec in enumerate(LEGACY_INDICATORS):
+        _layers=list(_spec.input_layers); _key=_layers[0] if _layers else ""; _meta=_DATASET_META.get(_key)
+        _asset=_spec.source_type if _spec.source_type and _spec.source_type != "gee" else (_meta[0] if _meta else _KNOWN_ASSET_FALLBACK.get(_key, "not_individually_confirmed"))
+        _scale=_spec.native_scale_m or _KNOWN_SCALES.get(_spec.name) or (_meta[1] if _meta else None)
+        _sres=(_meta[2] if _meta else (f"{int(_scale)} m" if _scale else "not_individually_confirmed"))
+        _tres=(_meta[3] if _meta else ("configured assessment window" if _spec.temporal_period=="" else _spec.temporal_period))
+        LEGACY_INDICATORS[_i]=replace(_spec,dataset_asset=_asset,native_scale_m=_scale,spatial_resolution=_sres,temporal_resolution=_tres)
+    # Calculator-specific provenance corrections. These override generic input-layer
+    # labels where the implementation uses a different source than the legacy key suggests.
+    for _i,_spec in enumerate(LEGACY_INDICATORS):
+        if _spec.name == "wsdi":
+            LEGACY_INDICATORS[_i]=replace(_spec,dataset_asset="COPERNICUS/S1_GRD", spatial_resolution="10 m", temporal_resolution="configured assessment window")
+        elif _spec.name == "jrc_water_persistence":
+            LEGACY_INDICATORS[_i]=replace(_spec,dataset_asset="COPERNICUS/S1_GRD", spatial_resolution="10 m", temporal_resolution="configured annual window", display_name="Persistent Water Fraction (Sentinel-1 SAR)")
+        elif _spec.name == "net_forest_change_rate":
+            LEGACY_INDICATORS[_i]=replace(_spec,dataset_asset="Hansen GFC + GOOGLE/DYNAMICWORLD/V1", spatial_resolution="30 m loss layer + 10 m DW", temporal_resolution="annual loss + current DW tree expansion")
 except Exception:
     # Registry import must remain usable even in environments where optional
     # legacy dependencies are unavailable. The calculator engine will report

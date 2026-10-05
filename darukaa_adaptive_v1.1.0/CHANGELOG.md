@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.1.1 — Scientific metric audit and EII hierarchy gate — 2026-10-05
+## v1.1.0 — Scientific metric audit and EII hierarchy gate — 2026-10-05
 
 - Added an explicit EII hierarchy gate: parent EII and its three components are mutually exclusive in headline scoring.
 - Default `eii_mode="components"` scores structural, compositional and functional EII components while retaining parent EII as diagnostic/contextual.

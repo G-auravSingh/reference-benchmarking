@@ -1157,15 +1157,15 @@ def create_default_registry() -> IndicatorRegistry:
 
     r.register(name="forest_loss_rate", applicable_realms=("terrestrial", "mixed"),
         # Forest loss/gain is trivially ~0 on open water, not informative
-        display_name="Tree Cover Loss Rate", source_type="gee",
-        extract_fn=extract_forest_loss_rate, unit="% per year", value_range=(0,100),
+        display_name="Annual Tree Cover Loss (ha/year)", source_type="gee",
+        extract_fn=extract_forest_loss_rate, unit="ha per year", value_range=(0,1e9),
         citation="Hansen et al. (2013). Science. DOI:10.1126/science.1244693. v1.13. "
              "NOTE: metric detects loss of tree canopy ≥30% density only. "
              "Does not capture grassland, shrub, or open-woodland degradation. "
              "For mixed grassland-forest landscapes, interpret alongside NDVI "
              "and habitat_health indicators for full habitat trajectory picture.",
         tier2_eligible=True, higher_is_better=False, reference_radius_km=50.0, pillar=1,
-        metadata={"gee_image_fn": _img_forest_loss, "tnfd_dim": 1, "display_name_report": "Tree Cover Loss Rate (Hansen GFC)", "scope_note": ("Measures annual rate of tree canopy loss (≥30% density threshold). "
+        metadata={"gee_image_fn": _img_forest_loss, "tnfd_dim": 1, "display_name_report": "Annual Tree Cover Loss (Hansen GFC; ha/year)", "scope_note": ("Measures annual rate of tree canopy loss (≥30% density threshold). "
                        "Sites with low baseline forest cover (<5 ha) will show "
                        "arithmetically inflated percentage rates — interpret absolute "
                        "area lost (ha/yr) alongside the percentage rate. "
@@ -1776,7 +1776,7 @@ def _forest_baseline_and_loss(eg, c):
 
 
 def extract_forest_loss_rate(g, c):
-    """GROSS tree-canopy loss rate only (Hansen GFC lossyear, %/yr), always
+    """GROSS annual tree-canopy loss area (Hansen GFC lossyear, ha/year), always
     >= 0. Ratio-scale by construction (a true zero -- no loss -- is meaningful,
     and the value can never go negative), matching its contract
     (measurement_scale='ratio', reference_estimator='log_response_ratio',
@@ -1801,7 +1801,7 @@ def extract_forest_loss_rate(g, c):
     (robust_z, genuinely signed-compatible), rather than overloading one
     metric with two incompatible statistical treatments.
 
-    site_value used for SCORING is always the GROSS loss rate for the window
+    site_value used for SCORING is always the GROSS annual loss area for the window
     named in config.forest_loss_primary_window (default: the full long-term
     record) -- pinned regardless of what other windows are configured, so a
     project cannot silently change which window drives its score. Every other
@@ -1822,52 +1822,28 @@ def extract_forest_loss_rate(g, c):
             loss_rates[key] = round(_annualized_rate_pct(loss_area_m2, baseline_m2_val, n_years), 4)
 
         baseline_ha = round(baseline_m2_val / 10000, 2)
-        # Flag unreliable results from near-zero baselines
-        # < 5 ha of baseline forest → percentage rates are arithmetically unstable
-        low_baseline = baseline_ha < 5.0
-
-        primary_value = loss_rates.get(primary_label)
-        if primary_value is None:
+        primary_loss_ha = loss_ha_by_window.get(primary_label)
+        if primary_loss_ha is None:
             logger.warning(f"forest_loss_primary_window='{primary_label}' not found in "
-                          f"configured windows {list(loss_rates.keys())}; falling back to "
+                          f"configured windows {list(loss_ha_by_window.keys())}; falling back to "
                           f"the first configured window for scoring.")
-            primary_value = next(iter(loss_rates.values()), None)
-
-        # Same real arithmetic-instability protection as before (found directly
-        # from the real Tata Motors run: Deccan forest's Hansen 2000 baseline
-        # was 0.01 ha) -- a near-zero baseline makes any percentage rate off
-        # it arithmetically meaningless, so it's suppressed from scoring while
-        # the real absolute number (loss_ha_by_window) stays in metadata.
-        if low_baseline:
-            logger.warning(f"forest_loss_rate: baseline_forest_ha={baseline_ha} is below the "
-                          f"5ha stability floor — percentage rate ({primary_value}%/yr) is "
-                          f"arithmetically unstable and has been suppressed from scoring. "
-                          f"See metadata for absolute area lost instead.")
-            primary_value = None
+            primary_loss_ha = next(iter(loss_ha_by_window.values()), None)
 
         return {
-            "value": primary_value,   # GROSS loss rate, %/yr; always >= 0
+            "value": primary_loss_ha,   # GROSS annual loss area, ha/year; zero is valid
             "pixels": None,
             "metadata": {
                 "all_window_loss_rates_pct_yr": loss_rates,
                 "primary_window": primary_label,
                 "baseline_forest_ha": baseline_ha,
                 "loss_ha_by_window": loss_ha_by_window,
-                "low_baseline_flag": low_baseline,
+                "low_baseline_flag": False,
                 "note": (f"Gross tree-canopy loss rate ONLY (Hansen GFC lossyear, "
                         f"≥30% canopy density threshold) for '{primary_label}'. Does not "
                         f"net off any regrowth/planting -- see net_forest_change_rate for "
                         f"the signed gain-minus-loss picture, e.g. for restoration/"
                         f"agroforestry projects."),
-                "low_baseline_note": (
-                        f"Baseline forest cover is only {baseline_ha:.1f} ha. "
-                        f"Percentage loss rates are arithmetically unstable at this scale — "
-                        f"a loss of 1 ha represents {round(100/max(baseline_ha,0.01),0):.0f}% of baseline. "
-                        f"Report absolute area lost (ha/yr) rather than percentage rate for this site. "
-                        f"This site is likely a non-forest or mixed-cover landscape; "
-                        f"NDVI trend and habitat_health are more ecologically appropriate "
-                        f"indicators of habitat trajectory here."
-                ) if low_baseline else None,
+                "low_baseline_note": None,
             }
         }
     except Exception as e:

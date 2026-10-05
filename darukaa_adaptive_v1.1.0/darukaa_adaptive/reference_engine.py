@@ -432,7 +432,7 @@ class AutomaticReferenceEngine:
         """
         return self._terrestrial_candidate_once(
             master_geometry, start, end, 1.0,
-            "ecologically_matched_contemporary_pressure_distribution",
+            "least_disturbed_contemporary",
             "terrestrial_ecological_gate_no_pressure_filter"
         )
 

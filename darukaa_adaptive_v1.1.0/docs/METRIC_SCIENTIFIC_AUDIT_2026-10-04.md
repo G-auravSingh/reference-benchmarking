@@ -83,7 +83,7 @@ The metric uses the ETH Global Canopy Height 2020 product at 10m GSD. The produc
 ### Tree-cover loss
 The numerator now uses only loss pixels inside the same 2000 forest mask used for the denominator. Hansen 2001–2025 contains 25 annual observations; the previous 24-year divisor was wrong. The recent windows are similarly corrected to 6 and 3 years for 2020–2025 and 2023–2025.
 
-The metric is therefore **Tree Cover Loss Rate under a declared 30% 2000 tree-cover threshold**, not a generic measure of all vegetation loss. Absolute loss area is retained for small-baseline EMUs; percentage scoring is suppressed when the baseline is too small to support a stable rate.
+The metric is therefore **Annual Tree Cover Loss under a declared 30% 2000 tree-cover threshold**, not a generic measure of all vegetation loss. Absolute loss area is retained for small-baseline EMUs; the absolute annual loss quantity is retained as the scored metric; percentage rate remains diagnostic only.
 
 ### CPLAND
 CPLAND is now explicitly implemented as the standard **Core Area Percentage of Landscape**: summed core area of the target habitat class divided by total landscape area ×100, with an explicit edge-depth parameter. It should not be described as a generic graph-theoretic connectivity index.

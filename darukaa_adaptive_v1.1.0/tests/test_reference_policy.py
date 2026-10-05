@@ -49,3 +49,11 @@ def test_profiles_separate_realm_specific_ecological_gates():
     assert AQUATIC_LAKE_PROFILE.realm == "aquatic"
     assert TERRESTRIAL_PROFILE.realm == "terrestrial"
     assert AQUATIC_LAKE_PROFILE.ecological_gate != TERRESTRIAL_PROFILE.ecological_gate
+
+
+def test_terrestrial_pressure_candidate_uses_valid_reference_state():
+    import inspect
+    from darukaa_adaptive.reference_engine import AutomaticReferenceEngine
+    src=inspect.getsource(AutomaticReferenceEngine.terrestrial_pressure_reference_candidate)
+    assert '"least_disturbed_contemporary"' in src
+    assert 'ecologically_matched_contemporary_pressure_distribution' not in src

@@ -55,9 +55,9 @@ C: Dict[str, dict] = {
     reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="redefine", input_layers=["india_pv_binary"], note="Connectivity; state ecological scale (D8). Fragmentation suite to be added."),
  "forest_loss_rate": dict(construct="C1_landscape", subdimension="disturbance_regime", measurement_scale="ratio",
-    reference_type="regional_distribution", reference_estimator="log_response_ratio",
+    reference_type="regional_distribution", reference_estimator="robust_z",
     disposition="retain", input_layers=[HANSEN],
-    note=("Change indicator; needs accuracy assessment (D4); low-baseline reliability flag; "
+    note=("Annual gross tree-cover loss area in ha/year; needs accuracy assessment (D4); zero is a valid observation; "
          "report with CI. REDESIGNED (independent audit item 9): back to GROSS loss only "
          "(always >=0), which is what this ratio/log_response_ratio contract actually "
          "requires -- log_response_ratio is undefined for site_value<=0, and a real v0.2.5 "
