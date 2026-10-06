@@ -413,7 +413,15 @@ def register_indicator(spec: IndicatorSpec, overwrite: bool = False) -> Indicato
 def get_registered_indicator(name: str) -> IndicatorSpec:
     return get_indicator_spec(name)
 
-def indicator_table() -> List[Dict]:
+def indicator_table(config=None) -> List[Dict]:
+    """Return the indicator registry, optionally with runtime temporal periods.
+
+    ``config`` is forwarded to ``metric_selection_table`` so report outputs
+    carry the actual configured assessment/trend window. With no config, this
+    remains the static registry API for backward compatibility.
+    """
+    if config is not None:
+        return metric_selection_table(config)
     return [asdict(x) for x in INDICATORS] + [asdict(x) for x in _DYNAMIC_REGISTRY.values()]
 
 def get_indicator_spec(name: str) -> IndicatorSpec:

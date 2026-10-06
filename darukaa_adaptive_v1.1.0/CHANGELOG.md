@@ -1,3 +1,8 @@
+## 2026-10-06 — v1.1.0 runtime hotfix
+
+- Fixed `indicator_table(config)` report call compatibility so the per-EMU indicator registry can receive runtime temporal-period metadata.
+- No scoring, reference-selection, partial-SoN, or pressure-intactness semantics changed in this hotfix.
+
 
 ## v1.1.0 — partial condition coverage + pressure-intactness semantics (2026-10-06)
 
