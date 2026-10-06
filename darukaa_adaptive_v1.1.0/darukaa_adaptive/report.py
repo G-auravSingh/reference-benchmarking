@@ -40,7 +40,7 @@ def _bar(label, value, status=None):
 
 def write_html_report(out, config, site_path, area_ha, domains, metrics_df, benchmark_df, scored_df, pillar_df, overall, water_df, readiness, evidence_df=None):
     out=Path(out); evidence_df=evidence_df if evidence_df is not None else pd.DataFrame()
-    cond=overall.get("condition_score_0_to_100"); press=overall.get("pressure_score_0_to_100")
+    cond=overall.get("condition_score_0_to_100"); press=overall.get("pressure_intactness_score_0_to_100", overall.get("pressure_score_0_to_100"))
     title=config.profile.name.replace('_',' ').title()
     gaps=[]
     c3_scored = False
@@ -48,8 +48,10 @@ def write_html_report(out, config, site_path, area_ha, domains, metrics_df, benc
         c3_scored = bool(scored_df.loc[scored_df["pillar"].eq("P3_biodiversity_integrity"), "score_eligible"].fillna(False).any())
     if not c3_scored:
         gaps.append("Fauna evidence (field/acoustic/eDNA) is not currently score-eligible; P3 Biodiversity Integrity cannot be treated as a completed condition pillar.")
-    if overall.get("status") == "insufficient_fauna_coverage":
-        gaps.append("Overall condition scoring is gated because the configured profile requires a scored C3 Fauna pillar.")
+    if overall.get("status") == "condition_scored_partial":
+        gaps.append(f"Overall condition is a partial State of Nature assessment based on {overall.get('condition_pillar_count', len(overall.get('condition_pillars', [])))}/3 condition pillars. Missing pillars are excluded, not assigned zero; P3 Biodiversity Integrity is the key evidence gap when absent.")
+    elif overall.get("status") == "insufficient_fauna_coverage":
+        gaps.append("Overall condition scoring is gated because the configured profile requires a scored P3 Biodiversity Integrity pillar.")
     if benchmark_df.empty: gaps.append("No reference benchmark was generated.")
     elif not benchmark_df.empty and (benchmark_df.get("selected_reference").isna().all()): gaps.append("No defensible reference value was available for the scoreable indicators.")
     if evidence_df.empty: gaps.append("No optional external/eDNA evidence file was supplied.")
@@ -77,7 +79,7 @@ footer{{margin-top:40px;color:#697681;font-size:12px}}
 <h2>3. Reference Framework</h2><p>The default workflow constructs an ecologically matched reference candidate automatically. The candidate is screened by ecosystem comparability, pressure, temporal compatibility and population quality before it can be approved for scoring. The production workflow does not use manual reference files. If both automatic stages fail, an analyst may enter a single manual HMI threshold in Colab after reviewing the reference diagnostics. The reference state, method, QA diagnostics and approval basis are retained in the assessment manifest.</p>{_table(benchmark_df[[c for c in ["metric","selected_reference","selected_reference_level","reference_n","reference_uncertainty","relative_departure_pct","reference_attainment_0_100","reference_method","reference_state","reference_approval_basis","benchmark_status","reference_approved_for_scoring"] if c in benchmark_df.columns]])}
 <h2>4. Indicator Results</h2>{_table(metric_display)}
 <h2>5. Pillar Results</h2>{pillar_html}<div style="margin-top:18px">P1 Ecosystem Extent & Configuration, P2 Ecosystem Condition and P3 Biodiversity Integrity are condition components. P4 Anthropogenic Pressure is reported separately.</div>
-<h2>6. State of Nature</h2><div class="grid"><div class="card"><div class="muted">Overall condition</div><div class="big">{('%.1f / 100' % cond) if cond is not None else 'Not scoreable'}</div><div>{html.escape(str(overall.get('condition_concern_label') or ''))}</div></div><div class="card"><div class="muted">Overall pressure</div><div class="big">{('%.1f / 100' % press) if press is not None else 'Not scoreable'}</div><div>{html.escape(str(overall.get('pressure_concern_label') or ''))}</div></div><div class="card"><div class="muted">Limiting condition component</div><div class="big" style="font-size:20px">{html.escape(str(overall.get('limiting_pillar') or 'Pending'))}</div><div>{html.escape(str(overall.get('limiting_metric') or ''))}</div></div></div>
+<h2>6. State of Nature</h2><div class="grid"><div class="card"><div class="muted">Overall condition</div><div class="big">{('%.1f / 100' % cond) if cond is not None else 'Not scoreable'}</div><div>{html.escape(str(overall.get('condition_concern_label') or ''))}</div></div><div class="card"><div class="muted">Pressure intactness</div><div class="big">{('%.1f / 100' % press) if press is not None else 'Not scoreable'}</div><div>{html.escape(str(overall.get('pressure_concern_label') or ''))}</div><div class="muted">Higher = lower pressure / better condition</div></div><div class="card"><div class="muted">Limiting condition component</div><div class="big" style="font-size:20px">{html.escape(str(overall.get('limiting_pillar') or 'Pending'))}</div><div>{html.escape(str(overall.get('limiting_metric') or ''))}</div></div></div>
 <h2>7. Spatial & Temporal Results</h2>{_table(water_df)}
 <h2>8. Multi-source Evidence & eDNA</h2><p>eDNA is an optional evidence stream. When supplied as validated observations, eDNA metrics use the same raw value → reference → intactness → pillar pathway as other evidence. Modelled eDNA-persistence proxies are retained as contextual unless a defensible reference and validation pathway are supplied.</p>{_table(evidence_df)}
 <h2>9. Interpretation & Management Use</h2><p>Interpretations should be tied to the indicator definition, reference comparison, spatial domain and uncertainty. Proxy indicators such as spectral bloom/turbidity signals should not be relabelled as laboratory water-quality measurements without independent validation. Management actions should therefore be linked to the specific limiting indicator and a measurable next-cycle monitoring variable.</p>
@@ -90,18 +92,19 @@ footer{{margin-top:40px;color:#697681;font-size:12px}}
 
 def write_project_report(out, project, project_overall, pillar_agg, metric_agg, comparison, emu_results, config):
     """Write a project-level client report while preserving the EMU comparison layer."""
-    out=Path(out); cond=project_overall.get("condition_score_0_to_100"); press=project_overall.get("pressure_score_0_to_100")
+    out=Path(out); cond=project_overall.get("condition_score_0_to_100"); press=project_overall.get("pressure_intactness_score_0_to_100", project_overall.get("pressure_score_0_to_100"))
     pillar_html=_table(pillar_agg) if pillar_agg is not None and not pillar_agg.empty else '<div class="empty">No project-level pillar score is currently defensible.</div>'
     metric_html=_table(metric_agg) if metric_agg is not None and not metric_agg.empty else '<div class="empty">No project-level metric score is currently defensible.</div>'
     comp_html=_table(comparison) if comparison is not None and not comparison.empty else '<div class="empty">No EMU comparison table available.</div>'
     generated=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     gaps=[]
-    if cond is None: gaps.append("A project-level condition score was not generated because the required condition pillars were not all score-eligible.")
+    if project_overall.get("status") == "condition_scored_partial": gaps.append(f"Project condition is a partial State of Nature assessment based on {project_overall.get('condition_pillar_count', len(project_overall.get('condition_pillars', [])))}/3 condition pillars. Missing pillars are excluded, not assigned zero.")
+    elif cond is None: gaps.append("A project-level condition score was not generated because no condition pillar was score-eligible.")
     if press is None: gaps.append("A project-level pressure score was not generated because pressure evidence was not score-eligible.")
     html_doc=f'''<!doctype html><html><head><meta charset="utf-8"><title>Project Biodiversity Baseline — {html.escape(project.project_name)}</title>
 <style>body{{font-family:Inter,Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}}.wrap{{max-width:1220px;margin:auto;padding:28px}}.hero{{background:#13202b;color:white;padding:42px;border-radius:18px;margin-bottom:22px}}h1{{font-size:34px;margin:0 0 8px}}h2{{margin-top:34px;border-bottom:1px solid #d8dee4;padding-bottom:8px}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}}.card{{background:white;border:1px solid #e0e5ea;border-radius:12px;padding:18px}}.big{{font-size:30px;font-weight:700}}.muted{{color:#65727e}}.data{{width:100%;border-collapse:collapse;background:white;font-size:13px}}.data th,.data td{{padding:8px;border-bottom:1px solid #e6eaee;text-align:left}}.data th{{background:#eef2f5}}.notice{{background:#fff8e6;border-left:4px solid #c58a18;padding:12px 15px;margin:12px 0}}.good{{background:#edf7f0;border-left:4px solid #3f7d54;padding:12px 15px}}.empty{{padding:18px;background:#fff;border:1px dashed #b8c1ca;color:#697681}}footer{{margin-top:40px;color:#697681;font-size:12px}}</style></head><body><div class="wrap">
 <div class="hero"><h1>Project Biodiversity Baseline</h1><div>{html.escape(project.project_name)}</div><div style="color:#cbd4da;margin-top:12px">{len(emu_results)} EMUs • Framework v{html.escape(config.profile.version)} • Generated {generated}</div></div>
-<div class="grid"><div class="card"><div class="muted">Project condition</div><div class="big">{('%.1f / 100' % cond) if cond is not None else 'Pending'}</div><div>{html.escape(str(project_overall.get('condition_concern_label') or ''))}</div></div><div class="card"><div class="muted">Project pressure</div><div class="big">{('%.1f / 100' % press) if press is not None else 'Pending'}</div><div>{html.escape(str(project_overall.get('pressure_concern_label') or ''))}</div></div><div class="card"><div class="muted">Limiting pillar</div><div class="big" style="font-size:20px">{html.escape(str(project_overall.get('limiting_pillar') or 'Pending'))}</div><div>Limiting EMU: {html.escape(str(project_overall.get('limiting_emu') or '—'))}</div></div></div>
+<div class="grid"><div class="card"><div class="muted">Project condition</div><div class="big">{('%.1f / 100' % cond) if cond is not None else 'Pending'}</div><div>{html.escape(str(project_overall.get('condition_concern_label') or ''))}</div></div><div class="card"><div class="muted">Pressure intactness</div><div class="big">{('%.1f / 100' % press) if press is not None else 'Pending'}</div><div>{html.escape(str(project_overall.get('pressure_concern_label') or ''))}</div><div class="muted">Higher = lower pressure / better condition</div></div><div class="card"><div class="muted">Limiting pillar</div><div class="big" style="font-size:20px">{html.escape(str(project_overall.get('limiting_pillar') or 'Pending'))}</div><div>Limiting EMU: {html.escape(str(project_overall.get('limiting_emu') or '—'))}</div></div></div>
 <h2>1. Executive Summary</h2><p>The project is assessed as a set of ecological management units (EMUs). Each EMU is independently characterized, benchmarked against an ecologically appropriate reference population where defensible, and scored only when evidence and reference QA permit. Project-level values summarize the EMU results; the EMU comparison table is retained so spatial ecological differences are not hidden by the project headline.</p>
 <h2>2. Project-level Pillars</h2>{pillar_html}
 <h2>3. Project-level Metric Summary</h2>{metric_html}
@@ -128,7 +131,7 @@ def write_assessment(output_dir, config, site_path, boundary_area_ha, domains, m
     bdf[ref_cols].to_csv(out/'reference_governance.csv',index=False) if ref_cols else pd.DataFrame().to_csv(out/'reference_governance.csv',index=False)
     (out/'readiness.json').write_text(json.dumps(readiness,indent=2,default=str),encoding='utf-8')
     (out/'overall_scorecard.json').write_text(json.dumps(overall or {},indent=2,default=str),encoding='utf-8')
-    pd.DataFrame(indicator_table()).to_csv(out/'indicator_registry.csv',index=False)
+    pd.DataFrame(indicator_table(config)).to_csv(out/'indicator_registry.csv',index=False)
     manifest={
         "package":"darukaa_adaptive",
         "version":config.profile.version,

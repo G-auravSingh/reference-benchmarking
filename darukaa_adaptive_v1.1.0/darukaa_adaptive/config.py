@@ -131,10 +131,16 @@ class ScoringConfig:
     min_valid_metrics_per_subdimension: int = 1
     min_valid_metrics_per_pillar: int = 1
     min_valid_pillars: int = 3
-    min_condition_pillars: int = 3
+    # A condition/SoN headline may be calculated from the condition pillars
+    # that are actually score-eligible. With the default of 1, the result is
+    # explicitly labelled partial when fewer than all three P1-P3 pillars are
+    # available; missing pillars are never treated as zeros.
+    min_condition_pillars: int = 1
     total_pillars: int = 4
     require_complete_pillars: bool = False
-    require_fauna_for_condition: bool = True
+    # P3 biodiversity evidence is important, but its absence must not erase
+    # otherwise valid P1/P2 condition information. Coverage is reported explicitly.
+    require_fauna_for_condition: bool = False
     pressure_separate_from_condition: bool = True
 
     # Metric selection is deliberately separate from metric calculation. By default,
@@ -163,7 +169,7 @@ class ScoringConfig:
 @dataclass
 class ProfileConfig:
     name: str = "aquatic_lake"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
     allow_terrestrial_metrics: bool = False
     notes: str = ""
 

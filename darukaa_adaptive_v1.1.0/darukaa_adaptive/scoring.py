@@ -148,20 +148,32 @@ def aggregate_pillars(scored_df, config):
 
 def aggregate_overall(pillar_df, config):
     row={"status":"insufficient_condition_coverage","condition_score_0_to_100":None,"condition_concern_label":None,
-         "pressure_score_0_to_100":None,"pressure_concern_label":None,"condition_pillars":[],"pressure_pillar":"P4_pressure",
+         "pressure_intactness_score_0_to_100":None,"pressure_concern_label":None,
+         # Backward-compatible alias retained for downstream consumers. The
+         # client-facing reports use the explicit pressure_intactness name.
+         "pressure_score_0_to_100":None,
+         "condition_pillars":[],"condition_pillar_count":0,"condition_pillar_total":3,
+         "condition_coverage":"none","pressure_pillar":"P4_pressure",
          "limiting_pillar":None,"limiting_metric":None,"limiting_metric_score_0_to_100":None,
          "aggregation_method":"geometric_mean_condition_pillars","son_score_0_to_100":None,"son_concern_label":None}
     if pillar_df is None or pillar_df.empty: return row
     cond=pillar_df[pillar_df.pillar.isin(["P1_extent_configuration","P2_ecosystem_condition","P3_biodiversity_integrity"]) & pillar_df.score_0_to_100.notna()].copy()
     press=pillar_df[(pillar_df.pillar=="P4_pressure") & pillar_df.score_0_to_100.notna()]
     if len(press)==1:
-        row["pressure_score_0_to_100"]=float(press.iloc[0].score_0_to_100); row["pressure_concern_label"]=concern_label(row["pressure_score_0_to_100"])
+        pi=float(press.iloc[0].score_0_to_100)
+        row["pressure_intactness_score_0_to_100"]=pi
+        row["pressure_score_0_to_100"]=pi
+        row["pressure_concern_label"]=concern_label(pi)
     row["condition_pillars"]=cond.pillar.tolist()
+    row["condition_pillar_count"]=int(len(cond))
+    row["condition_coverage"]=("complete" if len(cond)==3 else "partial" if len(cond)>0 else "none")
     fauna_required=bool(getattr(config.scoring,"require_fauna_for_condition",False))
     fauna_present="P3_biodiversity_integrity" in set(cond.pillar)
     condition_gate=(len(cond)>=config.scoring.min_condition_pillars and (not fauna_required or fauna_present))
     if condition_gate:
-        row["condition_score_0_to_100"]=geometric_mean(cond.score_0_to_100.astype(float).tolist()); row["condition_concern_label"]=concern_label(row["condition_score_0_to_100"]); row["status"]="condition_scored"
+        row["condition_score_0_to_100"]=geometric_mean(cond.score_0_to_100.astype(float).tolist())
+        row["condition_concern_label"]=concern_label(row["condition_score_0_to_100"])
+        row["status"]="condition_scored" if len(cond)==3 else "condition_scored_partial"
     elif fauna_required and not fauna_present: row["status"]="insufficient_fauna_coverage"
     if not cond.empty:
         r=cond.loc[cond.score_0_to_100.astype(float).idxmin()]; row["limiting_pillar"]=str(r.pillar); row["limiting_metric"]=None if pd.isna(r.limiting_metric) else str(r.limiting_metric); row["limiting_metric_score_0_to_100"]=None if pd.isna(r.limiting_metric_score_0_to_100) else float(r.limiting_metric_score_0_to_100)

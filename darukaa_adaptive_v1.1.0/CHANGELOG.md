@@ -1,3 +1,17 @@
+
+## v1.1.0 — partial condition coverage + pressure-intactness semantics (2026-10-06)
+
+- Condition/State-of-Nature headline scoring now uses all score-eligible P1–P3 condition pillars available for the assessment; missing pillars are excluded rather than assigned zero.
+- Results are explicitly labelled `condition_scored_partial` when fewer than 3 condition pillars are available, with `condition_pillar_count` and `condition_coverage` retained in the output.
+- The default condition gate no longer requires P3 fauna/biodiversity evidence; P3 remains a distinct biodiversity-integrity pillar and its absence is reported as an evidence gap. An explicit fauna gate remains configurable for profiles that require it.
+- P4 headline output is now exposed as `pressure_intactness_score_0_to_100`, making the direction explicit: higher values indicate lower pressure / better condition. The prior `pressure_score_0_to_100` field remains as a backward-compatible alias.
+- The underlying P4 metric/reference scoring formula was not changed in this release; boundary-saturated pressure results remain subject to QA review.
+
+## v1.1.0 — live-output audit hardening (2026-10-06)
+- Added runtime population of `temporal_period` in the registry using the configured assessment/trend window; the static registry remains date-agnostic.
+- Added automatic project-level output QA (`project_output_qa.json`) for condition coverage, extreme pressure scores, and boundary-concentrated metric scores.
+- Added automatic creation of a self-contained `<project_id>_assessment_outputs.zip` outside the output directory and automatic Colab download at the end of the main run cell.
+- Added the project archive and post-run QA record to the project manifest.
 # Changelog
 
 ## v1.1.0 — Scientific metric audit and EII hierarchy gate — 2026-10-05

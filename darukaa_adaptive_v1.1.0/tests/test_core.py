@@ -31,10 +31,23 @@ def test_condition_pressure_are_separate():
       {'metric':'c','pillar':'P3_biodiversity_integrity','intactness_score_0_100':70,'score_eligible':True},
       {'metric':'p','pillar':'P4_pressure','intactness_score_0_100':20,'score_eligible':True}])
     p=aggregate_pillars(scored,cfg); o=aggregate_overall(p,cfg)
-    assert abs(o['condition_score_0_to_100']-geometric_mean([90,80,70]))<1e-9; assert abs(o['pressure_score_0_to_100']-20)<1e-9
+    assert abs(o['condition_score_0_to_100']-geometric_mean([90,80,70]))<1e-9; assert abs(o['pressure_intactness_score_0_to_100']-20)<1e-9; assert abs(o['pressure_score_0_to_100']-20)<1e-9
     assert o['son_score_0_to_100'] is None
 
-def test_condition_requires_fauna_when_profile_requires_it():
+def test_partial_condition_is_scored_without_p3():
+    cfg=AssessmentConfig()
+    scored=pd.DataFrame([
+      {'metric':'a','pillar':'P1_extent_configuration','intactness_score_0_100':90,'score_eligible':True},
+      {'metric':'b','pillar':'P2_ecosystem_condition','intactness_score_0_100':80,'score_eligible':True},
+      {'metric':'p','pillar':'P4_pressure','intactness_score_0_100':70,'score_eligible':True}])
+    p=aggregate_pillars(scored,cfg); o=aggregate_overall(p,cfg)
+    assert abs(o['condition_score_0_to_100']-geometric_mean([90,80]))<1e-9
+    assert o['status']=='condition_scored_partial'
+    assert o['condition_coverage']=='partial'
+    assert o['condition_pillar_count']==2
+
+
+def test_explicit_fauna_gate_remains_supported():
     cfg=AssessmentConfig()
     cfg.scoring.require_fauna_for_condition=True
     scored=pd.DataFrame([

@@ -2,6 +2,8 @@
 from __future__ import annotations
 from pathlib import Path
 import copy
+import json
+import shutil
 import pandas as pd
 from .benchmark import ReferenceEngine
 from .config import AssessmentConfig
@@ -269,12 +271,26 @@ class AdaptivePipeline:
         comparison=build_emu_comparison_table(pillar_rows,[r for r in metric_rows if "score_0_to_100" in r])
         condition_pillars=pillar_agg[pillar_agg["pillar"].isin(["P1_extent_configuration","P2_ecosystem_condition","P3_biodiversity_integrity"]) & pillar_agg["project_score_0_to_100"].notna()] if not pillar_agg.empty else pd.DataFrame()
         pressure=pillar_agg[(pillar_agg["pillar"] == "P4_pressure") & (pillar_agg["project_score_0_to_100"].notna())] if not pillar_agg.empty else pd.DataFrame()
-        project_overall={"status":"insufficient_condition_coverage","condition_score_0_to_100":None,"condition_concern_label":None,"pressure_score_0_to_100":None,"pressure_concern_label":None,"limiting_pillar":None,"limiting_emu":None}
+        project_overall={"status":"insufficient_condition_coverage","condition_score_0_to_100":None,"condition_concern_label":None,
+                         "pressure_intactness_score_0_to_100":None,"pressure_concern_label":None,
+                         "pressure_score_0_to_100":None,
+                         "condition_pillars":[],"condition_pillar_count":0,"condition_pillar_total":3,
+                         "condition_coverage":"none","limiting_pillar":None,"limiting_emu":None}
         if not pressure.empty:
-            ps=float(pressure.iloc[0]["project_score_0_to_100"]); project_overall.update({"pressure_score_0_to_100":ps,"pressure_concern_label":__import__('darukaa_adaptive.scoring',fromlist=['concern_label']).concern_label(ps)})
-        if len(condition_pillars)==3:
+            ps=float(pressure.iloc[0]["project_score_0_to_100"]); project_overall.update({
+                "pressure_intactness_score_0_to_100":ps,
+                "pressure_score_0_to_100":ps,
+                "pressure_concern_label":__import__('darukaa_adaptive.scoring',fromlist=['concern_label']).concern_label(ps)})
+        n_cond=len(condition_pillars)
+        project_overall["condition_pillars"]=condition_pillars["pillar"].astype(str).tolist() if n_cond else []
+        project_overall["condition_pillar_count"]=int(n_cond)
+        project_overall["condition_coverage"]=("complete" if n_cond==3 else "partial" if n_cond>0 else "none")
+        min_cond=int(getattr(self.config.scoring,"min_condition_pillars",1))
+        if n_cond>=min_cond:
             from .scoring import geometric_mean, concern_label
-            cs=geometric_mean(condition_pillars["project_score_0_to_100"].astype(float).tolist()); project_overall.update({"status":"condition_scored","condition_score_0_to_100":cs,"condition_concern_label":concern_label(cs)})
+            cs=geometric_mean(condition_pillars["project_score_0_to_100"].astype(float).tolist())
+            project_overall.update({"status":"condition_scored" if n_cond==3 else "condition_scored_partial",
+                                    "condition_score_0_to_100":cs,"condition_concern_label":concern_label(cs)})
             idx=condition_pillars["project_score_0_to_100"].astype(float).idxmin(); project_overall["limiting_pillar"]=str(condition_pillars.loc[idx,"pillar"]); project_overall["limiting_emu"]=condition_pillars.loc[idx,"limiting_emu"]
         manifest={"project":project.to_dict(),"n_emus":len(project.emus),"emu_results":[{"emu_id":r["emu_id"],"domain":r["emu_domain"],"area_ha":r["emu_area_ha"],"output":r.get("outputs")} for r in emu_results],"aggregation":{"raw_metric_rows":raw_metric_agg.to_dict("records"),"scored_metric_rows":scored_metric_agg.to_dict("records"),"pillar_rows":pillar_agg.to_dict("records"),"emu_comparison":comparison.to_dict("records"),"project_overall":project_overall}}
         manifest_path=root_output/"project_assessment_manifest.json"
@@ -285,6 +301,43 @@ class AdaptivePipeline:
         comparison.to_csv(root_output/"emu_ecological_comparison.csv",index=False)
         (root_output/"project_overall_scorecard.json").write_text(__import__("json").dumps(project_overall,indent=2,default=str),encoding="utf-8")
         project_report=write_project_report(root_output, project, project_overall, pillar_agg, scored_metric_agg, comparison, emu_results, self.config)
-        return {"project":project,"emus":emu_results,"metric_aggregation":scored_metric_agg,"raw_metric_aggregation":raw_metric_agg,"pillar_aggregation":pillar_agg,"emu_comparison":comparison,"project_overall":project_overall,"project_report":str(project_report),"manifest":manifest,"output_dir":root_output}
+
+        # Automated post-run output audit. These are review flags, not silent
+        # corrections: extreme scores and incomplete condition coverage can be
+        # scientifically legitimate, but must be visible to the analyst.
+        qa_flags=[]
+        if project_overall.get("status") == "insufficient_condition_coverage":
+            qa_flags.append({"severity":"REVIEW","code":"condition_not_scored","message":"Project condition headline is not scoreable because no condition pillar is score-eligible; inspect evidence coverage."})
+        elif project_overall.get("status") == "condition_scored_partial":
+            qa_flags.append({"severity":"INFO","code":"partial_condition_coverage","message":f"Project condition score uses {project_overall.get('condition_pillar_count')}/3 condition pillars; missing pillars are not treated as zero."})
+        ps=project_overall.get("pressure_intactness_score_0_to_100")
+        if ps is not None and (float(ps) <= 5.0 or float(ps) >= 95.0):
+            qa_flags.append({"severity":"REVIEW","code":"extreme_project_pressure_score","message":f"Project pressure score is {float(ps):.6g}/100; inspect the underlying P4 metric/reference scores before client interpretation."})
+        if not comparison.empty and "score_0_to_100" in comparison.columns:
+            pass
+        score_rows=pd.DataFrame([r for r in metric_rows if r.get("score_eligible",False) and r.get("score_0_to_100") is not None])
+        metric_extremes=[]
+        if not score_rows.empty:
+            for metric,g in score_rows.groupby("metric"):
+                vals=pd.to_numeric(g["score_0_to_100"],errors="coerce").dropna()
+                if len(vals):
+                    zero_frac=float((vals <= 1e-12).mean()); hundred_frac=float((vals >= 100-1e-12).mean())
+                    if zero_frac >= 0.75 or hundred_frac >= 0.75:
+                        metric_extremes.append({"metric":str(metric),"n":int(len(vals)),"zero_fraction":zero_frac,"hundred_fraction":hundred_frac})
+        if metric_extremes:
+            qa_flags.append({"severity":"REVIEW","code":"metric_score_boundary_concentration","message":"One or more metrics have >=75% of EMU scores at a 0 or 100 boundary; inspect reference scale, denominator behaviour and metric distribution.","metrics":metric_extremes})
+        qa_flags.append({"severity":"INFO","code":"reference_population_coverage","message":f"Reference populations generated: {sorted(reference_populations)}"})
+        project_output_qa={"status":"review_required" if any(f["severity"]=="REVIEW" for f in qa_flags) else "pass","n_emus":len(project.emus),"flags":qa_flags}
+        (root_output/"project_output_qa.json").write_text(json.dumps(project_output_qa,indent=2,default=str),encoding="utf-8")
+
+        # Always create a self-contained project archive outside the project output
+        # directory. This prevents runtime disconnects from destroying the only
+        # copy of the generated reports/tables before the user can download them.
+        archive_base = root_output.parent / f"{project.project_id}_assessment_outputs"
+        archive_path = Path(shutil.make_archive(str(archive_base), "zip", root_dir=root_output.parent, base_dir=root_output.name))
+        manifest["project_output_qa"] = project_output_qa
+        manifest["output_archive"] = str(archive_path)
+        manifest_path.write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
+        return {"project":project,"emus":emu_results,"metric_aggregation":scored_metric_agg,"raw_metric_aggregation":raw_metric_agg,"pillar_aggregation":pillar_agg,"emu_comparison":comparison,"project_overall":project_overall,"project_report":str(project_report),"manifest":manifest,"output_dir":root_output,"project_output_qa":project_output_qa,"output_archive":str(archive_path)}
 
 LakePipeline=AdaptivePipeline

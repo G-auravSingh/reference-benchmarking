@@ -202,7 +202,13 @@ def effective_scoring_role(spec: IndicatorSpec, config=None) -> str:
         return "SCORED" if overrides[spec.name] == "scored" else "CONTEXTUAL"
     return "SCORED" if getattr(scoring_cfg, "score_all_scoreable_metrics", True) else spec.scoring_role
 
-def metric_selection_table() -> List[Dict]:
+def metric_selection_table(config=None) -> List[Dict]:
+    """Return the unified metric registry, optionally overlaid with the run period.
+
+    The static registry cannot know the actual assessment dates. When a runtime
+    config is supplied, empty ``temporal_period`` fields are populated with the
+    configured baseline/trend window so the audit table is operationally useful.
+    """
     rows=[]
     for spec in INDICATORS:
         rows.append({
@@ -214,9 +220,26 @@ def metric_selection_table() -> List[Dict]:
             "reference_type": spec.reference_type,
             "source": spec.source_type, "dataset_asset": spec.dataset_asset,
             "native_scale_m": spec.native_scale_m, "spatial_resolution": spec.spatial_resolution,
-            "temporal_resolution": spec.temporal_resolution, "temporal_period": spec.temporal_period,
+            "temporal_resolution": spec.temporal_resolution,
+            "temporal_period": spec.temporal_period,
             "notes": spec.contract_note or spec.notes,
         })
+    if config is not None:
+        temporal = getattr(config, "temporal", None)
+        baseline_label = getattr(temporal, "baseline_label", "configured baseline window") if temporal else "configured baseline window"
+        if temporal and hasattr(temporal, "baseline_inclusive_window"):
+            try:
+                bs, be = temporal.baseline_inclusive_window()
+                baseline_label = f"{baseline_label} [{bs} to {be}]"
+            except Exception:
+                pass
+        trend_label = None
+        if temporal and hasattr(temporal, "start_year") and hasattr(temporal, "end_year"):
+            trend_label = f"trend window [{temporal.start_year}-01-01 to {temporal.end_year}-12-31]"
+        trend_metrics = {"riparian_ndvi_sen_slope", "riparian_ndvi_trend", "net_forest_change_rate"}
+        for row in rows:
+            if not row.get("temporal_period"):
+                row["temporal_period"] = trend_label if row["metric"] in trend_metrics and trend_label else baseline_label
     return rows
 
 
