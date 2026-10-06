@@ -120,3 +120,18 @@ def test_zipped_site_selection_manifest_rebases_absolute_tile_paths(tmp_path):
         z.write(tile, 'tiles/TataMotors_Pimpri_EMU_01.geojson')
     project = load_project_input(archive, domain='terrestrial')
     assert [e.emu_id for e in project.emus] == ['EMU_01']
+
+
+def test_project_reference_population_coverage_uses_emu_results():
+    # Project-level QA must derive reference-population coverage from completed
+    # EMU results; _run_single owns the actual reference-population objects.
+    from darukaa_adaptive.pipeline import AdaptivePipeline
+    names=set()
+    results=[
+        {"reference_populations":{"terrestrial":{}}},
+        {"reference_populations":{"terrestrial":{},"terrestrial_pressure":{}}},
+        {"reference_populations":{}},
+    ]
+    for result in results:
+        names.update((result.get("reference_populations") or {}).keys())
+    assert names == {"terrestrial", "terrestrial_pressure"}

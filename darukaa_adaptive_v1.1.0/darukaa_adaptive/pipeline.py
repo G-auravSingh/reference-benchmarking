@@ -213,6 +213,7 @@ class AdaptivePipeline:
         root_output = Path(self.config.output_dir) / project.project_id
         root_output.mkdir(parents=True, exist_ok=True)
         emu_results = []
+        reference_population_names=set()
         metric_rows=[]; pillar_rows=[]
         project_evidence = None
         if external_evidence_file:
@@ -247,6 +248,7 @@ class AdaptivePipeline:
                 result["parent_zone"] = emu.parent_zone
                 result["input_attributes"] = emu.attributes
                 emu_results.append(result)
+                reference_population_names.update((result.get("reference_populations") or {}).keys())
                 for m in result.get("metrics", []):
                     metric_rows.append({"emu_id":emu.emu_id,"area_ha":result["emu_area_ha"],"metric":m.metric,"value":m.value,"domain":resolved_domain})
                 scored_rows = result.get("metric_concern")
@@ -326,7 +328,7 @@ class AdaptivePipeline:
                         metric_extremes.append({"metric":str(metric),"n":int(len(vals)),"zero_fraction":zero_frac,"hundred_fraction":hundred_frac})
         if metric_extremes:
             qa_flags.append({"severity":"REVIEW","code":"metric_score_boundary_concentration","message":"One or more metrics have >=75% of EMU scores at a 0 or 100 boundary; inspect reference scale, denominator behaviour and metric distribution.","metrics":metric_extremes})
-        qa_flags.append({"severity":"INFO","code":"reference_population_coverage","message":f"Reference populations generated: {sorted(reference_populations)}"})
+        qa_flags.append({"severity":"INFO","code":"reference_population_coverage","message":f"Reference populations generated across EMUs: {sorted(reference_population_names)}"})
         project_output_qa={"status":"review_required" if any(f["severity"]=="REVIEW" for f in qa_flags) else "pass","n_emus":len(project.emus),"flags":qa_flags}
         (root_output/"project_output_qa.json").write_text(json.dumps(project_output_qa,indent=2,default=str),encoding="utf-8")
 
