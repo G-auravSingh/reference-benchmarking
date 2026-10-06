@@ -1,0 +1,5 @@
+profile:
+  name: mixed
+  version: 1.1.0
+  allow_terrestrial_metrics: true
+  notes: Mixed aquatic + terrestrial assessment. Domain-specific references are kept separate.
