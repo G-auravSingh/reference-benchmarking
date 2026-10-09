@@ -1,0 +1,24 @@
+# Darukaa fixed concern convention — no metric-specific raw thresholds are required.
+#
+# Every scoreable indicator follows:
+#   raw value → approved comparable reference → metric-specific intactness transform
+#   → 0–100 intactness → fixed concern band
+#
+# Fixed product bands:
+#   80–100%  Very Low concern
+#   60–<80%  Low concern
+#   40–<60%  Moderate concern
+#   20–<40%  High concern
+#   0–<20%   Very High concern
+#
+# These bands are a declared Darukaa product convention, not universal ecological thresholds.
+#
+
+# Finite reference escalation
+# A: strict low-pressure contemporary; B: least-disturbed contemporary quantile;
+# C: explicit manual HMI threshold entered from the Colab diagnostics.
+least_disturbed_enabled: true
+least_disturbed_quantile: 0.10
+manual_hmi_fallback_enabled: true
+manual_hmi_threshold: null
+manual_hmi_reference_state: best_attainable
