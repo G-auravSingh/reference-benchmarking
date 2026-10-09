@@ -8,8 +8,8 @@ from darukaa_adaptive.aggregation import aggregate_project_metric_scores, aggreg
 def test_subdimension_geometric_mean_then_pillar_limiting_factor():
     cfg=AssessmentConfig()
     df=pd.DataFrame([
-        {"metric":"natural_landcover_fraction","pillar":"P1_extent_configuration","subdimension":"natural_cover","intactness_score_0_100":80,"score_eligible":True},
-        {"metric":"terrestrial_ndvi","pillar":"P2_ecosystem_condition","subdimension":"greenness","intactness_score_0_100":90,"score_eligible":True},
+        {"metric":"natural_habitat","pillar":"P1_extent_configuration","subdimension":"natural_cover","intactness_score_0_100":80,"score_eligible":True},
+        {"metric":"ndvi","pillar":"P2_ecosystem_condition","subdimension":"greenness","intactness_score_0_100":90,"score_eligible":True},
         {"metric":"riparian_ndvi","pillar":"P2_ecosystem_condition","subdimension":"greenness","intactness_score_0_100":40,"score_eligible":True},
         {"metric":"water_persistence","pillar":"P2_ecosystem_condition","subdimension":"hydrology","intactness_score_0_100":20,"score_eligible":True},
         {"metric":"edna_fish_richness","pillar":"P3_biodiversity_integrity","subdimension":"fish_richness","intactness_score_0_100":70,"score_eligible":True},
@@ -46,10 +46,10 @@ def test_project_pillar_comparison_keeps_limiting_emu():
 
 def test_emu_comparison_is_not_reduced_to_one_hidden_rank():
     pillars=[
-        {"emu_id":"A","area_ha":10,"domain":"terrestrial","pillar":"P1_extent_configuration","pillar_name":"Ecosystem Extent & Configuration","score_0_to_100":90,"concern_label":"Very Low","limiting_metric":"natural_landcover_fraction"},
-        {"emu_id":"A","area_ha":10,"domain":"terrestrial","pillar":"P2_ecosystem_condition","pillar_name":"Ecosystem Condition","score_0_to_100":60,"concern_label":"Low","limiting_metric":"terrestrial_ndvi"},
+        {"emu_id":"A","area_ha":10,"domain":"terrestrial","pillar":"P1_extent_configuration","pillar_name":"Ecosystem Extent & Configuration","score_0_to_100":90,"concern_label":"Very Low","limiting_metric":"natural_habitat"},
+        {"emu_id":"A","area_ha":10,"domain":"terrestrial","pillar":"P2_ecosystem_condition","pillar_name":"Ecosystem Condition","score_0_to_100":60,"concern_label":"Low","limiting_metric":"ndvi"},
     ]
-    metrics=[{"emu_id":"A","metric":"natural_landcover_fraction","score_0_to_100":90},{"emu_id":"A","metric":"terrestrial_ndvi","score_0_to_100":60}]
+    metrics=[{"emu_id":"A","metric":"natural_habitat","score_0_to_100":90},{"emu_id":"A","metric":"ndvi","score_0_to_100":60}]
     out=build_emu_comparison_table(pillars,metrics)
     assert set(['emu_id','area_ha','P1_extent_configuration_score_0_to_100','P2_ecosystem_condition_score_0_to_100','limiting_metric']).issubset(out.columns)
 

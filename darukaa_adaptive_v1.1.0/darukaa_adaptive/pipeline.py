@@ -18,7 +18,7 @@ from .inputs import load_project_input
 from .aggregation import (aggregate_emu_scorecards, aggregate_project_metric_scores, aggregate_project_pillars, build_emu_comparison_table, complete_emu_comparison, summarize_emu_condition_distribution)
 from .terrestrial import TerrestrialMetrics
 from .full_metrics import FullMetricEngine
-from .registry import FULL_INDICATORS, effective_scoring_role
+from .registry import FULL_INDICATORS, effective_scoring_role, REMOVED_METRICS, INDICATORS
 from .water import WaterDetector
 
 class AdaptivePipeline:
@@ -40,9 +40,10 @@ class AdaptivePipeline:
         if realm in {'terrestrial','mixed'} or self.config.profile.allow_terrestrial_metrics:
             metric_results.extend(TerrestrialMetrics(self.config).run(domains['boundary'],start,end))
 
-        # Full 0.2.7 calculator inventory.  These calculators are deliberately
-        # adapted into v1 MetricResult objects; legacy reference/scoring logic is
-        # never called.  Existing v1 profile metrics remain for compatibility.
+        # Active registered legacy calculators are adapted into v1 MetricResult
+        # objects; legacy reference/scoring logic is never called. Historical
+        # retired calculators remain in the vendored source for audit traceability,
+        # but are removed from the active registry before execution.
         full_realm = 'aquatic' if realm == 'aquatic_lake' else realm
         if full_realm in {'terrestrial','aquatic','mixed'}:
             full_engine = FullMetricEngine(self.config)
@@ -50,12 +51,30 @@ class AdaptivePipeline:
                 domains['boundary'], realm=full_realm,
                 temporal_window=f"{start}:{end}"
             ))
+        # Enforce the production registry at the calculator/runtime boundary.
+        # Retired IDs are suppressed before QA, reference selection, scoring or
+        # report construction. Any other unregistered ID is a package defect and
+        # fails with a direct diagnostic rather than a later registry KeyError.
+        active_names = {spec.name for spec in INDICATORS}
+        rejected_metrics = []
+        active_metric_results = []
+        for metric_result in metric_results:
+            if metric_result.metric in REMOVED_METRICS:
+                rejected_metrics.append(metric_result.metric)
+                continue
+            if metric_result.metric not in active_names:
+                raise RuntimeError(
+                    f"Calculator emitted unregistered metric '{metric_result.metric}'. "
+                    "This is a package contract defect; scoring/report generation stopped."
+                )
+            active_metric_results.append(metric_result)
+        metric_results = active_metric_results
         metric_qa=qa_metrics(metric_results)
         benchmarks=[]
         reference_populations={}
         if metric_results:
             if realm in {"aquatic_lake","mixed"}:
-                aquatic_metrics=[m for m in metric_results if m.metric in {"water_extent","water_persistence","ndci_proxy","red_reflectance_turbidity_proxy","surface_algal_bloom_frequency","riparian_ndvi","riparian_ndvi_sen_slope","shoreline_disturbance_fraction","landcover_composition"}]
+                aquatic_metrics=[m for m in metric_results if m.metric in {"water_extent","water_persistence","ndci_proxy","surface_algal_bloom_frequency","riparian_ndvi","riparian_ndvi_sen_slope","shoreline_disturbance_fraction","landcover_composition"}]
                 if aquatic_metrics:
                     lake_engine=LakeMetrics(self.config,WaterDetector(self.config))
                     lake_ref_engine=ReferenceEngine(self.config,lake_engine)
@@ -64,7 +83,7 @@ class AdaptivePipeline:
                         reference_populations["aquatic"] = lake_ref_engine.last_population.to_dict()
 
             if realm in {"terrestrial","mixed"}:
-                terrestrial_metrics=[m for m in metric_results if m.metric in {"natural_landcover_fraction","terrestrial_ndvi","built_fraction"}]
+                terrestrial_metrics=[m for m in metric_results if m.metric == "built_fraction"]
                 if terrestrial_metrics:
                     terr_engine=TerrestrialMetrics(self.config)
                     terr_ref_engine=ReferenceEngine(self.config,terr_engine)
@@ -195,12 +214,13 @@ class AdaptivePipeline:
                     'automatic_escalation_is_finite':True,
                 },
                 'reference_populations': reference_populations,
+                'retired_metric_emissions_suppressed': sorted(set(rejected_metrics)),
             }
         )
         return {'geometry':geom,'parts':parts,'domains':domains,'metrics':metric_results,'metric_qa':metric_qa,'benchmarks':benchmarks,
                 'reference_populations':reference_populations,'metric_concern':scored,'pillars':pillars,'overall':overall,
                 'water_periods':water_periods,'landcover':landcover,'boundary_area_ha':area_ha(geom),'readiness':readiness,
-                'evidence':evidence_df,'outputs':paths}
+                'evidence':evidence_df,'outputs':paths,'retired_metric_emissions_suppressed':sorted(set(rejected_metrics))}
 
     def run(self, site_file, external_evidence_file=None, *, project_id=None, project_name=None, domain="auto"):
         """Run either a single supported input or a multi-EMU project.

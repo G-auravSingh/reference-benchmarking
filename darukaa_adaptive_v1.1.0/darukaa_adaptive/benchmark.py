@@ -223,7 +223,6 @@ class ReferenceEngine:
         if metric == "water_extent": return self.metrics.water_extent(geometry, start, end).value
         if metric == "water_persistence": return self.metrics.water_persistence(geometry, start, end).value
         if metric == "ndci_proxy": return self.metrics.ndci(geometry, start, end).value
-        if metric == "red_reflectance_turbidity_proxy": return self.metrics.turbidity_proxy(geometry, start, end).value
         if metric == "surface_algal_bloom_frequency": return self.metrics.bloom_frequency(geometry, start, end).value
         if metric == "riparian_ndvi":
             geometry = self._as_shapely_geometry(geometry)
@@ -233,7 +232,7 @@ class ReferenceEngine:
             geometry = self._as_shapely_geometry(geometry)
             d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
             return self.metrics.shoreline_disturbance(ee_geometry(d["riparian_fixed"]),start,end).value
-        if metric in {"natural_landcover_fraction","terrestrial_ndvi","built_fraction"}:
+        if metric == "built_fraction":
             for rec in self.metrics.run(geometry,start,end):
                 if rec.metric==metric: return rec.value
         return None
@@ -255,7 +254,6 @@ class ReferenceEngine:
         if metric == "water_extent": return self.metrics.water_extent(geometry, start, end)
         if metric == "water_persistence": return self.metrics.water_persistence(geometry, start, end)
         if metric == "ndci_proxy": return self.metrics.ndci(geometry, start, end)
-        if metric == "red_reflectance_turbidity_proxy": return self.metrics.turbidity_proxy(geometry, start, end)
         if metric == "surface_algal_bloom_frequency": return self.metrics.bloom_frequency(geometry, start, end)
         if metric == "riparian_ndvi":
             geometry=self._as_shapely_geometry(geometry); d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
@@ -263,7 +261,7 @@ class ReferenceEngine:
         if metric == "shoreline_disturbance_fraction":
             geometry=self._as_shapely_geometry(geometry); d=make_shapely_domains(geometry,self.config.spatial.riparian_buffer_m,self.config.spatial.context_buffer_km)
             return self.metrics.shoreline_disturbance(ee_geometry(d["riparian_fixed"]),start,end)
-        if metric in {"natural_landcover_fraction","terrestrial_ndvi","built_fraction"}:
+        if metric == "built_fraction":
             for rec in self.metrics.run(geometry,start,end):
                 if rec.metric==metric: return rec
         return None

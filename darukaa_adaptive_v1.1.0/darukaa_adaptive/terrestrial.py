@@ -116,41 +116,17 @@ class TerrestrialMetrics:
 
         if dw_n < 1:
             return [
-                self._make(name, None, "insufficient_data", f"{start}:{end}", dataset, scale, direction, s2_n if name == "terrestrial_ndvi" else dw_n, None,
-                           notes="Dynamic World observations were unavailable for the configured period." if name != "terrestrial_ndvi" else "No Sentinel-2 observations met the configured cloud filter.")
-                for name, dataset, scale, direction in [
-                    ("natural_landcover_fraction", "GOOGLE/DYNAMICWORLD/V1", 10, "higher_is_better"),
-                    ("terrestrial_ndvi", "COPERNICUS/S2_SR_HARMONIZED", 10, "higher_is_better"),
-                    ("built_fraction", "GOOGLE/DYNAMICWORLD/V1", 10, "lower_is_better"),
-                ]
+                self._make("built_fraction", None, "no_valid_observation", f"{start}:{end}",
+                           "GOOGLE/DYNAMICWORLD/V1", 10, "lower_is_better", dw_n, None,
+                           notes="Dynamic World observations were unavailable for the configured period."),
             ]
 
         dw = dw_collection.mode()
-        natural = dw.eq(1).Or(dw.eq(2)).Or(dw.eq(3)).Or(dw.eq(5)).Or(dw.eq(7)).rename("fraction")
         built = dw.eq(6).rename("fraction")
-        natural_stats = self._stats(natural, geometry, "fraction", 10)
         built_stats = self._stats(built, geometry, "fraction", 10)
-
-        if s2_n < 1:
-            ndvi_stats = None
-            ndvi_value = None
-            ndvi_status = "insufficient_data"
-        else:
-            land_mask = dw.neq(0)
-            ndvi = s2.median().normalizedDifference(["B8", "B4"]).rename("ndvi").updateMask(land_mask)
-            ndvi_stats = self._stats(ndvi, geometry, "ndvi", 10)
-            ndvi_value = ndvi_stats["mean"]
-            ndvi_status = "ok" if ndvi_value is not None else "insufficient_land_or_data"
-
         window = f"{start}:{end}"
         return [
-            self._make("natural_landcover_fraction", natural_stats["mean"], "ok" if natural_stats["mean"] is not None else "insufficient_data", window,
-                       "GOOGLE/DYNAMICWORLD/V1", 10, "higher_is_better", dw_n, natural_stats,
-                       "Natural/semi-natural land-cover fraction; EO screening proxy. Dynamic World modal label is used over the configured period."),
-            self._make("terrestrial_ndvi", ndvi_value, ndvi_status, window,
-                       "COPERNICUS/S2_SR_HARMONIZED + Dynamic World land mask", 10, "higher_is_better", s2_n, ndvi_stats,
-                       "Terrestrial NDVI condition proxy, masked to Dynamic World non-water land classes."),
-            self._make("built_fraction", built_stats["mean"], "ok" if built_stats["mean"] is not None else "insufficient_data", window,
+            self._make("built_fraction", built_stats["mean"], "calculated" if built_stats["mean"] is not None else "no_valid_observation", window,
                        "GOOGLE/DYNAMICWORLD/V1", 10, "lower_is_better", dw_n, built_stats,
                        "Built-up fraction is a land-use pressure proxy."),
         ]

@@ -46,7 +46,11 @@ def _as_float(value):
 
 
 class FullMetricEngine:
-    """Run all 46 legacy calculators applicable to the requested realm."""
+    """Run active, registered legacy-derived calculators for the requested realm.
+
+    Historical calculators retired by the v1.1.0 scientific audit are not part of
+    ``FULL_INDICATORS`` and cannot run through this adapter.
+    """
 
     def __init__(self, config):
         self.config = config
@@ -65,7 +69,7 @@ class FullMetricEngine:
         """Run the migrated metric calculators for a realm.
 
         ``metric_names`` is an execution filter used by reference benchmarking.
-        Site assessments may still request the full registered inventory, but a
+        Site assessments request the complete *active registered* inventory, but a
         reference population only needs the metrics that are actually score-eligible.
         This avoids re-running all 46 calculators once for every scored metric.
         """

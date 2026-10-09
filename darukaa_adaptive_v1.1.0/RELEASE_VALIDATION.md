@@ -48,3 +48,18 @@
 ### Recommended Git commit
 
 `Complete project report and reconcile metric audit documentation`
+
+
+## 2026-10-09 — runtime registry/Colab checkout hotfix
+
+- Fixed the production `KeyError: Unknown indicator: natural_landcover_fraction`: the obsolete terrestrial aliases `natural_landcover_fraction` and `terrestrial_ndvi` are no longer emitted by the active terrestrial calculator. `built_fraction` remains the direct built-surface pressure metric; the canonical legacy `natural_habitat`/`ndvi` calculators remain governed by the active registry.
+- Removed the active aquatic call to retired `red_reflectance_turbidity_proxy`; the uncalibrated metric was never in the v1.1.0 active registry and must not be emitted.
+- Added a strict calculator/runtime registry contract before metric QA, reference benchmarking, scoring and report generation. A retired ID is suppressed and recorded; an unknown non-retired ID raises a clear contract error before downstream processing. Registry resolution and registration now explicitly reject retired identifiers.
+- Fixed Colab git checkout semantics: a 40-character commit SHA is fetched and checked out detached with hash verification; branches/tags are checked out by name. A Git commit SHA must not be passed as `git clone --branch`. The notebook reports the resolved pinned commit.
+- Added regression tests for the exact terrestrial no-observation error path, aquatic retired-metric emission, registry rejection, runtime contract order and SHA checkout logic.
+- **85/85 local automated tests passed**; Python compilation passed; notebook JSON valid and all 11 code cells compile. A local disposable Git repository verified SHA checkout logic.
+- **Not tested here:** live Colab execution, public GitHub network clone of the target ref, live Earth Engine permissions/assets/quotas, or real project EMU end-to-end output. Those remain explicit acceptance gates before client release.
+
+### Recommended Git commit
+
+`Fix retired metric runtime contract and commit-pinned Colab checkout`

@@ -1,3 +1,12 @@
+## 1.1.0 — runtime registry contract and Colab checkout hotfix (2026-10-09)
+
+- Prevented retired terrestrial duplicate aliases (`natural_landcover_fraction`, `terrestrial_ndvi`) from being emitted by the active terrestrial calculator, resolving the reported registry `KeyError`. The canonical registered metrics remain distinct and unchanged.
+- Removed the active call for retired `red_reflectance_turbidity_proxy`; uncalibrated red reflectance is not emitted as a turbidity indicator.
+- Added an explicit registry contract barrier before QA/benchmarking/scoring/reporting, and rejection for attempts to dynamically register retired IDs.
+- Colab now handles a 40-character Git commit SHA by fetching it and checking it out detached, verifying the resulting hash; branch/tag refs remain supported.
+- Regression tests cover the reported no-observation failure path, aquatic retirement, retired registry IDs, runtime gate order and SHA checkout.
+- Local validation: 85 tests passed; package compilation and Colab notebook code-cell compilation passed. Live Earth Engine/Colab execution remains unverified.
+
 ## 1.1.0 — scientific metric correction (2026-10-09)
 
 - Reduced the active metric registry from the historical 62-item inventory to a smaller accepted set; invalid and misleading metrics are removed from runtime registration rather than merely downgraded.

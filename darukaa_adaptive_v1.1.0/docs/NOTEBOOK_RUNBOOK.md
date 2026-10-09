@@ -41,3 +41,12 @@ Check every EMU for:
 - uncertainty and proxy labels.
 
 Then inspect the project-level `emu_ecological_comparison.csv`, project pillar summary and HTML project report.
+
+
+## Pinning a production code revision
+
+Set `GIT_REF` to either a branch/tag name such as `main` or a complete 40-character commit SHA. The bootstrap cell checks out the SHA detached and verifies that `git rev-parse HEAD` matches exactly. Do not use `git clone --branch <SHA>`: `--branch` expects a branch or tag name and causes “Remote branch not found” for a raw commit hash. Record the printed `ACTUAL_GIT_SHA` alongside the output manifest for reproducibility.
+
+## Retired metric runtime contract
+
+The 63-row metric contract matrix is an audit/crosswalk, not an instruction to calculate all rows. Only IDs in `darukaa_adaptive.registry.INDICATORS` are active in v1.1.0. Retired IDs such as `natural_landcover_fraction`, `terrestrial_ndvi`, and `red_reflectance_turbidity_proxy` are historical records, not runnable metrics. The pipeline rejects an unexpected unregistered output before reference benchmarking, scoring or reporting. If this guard fails, do not bypass it; repair the calculator/registry contract and rerun.

@@ -208,23 +208,6 @@ class LakeMetrics:
             "Water-masked chlorophyll/trophic proxy. Requires site and water-type calibration before ecological threshold scoring.",
         )
 
-    def turbidity_proxy(self, geometry, start, end):
-        s2 = self._s2(geometry, start, end)
-        n = self._collection_size(s2)
-        if n == 0:
-            return self._make("red_reflectance_turbidity_proxy", None, "insufficient_data",
-                              _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED", 20, 0)
-        composite = s2.median()
-        wm, method, _ = self.water.water_mask_for_period(geometry, start, end)
-        img = composite.select("B4").updateMask(wm).rename("red_reflectance")
-        stats = self._reduce_stats(img, geometry, 20)
-        return self._make(
-            "red_reflectance_turbidity_proxy", stats["mean"],
-            "ok" if stats["mean"] is not None else "insufficient_water_or_data",
-            _window_label(start, end), "COPERNICUS/S2_SR_HARMONIZED + " + method, 20, n, stats,
-            "Water-masked red-band proxy. Do not report as calibrated turbidity without field/sensor validation.",
-        )
-
     def bloom_frequency(self, geometry, start, end):
         import ee
 
@@ -375,7 +358,6 @@ class LakeMetrics:
             self.water_extent(boundary, baseline_start, baseline_end),
             self.water_persistence(boundary, baseline_start, baseline_end),
             self.ndci(boundary, baseline_start, baseline_end),
-            self.turbidity_proxy(boundary, baseline_start, baseline_end),
             self.bloom_frequency(boundary, baseline_start, baseline_end),
             self.riparian_ndvi(riparian_zone, baseline_start, baseline_end),
             self.shoreline_disturbance(riparian_zone, baseline_start, baseline_end),
