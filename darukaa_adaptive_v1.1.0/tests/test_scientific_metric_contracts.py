@@ -41,14 +41,14 @@ def test_chm_uses_meta_wri_primary_product_contract():
     assert "meta-forest-monitoring-okw37/assets/CanopyHeight" in spec.source_type
 
 
-def test_eii_parent_and_components_are_mutually_exclusive():
+def test_eii_parent_is_default_candidate_and_components_remain_gated_by_mode():
     from darukaa_adaptive.config import AssessmentConfig
     from darukaa_adaptive.registry import effective_scoring_role
     cfg = AssessmentConfig()
     cfg.scoring.eii_mode = "components"
     assert effective_scoring_role(_spec("eii"), cfg) == "CONTEXTUAL"
     for name in ("eii_structural", "eii_compositional", "eii_functional"):
-        assert effective_scoring_role(_spec(name), cfg) == "SCORED"
+        assert effective_scoring_role(_spec(name), cfg) == "CONTEXTUAL"
 
     cfg.scoring.eii_mode = "parent"
     assert effective_scoring_role(_spec("eii"), cfg) == "SCORED"
@@ -89,13 +89,13 @@ def test_active_legacy_inventory_excludes_retired_metrics():
         assert retired not in all_names
 
 
-def test_habitat_health_and_eii_parent_are_core_defaults():
+def test_habitat_health_contextual_and_eii_parent_default_candidate():
     from darukaa_adaptive.config import AssessmentConfig
     from darukaa_adaptive.registry import get_indicator_spec, effective_scoring_role
     cfg = AssessmentConfig()
     assert cfg.scoring.eii_mode == "parent"
     assert effective_scoring_role(get_indicator_spec("eii"), cfg) == "SCORED"
-    assert effective_scoring_role(get_indicator_spec("habitat_health"), cfg) == "SCORED"
+    assert effective_scoring_role(get_indicator_spec("habitat_health"), cfg) == "CONTEXTUAL"
 
 
 def test_star_t_requires_canonical_asset_and_is_context_only():

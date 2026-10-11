@@ -2168,41 +2168,32 @@ def extract_ceri(g,c):
                         "categories_included":"EX/EW=5,CR=4,EN=3,VU=2,NT=1,LC=0"}}
 
 def extract_star_t(g,c):
-    import ee; eg=_to_ee(g); y=c.ndvi_year
+    """Return only the official project-supplied STAR-T raster; never build a proxy.
+
+    STAR-T is a conservation-opportunity indicator, not current ecosystem condition.
+    """
+    asset = (getattr(c, "raster_paths", {}) or {}).get("star_t_gee_asset")
+    if not asset:
+        return {"value": None, "pixels": None, "status": "pending_input",
+                "metadata": {"reason": "Canonical STAR-T raster not supplied; proxy computation is prohibited.",
+                             "interpretation": "Conservation opportunity, not current condition."}}
+    import ee
     try:
-        dw=ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1").filterDate(f"{y}-01-01",f"{y}-12-31").filterBounds(eg).select("label").mode()
-        hm = dw.eq(DW_TREES)
-        for cls in DW_NATURAL_CLASSES[1:]:
-            hm = hm.Or(dw.eq(cls))
-        bm=dw.eq(DW_BUILT)
-        bd=bm.reduceNeighborhood(reducer=ee.Reducer.mean(),kernel=ee.Kernel.circle(radius=1000,units="meters"))
-        viirs=ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").filterDate(f"{y}-01-01",f"{y}-12-31").select("avg_rad").mean()
-        nn=viirs.unitScale(0,50); tp=bd.add(nn).divide(2)
-        combined_raster=ee.Image(0).float()
-        birds=_load_fc(_BIRDS,c)
-        if birds:
-            filt_b=birds.filter(ee.Filter.eq("presence",1)).filter(ee.Filter.eq("origin",1)).filter(ee.Filter.inList("RedList__5",["CR","EN","VU"]))
-            def aw_b(f):
-                cat=ee.String(f.get("RedList__5"))
-                w=ee.Number(ee.Algorithms.If(cat.equals("CR"),4,ee.Algorithms.If(cat.equals("EN"),3,ee.Algorithms.If(cat.equals("VU"),2,1))))
-                return f.set("weight",w)
-            wr_b=filt_b.map(aw_b)
-            sr_b=ee.Image().float().paint(featureCollection=wr_b,color="weight")
-            combined_raster=combined_raster.add(sr_b.unmask(0))
-        mammals=_load_fc(_MAMMALS,c)
-        if mammals:
-            filt_m=mammals.filter(ee.Filter.inList("category",["CR","EN","VU"]))
-            def aw_m(f):
-                cat=ee.String(f.get("category"))
-                w=ee.Number(ee.Algorithms.If(cat.equals("CR"),4,ee.Algorithms.If(cat.equals("EN"),3,ee.Algorithms.If(cat.equals("VU"),2,1))))
-                return f.set("weight",w)
-            wr_m=filt_m.map(aw_m)
-            sr_m=ee.Image().float().paint(featureCollection=wr_m,color="weight")
-            combined_raster=combined_raster.add(sr_m.unmask(0))
-        st=combined_raster.multiply(tp).multiply(hm).rename("STAR_T")
-        val=st.reduceRegion(reducer=ee.Reducer.mean(),geometry=eg,scale=1000,maxPixels=1e13).get("STAR_T").getInfo()
-        return {"value":val,"pixels":None}
-    except Exception as e: logger.warning(f"STAR_T: {e}"); return {"value":None,"pixels":None}
+        img = ee.Image(asset).select(0)
+        total = img.reduceRegion(reducer=ee.Reducer.sum(), geometry=_to_ee(g), scale=1000,
+                                 maxPixels=1e8, bestEffort=False).getInfo() or {}
+        value = next((v for v in total.values() if isinstance(v, (int, float)) and math.isfinite(v)), None)
+        if value is None:
+            return {"value": None, "pixels": None, "status": "no_valid_observation",
+                    "metadata": {"reason": "Canonical STAR-T raster has no valid values in this EMU."}}
+        return {"value": float(value), "pixels": None,
+                "metadata": {"source": "project-supplied canonical STAR-T raster",
+                             "analysis_scale_m": 1000, "aggregation": "sum of pixel-level threat-abatement opportunity",
+                             "score_eligible": False,
+                             "interpretation": "Conservation opportunity, not current condition."}}
+    except Exception as exc:
+        logger.warning("STAR-T extraction failed: %s", exc)
+        return {"value": None, "pixels": None, "status": "calculation_failed", "metadata": {"error": str(exc)}}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

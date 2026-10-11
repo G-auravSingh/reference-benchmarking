@@ -192,3 +192,13 @@ Published references used for this revision: Dynamic World source documentation 
 
 
 Current release inventory: **38 active metrics** (11 aquatic, 1 direct built-fraction pressure metric, and 26 retained legacy calculators including the contextual MSA candidate). The historical audit matrix contains 62 original metric IDs plus the added MSA candidate (63 rows total).
+
+## 2026-10-11 addendum — superseding changes before the next live run
+
+This addendum supersedes any earlier statement in this document that NDVI is context-only by default. The active v1.1.0 contract now treats Sentinel-2 NDVI as a default-scored greenness indicator using a reference-distribution response: score 0 at/below matched-reference p05, increasing linearly to 100 at/above the reference median. NDVI is interval-scale, so ratio and relative-departure fields are not reported. `habitat_health` remains contextual by default because it is derived from NDVI and redundant unless an alternative-mode contract is deliberately selected.
+
+The EII parent and component layers remain contextual in this package until the previously documented asset/path/value anomaly is resolved with live source metadata and per-EMU value checks. `EII_MODE` selects the intended representation but cannot bypass that gate; BII remains the independent scoreable alternative while EII is not validated. A canonical STAR-T raster is required; no Dynamic World/VIIRS proxy is accepted.
+
+The default headline release gate now requires at least three valid scored metrics across three distinct subdimensions per pillar, and all three condition pillars plus biodiversity evidence for a condition headline. This is a configurable production guardrail, not a universal ecological constant. A pillar that fails coverage remains unscored, even when individual metric scores are available.
+
+For multi-EMU handoffs, summed EMU area and union footprint are reported separately. An independent project boundary must be supplied or reconciled before the EMU footprint can be described as validated project area or used for project-area claims.

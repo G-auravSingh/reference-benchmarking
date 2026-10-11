@@ -129,18 +129,18 @@ class ScoringConfig:
     )
 
     min_valid_metrics_per_subdimension: int = 1
-    min_valid_metrics_per_pillar: int = 1
+    min_valid_metrics_per_pillar: int = 3
+    min_valid_subdimensions_per_pillar: int = 3
     min_valid_pillars: int = 3
-    # A condition/SoN headline may be calculated from the condition pillars
-    # that are actually score-eligible. With the default of 1, the result is
-    # explicitly labelled partial when fewer than all three P1-P3 pillars are
-    # available; missing pillars are never treated as zeros.
-    min_condition_pillars: int = 1
+    # A headline condition score requires all three condition pillars. Each pillar
+    # must itself have at least three valid metrics spanning at least three distinct
+    # subdimensions; missing evidence is reported as a gap rather than converted into
+    # a synthetic score. These are configurable minimum evidence gates, not universal
+    # ecological constants.
+    min_condition_pillars: int = 3
     total_pillars: int = 4
-    require_complete_pillars: bool = False
-    # P3 biodiversity evidence is important, but its absence must not erase
-    # otherwise valid P1/P2 condition information. Coverage is reported explicitly.
-    require_fauna_for_condition: bool = False
+    require_complete_pillars: bool = True
+    require_fauna_for_condition: bool = True
     pressure_separate_from_condition: bool = True
 
     # Metric selection is deliberately separate from metric calculation. By default,
@@ -151,12 +151,11 @@ class ScoringConfig:
     score_all_scoreable_metrics: bool = True
     metric_overrides: Dict[str, str] = field(default_factory=dict)
 
-    # EII hierarchy gate. The parent EII is a provider-level composite of
-    # structural, compositional and functional integrity; it must not be
-    # aggregated together with those same components. "components" is the
-    # default because it preserves diagnostic visibility into the limiting
-    # EII dimension. "parent" is available when a single published EII headline
-    # is explicitly preferred. "none" keeps all EII layers contextual.
+    # EII hierarchy gate. Parent EII and its structural/compositional/functional
+    # components must never be scored together. Current EII layers remain contextual
+    # because the production asset/path anomaly is unresolved; this mode takes effect
+    # only after the selected layer has passed the source/value QA gate. BII remains
+    # the independent biodiversity-intactness fallback while EII is not scoreable.
     eii_mode: str = "parent"
 
     # Retained only for migration compatibility. Production scoring does not use
@@ -266,6 +265,8 @@ class AssessmentConfig:
             errors.append("scoring.min_valid_metrics_per_subdimension must be >= 1")
         if self.scoring.min_valid_metrics_per_pillar < 1:
             errors.append("scoring.min_valid_metrics_per_pillar must be >= 1")
+        if self.scoring.min_valid_subdimensions_per_pillar < 1:
+            errors.append("scoring.min_valid_subdimensions_per_pillar must be >= 1")
         if self.reference.auto_min_water_occurrence <= 0 or self.reference.auto_min_water_occurrence > 1:
             errors.append("reference.auto_min_water_occurrence must be in (0,1]")
         if self.reference.auto_min_candidate_area_ha <= 0:

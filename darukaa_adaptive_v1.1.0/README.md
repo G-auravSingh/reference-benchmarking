@@ -118,3 +118,12 @@ A passing software suite does not substitute for live Earth Engine acceptance. D
 Metric calculation is independent of metric selection. The registry exposes every registered metric with its pillar, construct, direction, source, reference type, native scale and scoreability class. By default, all `default_scored` metrics are scored. A client can demote any of these to contextual in the Colab notebook using `METRIC_OVERRIDES`, without modifying the calculator or package code. Diagnostic, removed and hard-context metrics remain non-scoreable unless their scientific contract is changed in a future audited release.
 
 The active metric registry is deliberately smaller than the historical audit inventory. Metrics that are invalid, misleadingly named, redundant, or based on unvalidated composites are removed from runtime calculation and reporting. See `docs/METRIC_CONTRACT_MATRIX.csv` for the 62 original metric IDs plus the MSA candidate (63 audit rows), including dispositions, caveats and source/provenance fields.
+
+
+## Pre-Colab metric and area release gates (2026-10-11)
+
+- `score_all_scoreable_metrics=true` means every metric classified as scientifically scoreable is included by default, subject to valid observations, minimum spatial support, an approved reference and metric-specific response QA. It does not force context-only or invalid metrics into a score.
+- NDVI uses a reference-distribution p05-to-median response, not a ratio. `habitat_health` remains contextual by default due redundancy with NDVI. EII remains contextual pending source/path QA; BII remains the independent fallback.
+- Headline pillar scores require at least three scored metrics across three subdimensions; a condition headline requires all P1-P3 pillars and biodiversity evidence.
+- A multi-EMU handoff must include or be reconciled against the independent project boundary. The sum/union of EMU polygons is reported as EMU footprint only until that check passes.
+- See `docs/PRECOLAB_METRIC_AND_AREA_AUDIT_2026-10-11.md` before running Colab.

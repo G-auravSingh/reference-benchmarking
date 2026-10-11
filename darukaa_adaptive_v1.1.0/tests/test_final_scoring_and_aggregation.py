@@ -6,7 +6,7 @@ from darukaa_adaptive.aggregation import aggregate_project_metric_scores, aggreg
 
 
 def test_subdimension_geometric_mean_then_pillar_limiting_factor():
-    cfg=AssessmentConfig()
+    cfg=AssessmentConfig(); cfg.scoring.min_valid_metrics_per_pillar=1; cfg.scoring.min_valid_subdimensions_per_pillar=1
     df=pd.DataFrame([
         {"metric":"natural_habitat","pillar":"P1_extent_configuration","subdimension":"natural_cover","intactness_score_0_100":80,"score_eligible":True},
         {"metric":"ndvi","pillar":"P2_ecosystem_condition","subdimension":"greenness","intactness_score_0_100":90,"score_eligible":True},
@@ -60,6 +60,7 @@ def test_calculated_metric_status_is_scoreable_when_other_gates_pass():
     from darukaa_adaptive.benchmark import benchmark_metric
     from darukaa_adaptive.scoring import score_metric
     cfg = AssessmentConfig()
+    cfg.scoring.eii_mode = "none"
     metric = SimpleNamespace(metric="bii", value=0.5, units="index", direction="higher_is_better",
                              reference_allowed=True, status="calculated", notes="", domain="terrestrial", evidence_type="EO")
     b = benchmark_metric("bii", 0.5, 0.8, None, tier1_approved=True, reference_level="auto", reference_n=100,

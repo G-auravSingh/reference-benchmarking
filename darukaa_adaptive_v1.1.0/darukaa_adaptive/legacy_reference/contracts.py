@@ -106,14 +106,10 @@ C: Dict[str, dict] = {
 
  # ---------------- C2 vegetation condition ----------------
  "eii": dict(construct="C2_vegetation", subdimension="integrity", measurement_scale="bounded",
-    disposition="context", input_layers=[EII_LAYER],
-    note=("DEMOTED (this audit, was 'retain'): the parent band is itself the dataset "
-         "provider's own hard-minimum of the 3 sub-scores (non-compensatory by "
-         "construction, confirmed v0.2.2) -- scoring the 3 sub-components separately "
-         "(now promoted, see below) gives the SAME worst-case-driven result but with real "
-         "visibility into WHICH dimension (structure/composition/function) is actually "
-         "limiting, which the single blended parent number hides. Kept as context, not "
-         "removed, so the pre-blended number is still shown for reference.")),
+    disposition="retain", input_layers=[EII_LAYER],
+    note=("Default-scoring candidate in parent mode, as configured by the user. "
+         "Must pass live source/band/value QA; missing or anomalous observations are "
+         "not scored. EII components remain contextual in parent mode.")),
  "eii_structural": dict(construct="C2_vegetation", subdimension="eii_structure", measurement_scale="bounded",
     disposition="context",
     note=("SUSPENDED FROM SCORING (independent audit item 5, confirmed real anomaly, NOT a "
@@ -139,8 +135,12 @@ C: Dict[str, dict] = {
  "eii_functional": dict(construct="C2_vegetation", subdimension="function", measurement_scale="bounded",
     disposition="context",
     note="SUSPENDED FROM SCORING alongside eii_structural (independent audit item 5) -- same unresolved primary-asset-vs-fallback ambiguity. Re-promote only after the anomaly is resolved."),
- "ndvi": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="interval",
-    disposition="context", input_layers=[NDVI], note="Not ratio-scale; remove from intactness. Keep as trend/context (B1)."),
+ "ndvi": dict(construct="C2_vegetation", subdimension="vegetation_greenness", measurement_scale="interval",
+    reference_type="regional_distribution", reference_estimator="robust_z",
+    disposition="retain", input_layers=[NDVI],
+    note=("Default-scored as a directional greenness indicator using a reference-distribution response, "
+          "not a ratio of NDVI values. The score is 0 at/below the matched reference p05 and reaches "
+          "100 at/above the reference median; raw NDVI and reference distribution remain reported.")),
  "habitat_health": dict(construct="C2_vegetation", subdimension="structure", measurement_scale="bounded",
     disposition="context", input_layers=[NDVI], note="z-score construct; overlaps NDVI (Gate A)."),
  "bii": dict(construct="C3_fauna", subdimension="abundance_intactness", measurement_scale="bounded",

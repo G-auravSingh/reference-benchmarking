@@ -129,10 +129,12 @@ TERRESTRIAL_INDICATORS: List[IndicatorSpec] = [
 # implementation dependency; v1.1.0 owns applicability, status, reference
 # routing, benchmarking, scoring and aggregation.
 #
-# Metrics that are intrinsically unsuitable for a headline reference-relative score.
-# Context-only and diagnostic gates are independent of the retired-metric contract.
+# Metrics intrinsically unsuitable for a headline reference-relative score by default.
+# LAI is intentionally not hard-gated: it is a default scoring candidate when native
+# 500 m support and valid observations permit it. Context-only and diagnostic gates
+# remain independent of the retired-metric contract.
 HARD_CONTEXT_ONLY = {
-    "landcover_composition", "riparian_ndvi_sen_slope", "msa", "lai", "ndci_proxy",
+    "landcover_composition", "riparian_ndvi_sen_slope", "msa", "ndci_proxy",
     "surface_algal_bloom_frequency", "shdi", "star_t", "aridity_index", "lst_day", "lst_night",
 }
 
@@ -156,13 +158,16 @@ HARD_DIAGNOSTIC = {
 def metric_scoreability(spec: IndicatorSpec) -> str:
     """Return the registry-level scoring option for a metric.
 
-    ``default_scored`` means it is included by default but can be demoted.
-    ``context_only`` means it is intentionally not scoreable in this release.
-    ``diagnostic`` and ``removed`` are hard-gated.
+    The active scientific disposition is authoritative. A broad runtime default
+    must not silently promote a metric that the contract explicitly retains as
+    contextual (for example, unresolved EII layers or a derived duplicate of NDVI).
+    ``default_scored`` metrics are included unless a user override demotes them.
     """
+    if not spec.active or spec.disposition == "remove":
+        return "removed"
     if spec.name in HARD_DIAGNOSTIC or spec.disposition == "screening":
         return "diagnostic"
-    if spec.name in HARD_CONTEXT_ONLY:
+    if spec.name in HARD_CONTEXT_ONLY or spec.disposition == "context" or spec.default_scoring == "context_only":
         return "context_only"
     return "default_scored"
 
@@ -173,11 +178,15 @@ def effective_scoring_role(spec: IndicatorSpec, config=None) -> str:
     component dimensions must never enter the same headline condition score.
     ``config.scoring.eii_mode`` therefore acts as a hard scientific gate:
 
-    * ``parent`` (default): the published parent EII
-      are score-eligible; the parent EII is diagnostic/contextual.
-    * ``parent``: the parent EII is score-eligible; all three components are
-      diagnostic/contextual.
+    * ``parent``: parent EII is the only EII layer that may be scored, but only
+      if its registry disposition and live source/value QA permit scoring.
+    * ``components``: the three component layers may be scored only after each
+      passes its source/value QA gate; the parent remains contextual.
     * ``none``: all EII layers are diagnostic/contextual.
+
+    EII parent is the default scoring candidate in parent mode. Runtime source/value
+    QA and approved-reference checks remain mandatory; a registry role alone never
+    makes an invalid or unapproved EII measurement scoreable.
 
     User metric overrides may demote a scoreable metric, but cannot promote an
     EII layer that is excluded by the selected hierarchy mode.
@@ -195,6 +204,19 @@ def effective_scoring_role(spec: IndicatorSpec, config=None) -> str:
         return "CONTEXTUAL"
     if spec.name in eii_components and eii_mode != "components":
         return "CONTEXTUAL"
+
+    # BII and the EII hierarchy are alternative headline representations, not
+    # additive metrics. Keep BII available when EII is context-only/unvalidated;
+    # once the selected EII layer is genuinely scoreable, suppress BII from the
+    # same headline condition composite.
+    if spec.name == "bii" and eii_mode in {"parent", "components"}:
+        eii_names = eii_parent if eii_mode == "parent" else eii_components
+        eii_specs = [x for x in INDICATORS if x.name in eii_names]
+        overrides = getattr(scoring_cfg, "metric_overrides", {}) or {}
+        eii_layers_eligible = bool(eii_specs) and all(metric_scoreability(x) == "default_scored" and x.reference_allowed for x in eii_specs)
+        eii_layers_demoted = any(overrides.get(x.name) == "contextual" for x in eii_specs)
+        if eii_layers_eligible and not eii_layers_demoted:
+            return "CONTEXTUAL"
 
     overrides = getattr(scoring_cfg, "metric_overrides", {}) or {}
     if spec.name in overrides:
@@ -336,6 +358,22 @@ try:
         "flii": ("projects/darukaa-earth-product/assets/flii_global_2019", 300.0, ("flii_asset",)),
         "msa": ("projects/ee-jayankandir/assets/TerrestrialMSA_2015_World", 300.0, ("globio_msa_2015",)),
     }
+    # LAI is an approved default-scoring candidate. Its 500 m native support
+    # and valid-pixel gates are enforced at measurement QA, not by a blanket
+    # contextual disposition.
+    for _i, _spec in enumerate(LEGACY_INDICATORS):
+        if _spec.name == "eii":
+            LEGACY_INDICATORS[_i] = replace(
+                _spec, scoring_role="SCORED", default_scoring="reference_relative",
+                reference_allowed=True, disposition="retain", uncertainty_method="reference_distribution",
+                contract_note="Default parent EII scoring candidate. Score only after valid source values, approved reference distribution and EII source/path QA; component layers remain contextual in parent mode.")
+        if _spec.name == "lai":
+            LEGACY_INDICATORS[_i] = replace(
+                _spec, scoring_role="SCORED", default_scoring="reference_relative",
+                reference_allowed=True, disposition="retain", uncertainty_method="reference_distribution",
+                contract_note="Default-scoring candidate at native 500 m support; suppress when valid observations or spatial support are insufficient.")
+            break
+
     for _name, (_source, _scale, _layers) in _SOURCE_OVERRIDES.items():
         for _i, _spec in enumerate(LEGACY_INDICATORS):
             if _spec.name == _name:

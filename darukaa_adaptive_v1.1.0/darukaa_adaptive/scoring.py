@@ -130,16 +130,20 @@ def aggregate_pillars(scored_df, config):
     rows=[]
     for pillar,name in PILLARS.items():
         g=subdf[(subdf["pillar"]==pillar) & subdf["score_0_to_100"].notna()] if not subdf.empty else pd.DataFrame()
-        if g.empty:
+        n_metrics = int(pd.to_numeric(g.get("n_scored_metrics", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()) if not g.empty else 0
+        min_metrics = int(config.scoring.min_valid_metrics_per_pillar)
+        min_subdimensions = int(config.scoring.min_valid_subdimensions_per_pillar)
+        n_subdimensions = int(len(g))
+        if g.empty or n_metrics < min_metrics or n_subdimensions < min_subdimensions:
             rows.append({"pillar":pillar,"pillar_name":name,"score_0_to_100":None,"concern_label":None,
-                         "n_scored_metrics":0,"n_scored_subdimensions":0,"minimum_metrics_required":config.scoring.min_valid_metrics_per_pillar,
+                         "n_scored_metrics":n_metrics,"n_scored_subdimensions":n_subdimensions,"minimum_metrics_required":min_metrics,"minimum_subdimensions_required":min_subdimensions,
                          "limiting_subdimension":None,"limiting_metric":None,"limiting_metric_score_0_to_100":None,
                          "status":"insufficient_metric_coverage","aggregation_method":"limiting_factor"})
             continue
         idx=g["score_0_to_100"].astype(float).idxmin(); r=g.loc[idx]
         rows.append({"pillar":pillar,"pillar_name":name,"score_0_to_100":float(r["score_0_to_100"]),
-                     "concern_label":concern_label(r["score_0_to_100"]),"n_scored_metrics":int(g["n_scored_metrics"].sum()),
-                     "n_scored_subdimensions":int(len(g)),"minimum_metrics_required":config.scoring.min_valid_metrics_per_pillar,
+                     "concern_label":concern_label(r["score_0_to_100"]),"n_scored_metrics":n_metrics,
+                     "n_scored_subdimensions":n_subdimensions,"minimum_metrics_required":min_metrics,"minimum_subdimensions_required":min_subdimensions,
                      "limiting_subdimension":str(r["subdimension"]),"limiting_metric":r["limiting_metric"],
                      "limiting_metric_score_0_to_100":r["limiting_metric_score_0_to_100"],"status":"scored",
                      "aggregation_method":"limiting_factor_over_geometric_mean_subdimensions"})

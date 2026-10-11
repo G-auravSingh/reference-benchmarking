@@ -143,12 +143,36 @@ def benchmark_metric(metric_name, observed, tier1, tier2, allow_tier2=True, tier
     raw = raw_relative_ratio(observed, selected, spec.direction)
     intact = reference_relative_intactness(observed, selected, spec.direction)
     dep = relative_departure(observed, selected, spec.direction)
+    diagnostics = dict(reference_diagnostics or {})
     attainment = metric_reference_attainment(observed, selected, spec.direction, metric_name)
+    comparison_method = ("bounded_absolute_zero_reference" if metric_name == "built_fraction" and selected == 0 and attainment is not None
+                         else ("reference_relative_ratio" if spec.direction != "reference_target" else "distance_from_reference"))
+    response_note = None
+    if metric_name == "ndvi" and observed is not None:
+        # NDVI is interval-scale, so a ratio such as observed/reference is not
+        # scientifically meaningful. Use a transparent, directional response
+        # anchored to the matched reference spatial distribution instead.
+        p05 = diagnostics.get("p05")
+        p50 = diagnostics.get("p50", selected)
+        # Suppress ratio-derived diagnostics as well as ratio-based scoring; NDVI
+        # has no meaningful ratio-scale interpretation.
+        raw = None
+        intact = None
+        dep = None
+        if p05 is not None and p50 is not None and math.isfinite(float(p05)) and math.isfinite(float(p50)) and float(p50) > float(p05):
+            attainment = max(0.0, min(100.0, 100.0 * (float(observed) - float(p05)) / (float(p50) - float(p05))))
+            comparison_method = "reference_distribution_p05_to_p50"
+            response_note = "NDVI is interval-scale: score uses reference p05-to-median directional attainment, not a ratio. Ratio and relative-departure fields are intentionally unavailable; scores are capped at 100 at/above the reference median."
+        else:
+            attainment = None
+            comparison_method = "reference_distribution_unavailable"
+            response_note = "NDVI scoring withheld because valid reference p05 and median values were unavailable or non-distinct; ratio fields are not reported for interval-scale NDVI."
     ci_low = ci_high = None
     if reference_ci:
         ci_low, ci_high = reference_ci
     interpretation = "at_or_above_reference" if (dep is not None and dep >= 0) else "below_reference"
-    diagnostics = dict(reference_diagnostics or {})
+    if metric_name == "ndvi" and observed is not None and selected is not None:
+        interpretation = "at_or_above_reference" if float(observed) >= float(selected) else "below_reference"
     ref_sd = diagnostics.get("std_dev")
     ref_med = diagnostics.get("p50")
     ref_mad = None
@@ -163,14 +187,13 @@ def benchmark_metric(metric_name, observed, tier1, tier2, allow_tier2=True, tier
         robust_z = (float(observed) - float(ref_med)) / float(ref_mad)
     if spec.direction == "reference_target" and dep is not None:
         interpretation = "near_reference_target" if dep == 0 else "departed_from_reference_target"
-    comparison_method = ("bounded_absolute_zero_reference" if metric_name == "built_fraction" and selected == 0 and attainment is not None
-                         else ("reference_relative_ratio" if spec.direction != "reference_target" else "distance_from_reference"))
-    notes = (
-        "Zero-reference bounded response: native built-fraction scale used because a zero reference denominator is undefined; "
-        "reference-relative ratio fields are retained as unavailable."
-        if comparison_method == "bounded_absolute_zero_reference"
-        else "Reference-relative comparison. The legacy intactness field is retained for compatibility; production interpretation uses reference attainment and the explicit reference state."
-    )
+    if response_note:
+        notes = response_note
+    elif comparison_method == "bounded_absolute_zero_reference":
+        notes = ("Zero-reference bounded response: native built-fraction scale used because a zero reference denominator is undefined; "
+                 "reference-relative ratio fields are retained as unavailable.")
+    else:
+        notes = "Reference-relative comparison. The legacy intactness field is retained for compatibility; production interpretation uses reference attainment and the explicit reference state."
     return BenchmarkResult(metric_name, observed, tier1, tier2, selected, reference_level or level, raw,
                            intact, attainment,
                            comparison_method,

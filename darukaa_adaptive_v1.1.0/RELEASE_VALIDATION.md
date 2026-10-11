@@ -63,3 +63,16 @@
 ### Recommended Git commit
 
 `Fix retired metric runtime contract and commit-pinned Colab checkout`
+
+
+## 2026-10-11 release gate (pre-Colab)
+
+This package has not yet been validated by a new live Earth Engine run after the 2026-10-11 repairs. Offline tests validate scoring contracts and guards, not external raster correctness. The next live run must be reviewed for: (1) NDVI reference-distribution scores, (2) FLII/LAI/GHM valid-pixel suppression, (3) EII source/path and value variation, (4) CHM asset/band/scale/value plausibility, (5) forest-loss boundary saturation, (6) area reconciliation against the original project boundary, and (7) all metric/pillar coverage gates. A condition headline must remain unavailable if any condition pillar fails its minimum coverage contract.
+
+
+## 2026-10-11 metric-policy reconciliation
+
+- EII parent is now registered as the default scoring candidate in `parent` mode; its components remain contextual in that mode. A candidate role does not waive valid-value, source/path QA, or approved-reference requirements. The known EII asset/value anomaly still requires live Earth Engine verification before treating EII results as scientifically validated.
+- LAI remains a default-scoring candidate at native 500 m support. Light pollution remains a default-scoring candidate with spatial-support QA.
+- STAR-T remains pending/contextual unless a canonical STAR-T raster is supplied. The older Dynamic World + VIIRS + species-range approximation is not restored as STAR-T because it is not a validated implementation of the STAR-T methodology.
+- Offline regression suite: 101 passed on 2026-10-11. This is not a live Earth Engine acceptance run.

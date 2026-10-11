@@ -9,7 +9,7 @@ from .benchmark import ReferenceEngine
 from .config import AssessmentConfig
 from .evidence import load_evidence_csv
 from .metrics import LakeMetrics
-from .qa import qa_metrics
+from .qa import qa_metrics, normalize_measurement_status
 from .readiness import assess_readiness
 from .report import write_assessment, write_project_report, audit_project_output_bundle
 from .scoring import build_scorecard, score_external_observations
@@ -59,6 +59,9 @@ class AdaptivePipeline:
         rejected_metrics = []
         active_metric_results = []
         for metric_result in metric_results:
+            # Normalize zero-support "calculated" placeholders before they can
+            # enter reference selection or scoring.
+            metric_result = normalize_measurement_status(metric_result)
             if metric_result.metric in REMOVED_METRICS:
                 rejected_metrics.append(metric_result.metric)
                 continue
@@ -67,6 +70,12 @@ class AdaptivePipeline:
                     f"Calculator emitted unregistered metric '{metric_result.metric}'. "
                     "This is a package contract defect; scoring/report generation stopped."
                 )
+            # The registry/runtime role is authoritative for score eligibility.
+            # Calculator adapters historically carried stale booleans (e.g. NDVI
+            # could be marked eligible despite being context-only, while a pressure
+            # metric could be marked ineligible despite being scored by the registry).
+            spec = next(x for x in INDICATORS if x.name == metric_result.metric)
+            metric_result.score_eligible = effective_scoring_role(spec, self.config) in {"SCORED", "PRESSURE"}
             active_metric_results.append(metric_result)
         metric_results = active_metric_results
         metric_qa=qa_metrics(metric_results)
@@ -317,10 +326,30 @@ class AdaptivePipeline:
                                     "condition_score_0_to_100":cs,"condition_concern_label":concern_label(cs)})
             idx=condition_pillars["project_score_0_to_100"].astype(float).idxmin(); project_overall["limiting_pillar"]=str(condition_pillars.loc[idx,"pillar"]); project_overall["limiting_emu"]=condition_pillars.loc[idx,"limiting_emu"]
         total_emu_area_ha=float(sum(float(e.area_ha or area_ha(e.geometry) or 0) for e in project.emus))
+        # A tile/EMU handoff is not itself an independent project-boundary proof.
+        # Record the union footprint separately from the sum, and do not label
+        # either as validated project area unless the source boundary is supplied.
+        union_emu_area_ha = None
+        area_sum_union_delta_ha = None
+        overlap_excess_ha = None
+        try:
+            from shapely.ops import unary_union
+            valid_geometries = [e.geometry for e in project.emus if e.geometry is not None]
+            if valid_geometries:
+                union_emu_area_ha = float(area_ha(unary_union(valid_geometries)))
+                area_sum_union_delta_ha = total_emu_area_ha - union_emu_area_ha
+                overlap_excess_ha = max(0.0, area_sum_union_delta_ha)
+        except Exception:
+            pass
         project_overall["n_emus"] = int(len(project.emus))
         project_overall["summed_emu_area_ha"] = total_emu_area_ha
-        project_overall["condition_distribution_basis"] = "all three condition pillars scored per EMU; existing concern thresholds; area shares use summed EMU area and assume non-overlapping EMUs"
-        manifest={"project":project.to_dict(),"n_emus":len(project.emus),"summed_emu_area_ha":total_emu_area_ha,"emu_results":[{"emu_id":r["emu_id"],"domain":r["emu_domain"],"area_ha":r["emu_area_ha"],"output":r.get("outputs")} for r in emu_results],"aggregation":{"raw_metric_rows":raw_metric_agg.to_dict("records"),"scored_metric_rows":scored_metric_agg.to_dict("records"),"pillar_rows":pillar_agg.to_dict("records"),"emu_comparison":comparison.to_dict("records"),"condition_distribution":condition_distribution.to_dict("records"),"project_overall":project_overall}}
+        project_overall["union_emu_footprint_area_ha"] = union_emu_area_ha
+        project_overall["overlap_excess_area_ha"] = overlap_excess_ha
+        project_overall["area_sum_minus_union_ha"] = area_sum_union_delta_ha
+        project_overall["project_boundary_area_ha"] = None
+        project_overall["area_basis_status"] = "project_boundary_not_supplied; EMU footprint only"
+        project_overall["condition_distribution_basis"] = "all three condition pillars scored per EMU; existing concern thresholds; area shares use summed EMU areas and are interpretable only after EMU geometry and project-boundary reconciliation"
+        manifest={"project":project.to_dict(),"n_emus":len(project.emus),"summed_emu_area_ha":total_emu_area_ha,"union_emu_footprint_area_ha":union_emu_area_ha,"overlap_excess_area_ha":overlap_excess_ha,"area_sum_minus_union_ha":area_sum_union_delta_ha,"project_boundary_area_ha":None,"area_basis_status":"project_boundary_not_supplied; EMU footprint only","emu_results":[{"emu_id":r["emu_id"],"domain":r["emu_domain"],"area_ha":r["emu_area_ha"],"output":r.get("outputs")} for r in emu_results],"aggregation":{"raw_metric_rows":raw_metric_agg.to_dict("records"),"scored_metric_rows":scored_metric_agg.to_dict("records"),"pillar_rows":pillar_agg.to_dict("records"),"emu_comparison":comparison.to_dict("records"),"condition_distribution":condition_distribution.to_dict("records"),"project_overall":project_overall}}
         manifest_path=root_output/"project_assessment_manifest.json"
         manifest_path.write_text(__import__("json").dumps(manifest,indent=2,default=str),encoding="utf-8")
         raw_metric_agg.to_csv(root_output/"project_metric_raw_aggregation.csv",index=False)
@@ -334,8 +363,38 @@ class AdaptivePipeline:
         # corrections: extreme scores and incomplete condition coverage can be
         # scientifically legitimate, but must be visible to the analyst.
         qa_flags=[]
+        # Promote metric-level measurement QA into project-level release QA. A
+        # project must not say "no evidence gaps" when one or more EMUs contain
+        # scoreable metrics with missing observations/pixels or invalid values.
+        metric_qa_records = []
+        for emu_result in emu_results:
+            qdf = emu_result.get("metric_qa")
+            if isinstance(qdf, pd.DataFrame) and not qdf.empty:
+                for qrow in qdf.to_dict("records"):
+                    qrow["emu_id"] = emu_result.get("emu_id")
+                    metric_qa_records.append(qrow)
+        qa_review_records = [r for r in metric_qa_records if r.get("qa_status") == "review"]
+        if qa_review_records:
+            qa_metrics_by_name = sorted({str(r.get("metric")) for r in qa_review_records if r.get("metric")})
+            qa_emus = sorted({str(r.get("emu_id")) for r in qa_review_records if r.get("emu_id")})
+            qa_flags.append({
+                "severity": "REVIEW",
+                "code": "metric_measurement_qa",
+                "message": f"Metric-level measurement QA requires review for {len(qa_review_records)} EMU-metric records across {len(qa_metrics_by_name)} metrics. Do not release without checking missing observations/pixels and value validity.",
+                "metrics": qa_metrics_by_name,
+                "emus": qa_emus,
+                "n_flagged_records": len(qa_review_records),
+            })
+        non_scored_records = [r for r in metric_qa_records if r.get("qa_status") in {"not_applicable", "pending_input", "context_only_pending_provenance", "contextual", "diagnostic_only"}]
+        if non_scored_records:
+            qa_flags.append({
+                "severity": "INFO",
+                "code": "metric_non_scored_statuses",
+                "message": f"{len(non_scored_records)} EMU-metric records are explicitly not applicable, pending input/provenance, or contextual; these are not treated as successful scored observations.",
+                "n_records": len(non_scored_records),
+            })
         if project_overall.get("status") == "insufficient_condition_coverage":
-            qa_flags.append({"severity":"REVIEW","code":"condition_not_scored","message":"Project condition headline is not scoreable because no condition pillar is score-eligible; inspect evidence coverage."})
+            qa_flags.append({"severity":"REVIEW","code":"condition_not_scored","message":"Project condition headline is withheld because the required three-pillar and per-pillar metric/subdimension coverage gates were not met; inspect evidence coverage and missing metrics."})
         elif project_overall.get("status") == "condition_scored_partial":
             qa_flags.append({"severity":"INFO","code":"partial_condition_coverage","message":f"Project condition score uses {project_overall.get('condition_pillar_count')}/3 condition pillars; missing pillars are not treated as zero."})
         ps=project_overall.get("pressure_intactness_score_0_to_100")
@@ -353,6 +412,9 @@ class AdaptivePipeline:
         if metric_extremes:
             qa_flags.append({"severity":"REVIEW","code":"metric_score_boundary_concentration","message":"One or more metrics have >=75% of EMU scores at a 0 or 100 boundary; inspect reference scale, denominator behaviour and metric distribution.","metrics":metric_extremes})
         qa_flags.append({"severity":"INFO","code":"reference_population_coverage","message":f"Reference populations generated across EMUs: {sorted(reference_population_names)}"})
+        qa_flags.append({"severity":"REVIEW","code":"project_boundary_area_unverified","message":"The handoff supplied EMU polygons but no independent project-boundary geometry/area. Summed EMU area and their union footprint are reported as EMU coverage only; reconcile against the original site-selection boundary before using project-area totals or area-share claims."})
+        if area_sum_union_delta_ha is not None and abs(area_sum_union_delta_ha) > 0.01:
+            qa_flags.append({"severity":"REVIEW","code":"emu_geometry_overlap_or_area_mismatch","message":f"Summed EMU area minus union footprint is {area_sum_union_delta_ha:.4f} ha. Resolve overlapping polygons or inconsistent supplied area attributes before interpreting area-weighted project summaries."})
         project_output_qa={"status":"review_required" if any(f["severity"]=="REVIEW" for f in qa_flags) else "pass","n_emus":len(project.emus),"flags":qa_flags}
         (root_output/"project_output_qa.json").write_text(json.dumps(project_output_qa,indent=2,default=str),encoding="utf-8")
         project_report=write_project_report(root_output, project, project_overall, pillar_agg, scored_metric_agg, comparison, emu_results, self.config, project_output_qa)

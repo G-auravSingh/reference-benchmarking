@@ -1,3 +1,14 @@
+## 2026-10-11 — pre-Colab scoring-coverage and area-contract repair (version remains 1.1.0)
+
+- Default scoring now follows the active scientific disposition rather than allowing `score_all_scoreable_metrics=True` to accidentally promote context-only metrics.
+- Promoted Sentinel-2 NDVI to default scoring through a reference-distribution response (reference p05 to median), not a mathematically inappropriate NDVI ratio. `habitat_health` remains contextual by default because it is derived from and redundant with NDVI.
+- EII parent/components remain gated until the documented source/path anomaly is resolved; BII remains the independent fallback. The selected EII layer and BII cannot both contribute to the same headline condition composite.
+- Suppressed zero-pixel placeholders and coarse-raster values supported by fewer than four native pixels for FLII, GHM, LAI, BII and light pollution; these become `no_valid_observation`, not ecological zero. Four pixels is a minimum computational support gate, not a claim of independent ecological replication.
+- Enforced the previously declared minimum-metrics-per-pillar setting. Default pillar scores now require at least three scored metrics spanning three subdimensions; the condition headline requires all three condition pillars and biodiversity evidence. This prevents one-metric pillars from being presented as broad condition scores.
+- Project handoff now reports summed EMU area and union footprint separately, flags absent independent project-boundary geometry, and labels area as EMU footprint rather than verified project area.
+- Replaced the shadowing non-canonical STAR-T proxy with official-raster-only extraction; absent canonical STAR-T input is `pending_input`.
+- Added regression tests for NDVI response, metric disposition, zero/low pixel support, EII/BII gating and strict headline coverage.
+
 ## 1.1.0 — runtime registry contract and Colab checkout hotfix (2026-10-09)
 
 - Prevented retired terrestrial duplicate aliases (`natural_landcover_fraction`, `terrestrial_ndvi`) from being emitted by the active terrestrial calculator, resolving the reported registry `KeyError`. The canonical registered metrics remain distinct and unchanged.
@@ -185,3 +196,14 @@ Earlier `darukaa_adaptive_v1.0.0` work remains represented by the historical pac
 - Corrected archive sequencing so the downloaded ZIP contains the final manifest including output-QA state and archive path.
 - Reconciled historical metric audit/migration documentation so pre-repair metric inventories are explicitly labelled historical and cannot be mistaken for the current active registry.
 - Local validation: 76 tests passed; Python package compilation passed. Live Earth Engine execution and client-specific output remain to be validated in Colab.
+
+
+## 2026-10-10 — Runtime QA/readiness reconciliation (v1.1.0; package version unchanged)
+
+- Treat `calculated` as a successful measurement status in metric QA, while preserving explicit review flags for zero observations/pixels, missing/non-finite values, and invalid distributions.
+- Keep `not_applicable` and `context_only_pending_provenance` visible as non-scored informational states rather than counting them as measurement failures.
+- Readiness now counts finite, supported `calculated` metrics and excludes records with explicit zero observation/pixel support.
+- Make the registry/runtime role authoritative for the `score_eligible` field exported with raw metric records.
+- Propagate metric-level QA review records into project output QA and the HTML report's Evidence Gaps section.
+- Explain that the project condition headline is the geometric mean of area-weighted P1–P3 pillar summaries and that “complete” pillar coverage does not mean all metrics were scored.
+- Regression tests cover successful `calculated` records, zero-support records, non-applicable records, readiness counts, and existing runtime/reporting contracts.

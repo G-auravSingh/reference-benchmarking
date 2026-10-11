@@ -25,7 +25,7 @@ def test_fixed_bands():
 def test_geomean(): assert abs(geometric_mean([25,100])-50.0)<1e-9
 
 def test_condition_pressure_are_separate():
-    cfg=AssessmentConfig(); scored=pd.DataFrame([
+    cfg=AssessmentConfig(); cfg.scoring.min_valid_metrics_per_pillar=1; cfg.scoring.min_valid_subdimensions_per_pillar=1; cfg.scoring.min_condition_pillars=3; scored=pd.DataFrame([
       {'metric':'a','pillar':'P1_extent_configuration','intactness_score_0_100':90,'score_eligible':True},
       {'metric':'b','pillar':'P2_ecosystem_condition','intactness_score_0_100':80,'score_eligible':True},
       {'metric':'c','pillar':'P3_biodiversity_integrity','intactness_score_0_100':70,'score_eligible':True},
@@ -35,7 +35,7 @@ def test_condition_pressure_are_separate():
     assert o['son_score_0_to_100'] is None
 
 def test_partial_condition_is_scored_without_p3():
-    cfg=AssessmentConfig()
+    cfg=AssessmentConfig(); cfg.scoring.min_valid_metrics_per_pillar=1; cfg.scoring.min_valid_subdimensions_per_pillar=1; cfg.scoring.min_condition_pillars=2; cfg.scoring.require_fauna_for_condition=False
     scored=pd.DataFrame([
       {'metric':'a','pillar':'P1_extent_configuration','intactness_score_0_100':90,'score_eligible':True},
       {'metric':'b','pillar':'P2_ecosystem_condition','intactness_score_0_100':80,'score_eligible':True},
@@ -48,7 +48,7 @@ def test_partial_condition_is_scored_without_p3():
 
 
 def test_explicit_fauna_gate_remains_supported():
-    cfg=AssessmentConfig()
+    cfg=AssessmentConfig(); cfg.scoring.min_valid_metrics_per_pillar=1; cfg.scoring.min_valid_subdimensions_per_pillar=1; cfg.scoring.min_condition_pillars=2
     cfg.scoring.require_fauna_for_condition=True
     scored=pd.DataFrame([
       {'metric':'a','pillar':'P1_extent_configuration','intactness_score_0_100':90,'score_eligible':True},
