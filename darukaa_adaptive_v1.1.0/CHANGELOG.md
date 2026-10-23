@@ -37,7 +37,7 @@
   - The aquatic modules, pending the aquatic design.
   - 17 dated or overlapping documents.
 - New Colab notebook with an Earth Engine probe (CR1), pre-registered R2 controls, and a metric-role table defaulting to "all scoreable" (amendment A2).
-- Evidence: 53 offline tests (unit and mocked end-to-end). Not yet run against Earth Engine.
+- Evidence: 58 offline tests (unit and mocked end-to-end) and an independent static review of the Earth Engine code (10 findings fixed). Not yet run against Earth Engine.
 
 ## 2026-10-11 — pre-Colab scoring-coverage and area-contract repair (version remains 1.1.0)
 
