@@ -192,7 +192,10 @@ def _measure(plan: Planned, unit: Unit, raw: Dict[str, Any]) -> Measurement:
         value = num / 1e4 if spec.factor is None else spec.factor * num / den
         m = Measurement(mid, unit.unit_id, unit.level, value, "ok", analysis_scale_m=spec.scale, extras=extras, **common)
         return check_measurement(m)
-    value, status, extras = spec.parse(raw)
+    try:
+        value, status, extras = spec.parse(raw)
+    except Exception as exc:  # noqa: BLE001 - a failed contract check is an error, never a value
+        return failed(mid, unit.unit_id, unit.level, exc)
     m = Measurement(mid, unit.unit_id, unit.level, value, status if value is not None else ("no_valid_pixels" if status == "ok" else status),
                     extras=extras, **common)
     return check_measurement(m)

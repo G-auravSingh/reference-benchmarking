@@ -141,7 +141,7 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
     # The collections behind the mask are filtered to an area that covers the sites,
     # their context windows and the whole reference ring.
     filter_region = to_ee(projected_buffer(footprint, config.pool.radius_km * 1000.0 + 2000.0))
-    mask, dw_count = build_mask(filter_region, start, end_excl, config.natural_mask_min_probability)
+    mask, dw_count = build_mask(filter_region, start, end_excl, config.natural_mask_min_probability, crs=crs)
     ctx_base = {"crs": crs, "start": start, "end_exclusive": end_excl, "mask": mask, "peak_window": peak,
                 "raster_paths": dict(config.raster_paths), "options": dict(config.options)}
 

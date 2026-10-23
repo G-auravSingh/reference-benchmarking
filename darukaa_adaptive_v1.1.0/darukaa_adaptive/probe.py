@@ -76,8 +76,8 @@ def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, st
             return {"covered_pixel_equivalent": d.get("constant_sum"), "centre_pixels": d.get("constant_count"), "mean": m.get("v")}
 
         h = ee.Image(L.HANSEN_ASSET)
-        r["hansen_baseline_ha"] = _try(lambda: {t: h.select("treecover2000").gte(t).multiply(ee.Image.pixelArea()).reduceRegion(
-            ee.Reducer.sum(), g, 30, h.projection(), maxPixels=1e13).getInfo() for t in (10, 30)})
+        r["hansen_baseline_ha"] = _try(lambda: {t: h.select("treecover2000").gte(t).multiply(ee.Image.pixelArea()).divide(1e4).reduceRegion(
+            ee.Reducer.sum(), g, None, h.projection(), maxPixels=1e13).getInfo() for t in (10, 30)})
         r["eii_bands"] = _try(lambda: {b: ee.Dictionary(px(ee.Image(L.EII_ASSET).select(b), 300)).getInfo()
                                        for b in ("eii", "functional_integrity", "structural_integrity", "compositional_integrity")})
         r["flii"] = _try(lambda: ee.Dictionary(px(ee.Image(L.FLII_ASSET), 300)).getInfo())
@@ -85,12 +85,22 @@ def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, st
         ghm, proj = L.ghm_image(g)
         r["ghm_90m"] = _try(lambda: ee.Dictionary(px(ghm, 90, proj)).getInfo())
         r["ghm_1000m_old_scale"] = _try(lambda: ee.Dictionary(px(ghm, 1000, proj)).getInfo())
-        mask, dwn = nm.build_mask(g, window[0], window[1])
+        mask, dwn = nm.build_mask(g, window[0], window[1], crs=crs)
         r["natural_mask"] = _try(lambda: {"dw_images": dwn.getInfo(), "means": mask.select(
             ["natural_2020", "natural_now", "loss", "gain_candidate", "managed", "uncertain"]).reduceRegion(
             ee.Reducer.mean(), g, 10, crs, maxPixels=1e13).getInfo(),
             "strata": mask.select("stratum").reduceRegion(ee.Reducer.frequencyHistogram(), g, 10, crs, maxPixels=1e13).getInfo()})
         r["meta_chm_mean_10m"] = _try(lambda: ee.Dictionary(px(L.chm_image(), 10)).getInfo())
+        # Weight-path check (review finding 1): the 300 m natural fraction must match the 10 m mean.
+        r["weight_check"] = _try(lambda: {
+            "natural_now_mean_10m": mask.select("natural_now").reduceRegion(ee.Reducer.mean(), g, 10, crs, maxPixels=1e13).get("natural_now").getInfo(),
+            "natural_weight_mean_300m": mask.select("natural_now").unmask(0).toFloat().setDefaultProjection(crs=crs, scale=10)
+                .reduceResolution(ee.Reducer.mean(), False, 65535).reproject(crs=crs, scale=300)
+                .reduceRegion(ee.Reducer.mean(), g, 300, crs, maxPixels=1e13).get("natural_now").getInfo()})
+        r["glad_height_codes"] = _try(lambda: ee.ImageCollection(L.GLAD_HEIGHT_ASSET).mosaic().select([0]).reduceRegion(
+            ee.Reducer.frequencyHistogram(), g, 30, crs, maxPixels=1e13).getInfo())
+        r["fire_images_per_year"] = _try(lambda: {y: ee.ImageCollection(L.MCD64_ASSET).filterDate(f"{y}-01-01", f"{y+1}-01-01").size().getInfo()
+                                                  for y in (2016, 2020, 2024, 2025)})
         out[uid] = r
     return out
 

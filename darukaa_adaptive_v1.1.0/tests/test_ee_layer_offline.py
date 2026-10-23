@@ -118,3 +118,46 @@ def test_regional_blocks_are_outside_exclusion_and_match_site_support():
     for _, g, _ in blocks:
         assert not g.intersects(excl)
         assert area_ha(g) == pytest.approx(area_ha(site), rel=0.05)
+
+
+# ---------------------------------------------------------------- review findings (23 Oct red-team pass)
+def _plan(metric, ctx_extra=None):
+    u = Unit("S", "site", box(73.8, 18.6, 73.81, 18.61))
+    base = _ctx_base()
+    base["raster_paths"] = {"grip4_asset": "projects/x/GRIP4/South-East-Asia"}
+    return u, {pl.metric: pl for pl in plan_unit(u, [metric], base)}[metric]
+
+
+def test_empty_road_query_is_not_a_zero_density(fake_ee):
+    from darukaa_adaptive.extraction import _measure
+    u, p = _plan("road_density")
+    m = _measure(p, u, {"length_m": 0.0, "area_m2": 4e6, "n_within_10km": 0})
+    assert m.value is None and m.status == "source_unavailable"
+    m = _measure(p, u, {"length_m": 2000.0, "area_m2": 4e6, "n_within_10km": 1})
+    assert m.value == pytest.approx(0.5)
+
+
+def test_overlap_above_100_percent_is_flagged_not_reported(fake_ee):
+    from darukaa_adaptive.extraction import _measure
+    u, p = _plan("protected_area_overlap_pct")
+    m = _measure(p, u, {"overlap_m2": 3e6, "unit_m2": 1e6, "n_near": 2, "distance_m": 0})
+    assert m.value is None and m.status == "out_of_range_review"
+
+
+def test_missing_range_fields_raise_instead_of_counting_zero(fake_ee):
+    from darukaa_adaptive.extraction import _measure
+    u, p = _plan("threatened_species_range_count")
+    m = _measure(p, u, {"mammals": 0, "fields_mammals": False, "birds": 3, "fields_birds": True})
+    assert m.status == "error" and m.value is None
+
+
+def test_natural_mask_requires_metric_crs(fake_ee):
+    from darukaa_adaptive.natural_mask import build_mask
+    with pytest.raises(ValueError):
+        build_mask("REGION", "2025-08-01", "2026-09-01")
+
+
+def test_fire_spec_records_images_per_year(fake_ee):
+    u, p = _plan("fire_frequency")
+    spec, _ = p.spec
+    assert set(spec.extras["images_per_year"]) == {str(y) for y in range(2016, 2026)}

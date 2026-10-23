@@ -63,8 +63,13 @@ def forty_class(region):
     return cls.updateMask(valid), maxp.updateMask(valid)
 
 
-def build_mask(region, start: str, end_exclusive: str, min_probability: float = 0.5):
-    """Return (image with mask bands, lazy DW image count)."""
+def build_mask(region, start: str, end_exclusive: str, min_probability: float = 0.5, crs: str = None):
+    """Return (image with mask bands, lazy DW image count).
+
+    The mask is built from composites, which have no fixed projection (EE treats
+    them as WGS84 at 1 degree). It is therefore pinned to ``crs`` at 10 m so that
+    later aggregation (reduceResolution) works on 10 m pixels, not 1-degree ones.
+    """
     ee = ee_module()
     fcls_m, fmaxp_m = forty_class(region)
     # Masked inputs are made explicit (0 / -1) so every logical test below is defined
@@ -113,4 +118,6 @@ def build_mask(region, start: str, end_exclusive: str, min_probability: float = 
         gain_candidate.rename("gain_candidate"), managed.rename("managed"), uncertain.rename("uncertain"),
         stratum.rename("stratum"), label.rename("dw_label"), sbtn_cls.rename("sbtn_class"),
     ]).updateMask(label.mask())
-    return bands, dw_count
+    if crs is None:
+        raise ValueError("build_mask needs a metric CRS (e.g. the site's UTM zone)")
+    return bands.setDefaultProjection(crs=crs, scale=10), dw_count

@@ -174,14 +174,23 @@ def ghm_image(region):
 
 
 def fire_frequency_image(first_year: int, last_year: int):
+    """Share of years with a MODIS burned-area detection, valid-data pixels only.
+
+    A month counts only where QA bit 1 (valid data) is set; a year is masked at a
+    pixel if any of its months lacks valid data there, so missing data never reads
+    as "not burned". Per-year image counts are returned for the record.
+    """
     ee = ee_module()
-    years = []
+    col = ee.ImageCollection(MCD64_ASSET)
+    years, counts = [], {}
     for y in range(first_year, last_year + 1):
-        burned = (ee.ImageCollection(MCD64_ASSET).filterDate(f"{y}-01-01", f"{y + 1}-01-01")
-                  .select("BurnDate").max().gt(0).unmask(0))
-        years.append(burned)
-    proj = ee.Image(ee.ImageCollection(MCD64_ASSET).first()).projection()
-    return ee.ImageCollection(years).mean().rename("v").setDefaultProjection(proj), proj
+        yc = col.filterDate(f"{y}-01-01", f"{y + 1}-01-01")
+        valid_all = yc.map(lambda i: ee.Image(i).select("QA").bitwiseAnd(2).neq(0)).min()
+        burned = yc.map(lambda i: ee.Image(i).select("BurnDate").gt(0).unmask(0)).max()
+        years.append(burned.updateMask(valid_all).rename("v").toFloat())
+        counts[str(y)] = yc.size()
+    proj = ee.Image(col.first()).projection()
+    return ee.ImageCollection(years).mean().rename("v").setDefaultProjection(proj), proj, counts
 
 
 def viirs_image(start: str, end_exclusive: str):
@@ -224,7 +233,7 @@ def weight_image(ctx: ExtractionContext, kind: str, scale: float):
             w = w.Or(s.eq(code))
     else:
         raise ValueError(f"Unknown weight kind {kind}")
-    w = w.unmask(0).toFloat()
+    w = w.unmask(0).toFloat().setDefaultProjection(crs=ctx.crs, scale=10)
     if scale <= 10:
         return w
     return (w.reduceResolution(reducer=ee.Reducer.mean(), bestEffort=False, maxPixels=65535)
@@ -291,7 +300,7 @@ def b_tree_loss_rate(ctx):
     base = h.select("treecover2000").gte(thr)
     ly = h.select("lossyear")
     loss = base.And(ly.gte(last - 2000 - n + 1)).And(ly.lte(last - 2000))
-    return RatioSpec(loss, base, 30, 100.0 / n, crs=h.projection(), period=f"Hansen v1.13 loss {last - n + 1}-{last}; baseline 2000, canopy >= {thr}%",
+    return RatioSpec(loss, base, None, 100.0 / n, crs=h.projection(), period=f"Hansen v1.13 loss {last - n + 1}-{last}; baseline 2000, canopy >= {thr}%",
                      min_denominator_ha=ctx.opt("min_forest_baseline_ha", 1.0), na_status="not_applicable_no_forest_baseline",
                      extras={"baseline_forest_ha": (base, "ha"), "loss_ha": (loss, "ha")})
 
@@ -318,7 +327,9 @@ def b_landscape_extent(ctx):
 def _overlap_spec(ctx, fc, label):
     ee = ee_module()
     near = fc.filterBounds(ctx.unit_region.buffer(50000))
-    inter = near.filterBounds(ctx.unit_region).geometry().intersection(ctx.unit_region, ee.ErrorMargin(10))
+    # Dissolve first so nested designations (e.g. a park inside a sanctuary) are not counted twice.
+    inter = (near.filterBounds(ctx.unit_region).union(ee.ErrorMargin(10)).geometry()
+             .intersection(ctx.unit_region, ee.ErrorMargin(10)))
     lazy = {"overlap_m2": inter.area(ee.ErrorMargin(10)), "unit_m2": ctx.unit_region.area(ee.ErrorMargin(10)),
             "n_near": near.size(),
             "distance_m": ee.Algorithms.If(near.size().gt(0), ctx.unit_region.distance(near.geometry(), ee.ErrorMargin(10)), None)}
@@ -329,7 +340,10 @@ def _overlap_spec(ctx, fc, label):
             return None, "no_valid_pixels", {}
         extras = {"distance_to_nearest_m": raw.get("distance_m") if (raw.get("n_near") or 0) > 0 else None,
                   "n_within_50km": raw.get("n_near"), "layer": label}
-        return 100.0 * (raw.get("overlap_m2") or 0) / unit, "ok", extras
+        pct = 100.0 * (raw.get("overlap_m2") or 0) / unit
+        if pct > 100.5:
+            return None, "out_of_range_review", extras
+        return min(pct, 100.0), "ok", extras
     return CustomSpec(lazy, parse, period="current release")
 
 
@@ -380,7 +394,8 @@ def b_managed_chm(ctx):
 
 def b_glad_height(ctx):
     ee = ee_module()
-    img = ee.ImageCollection(GLAD_HEIGHT_ASSET).mosaic().select([0]).rename("v")
+    raw = ee.ImageCollection(GLAD_HEIGHT_ASSET).mosaic().select([0])
+    img = raw.updateMask(raw.lte(60)).rename("v")   # 101 water, 102 snow/ice, 103 no data are codes, not heights
     return StatsSpec(img, 30, weight="strata:10", period="2019/2020")
 
 
@@ -428,24 +443,29 @@ def b_built_fraction(ctx):
 
 def b_ghm(ctx):
     img, proj = ghm_image(ctx.region)
-    return StatsSpec(img, 90, crs=proj, weight="none", period="gHM v3 2022")
+    return StatsSpec(img, None, crs=proj, weight="none", period="gHM v3 2022")
 
 
 def b_fire(ctx):
     first, last = ctx.opt("fire_first_year", 2016), ctx.opt("fire_last_year", 2025)
-    img, proj = fire_frequency_image(first, last)
-    return StatsSpec(img, 463.3127, crs=proj, weight="none", period=f"MCD64A1 {first}-{last}")
+    img, proj, counts = fire_frequency_image(first, last)
+    return StatsSpec(img, None, crs=proj, weight="none", period=f"MCD64A1 {first}-{last}",
+                     extras={"images_per_year": counts})
 
 
 def b_night_lights(ctx):
     img, proj, n = viirs_image(ctx.start, ctx.end_exclusive)
-    return StatsSpec(img, 463.83, crs=proj, weight="none", period=f"VIIRS monthly {ctx.start}..{ctx.end_exclusive}", extras={"n_months": n})
+    return StatsSpec(img, None, crs=proj, weight="none", period=f"VIIRS monthly {ctx.start}..{ctx.end_exclusive}", extras={"n_months": n})
 
 
 def b_population(ctx):
     ee = ee_module()
-    pop = ee.ImageCollection(WORLDPOP_ASSET).filter(ee.Filter.eq("year", 2020)).filterBounds(ctx.region).mosaic().select("population")
-    lazy = {"people": pop.reduceRegion(reducer=ee.Reducer.sum(), geometry=ctx.region, scale=92.77, crs=ctx.crs,
+    col = ee.ImageCollection(WORLDPOP_ASSET).filter(ee.Filter.eq("year", 2020)).filterBounds(ctx.region)
+    proj = ee.Image(col.first()).select("population").projection()
+    pop = col.mosaic().select("population")
+    # Counts are summed on WorldPop's own grid; resampling to a metric grid would
+    # sample each native cell about cos(latitude) times and under-count.
+    lazy = {"people": pop.reduceRegion(reducer=ee.Reducer.sum(), geometry=ctx.region, crs=proj, scale=None,
                                         maxPixels=1e13, tileScale=4).get("population"),
             "area_m2": ctx.region.area(ee.ErrorMargin(1))}
 
@@ -465,12 +485,17 @@ def b_road_density(ctx):
     region = ctx.region
     roads = ee.FeatureCollection(asset).filterBounds(region)
     length_m = roads.map(lambda f: f.set("len", f.geometry().intersection(region, ee.ErrorMargin(1)).length(ee.ErrorMargin(1)))).aggregate_sum("len")
-    lazy = {"length_m": length_m, "area_m2": region.area(ee.ErrorMargin(1))}
+    lazy = {"length_m": length_m, "area_m2": region.area(ee.ErrorMargin(1)),
+            "n_within_10km": ee.FeatureCollection(asset).filterBounds(region.buffer(10000)).limit(1).size()}
 
     def parse(raw):
         a = raw.get("area_m2") or 0
         if a <= 0 or raw.get("length_m") is None:
             return None, "no_valid_pixels", {}
+        if not raw.get("n_within_10km"):
+            # No road at all within 10 km usually means the regional asset does not cover
+            # this area; an empty query must not read as a genuine zero density.
+            return None, "source_unavailable", {"note": "no GRIP4 road within 10 km; check asset coverage"}
         return (raw["length_m"] / 1000.0) / (a / 1e6), "ok", {"road_km": raw["length_m"] / 1000.0}
     return CustomSpec(lazy, parse, period="GRIP4 (~2018)")
 
@@ -485,7 +510,7 @@ def b_lst_night(ctx):
     col = ee.ImageCollection(MOD11_ASSET).filterDate(ctx.start, ctx.end_exclusive)
     proj = ee.Image(col.first()).select("LST_Night_1km").projection()
     img = col.select("LST_Night_1km").mean().multiply(0.02).subtract(273.15).rename("v").setDefaultProjection(proj)
-    return StatsSpec(img, 1000, crs=proj, weight="none", period=f"MOD11A1 {ctx.start}..{ctx.end_exclusive}")
+    return StatsSpec(img, None, crs=proj, weight="none", period=f"MOD11A1 {ctx.start}..{ctx.end_exclusive}")
 
 
 def b_aridity(ctx):
@@ -502,19 +527,28 @@ def b_managed_area(ctx):
                      na_status="no_valid_pixels")
 
 
-def _range_count(ctx, assets, filt=None, label=""):
+def _range_count(ctx, assets, filt=None, required_fields=("sci_name",)):
+    """Count species from Darukaa-held IUCN range snapshots overlapping the unit.
+
+    Each asset is checked lazily for the fields the filter needs; a missing field is
+    an error, never an empty (zero) count.
+    """
     ee = ee_module()
-    total = ee.Number(0)
     lazy = {}
     for name, asset in assets:
-        fc = ee.FeatureCollection(ctx.raster_paths.get(name, asset)).filterBounds(ctx.unit_region)
+        full = ee.FeatureCollection(ctx.raster_paths.get(name, asset))
+        fc = full.filterBounds(ctx.unit_region)
         if filt is not None:
-            fc = filt(fc)
-        lazy[name] = fc.distinct("sci_name").size()
+            fc = filt(fc, full)
+        lazy[name] = fc.aggregate_array("sci_name").distinct().size()
+        lazy[f"fields_{name}"] = full.first().propertyNames().containsAll(list(required_fields))
 
     def parse(raw):
-        n = sum(int(v) for v in raw.values() if v is not None)
-        return float(n), "ok", {k: raw[k] for k in raw}
+        missing = [k[7:] for k, v in raw.items() if k.startswith("fields_") and not v]
+        if missing:
+            raise ValueError(f"range asset(s) {missing} lack required fields {list(required_fields)}")
+        counts = {k: int(v) for k, v in raw.items() if not k.startswith("fields_") and v is not None}
+        return float(sum(counts.values())), "ok", counts
     return CustomSpec(lazy, parse, period="Darukaa-held IUCN range snapshots")
 
 
@@ -522,14 +556,22 @@ def b_threatened_range(ctx):
     ee = ee_module()
     field = ctx.opt("iucn_category_field", "category")
     return _range_count(ctx, [("mammals", MAMMALS_ASSET), ("birds", BIRDS_ASSET)],
-                        lambda fc: fc.filter(ee.Filter.inList(field, ["CR", "EN", "VU"])))
+                        lambda fc, full: fc.filter(ee.Filter.inList(field, ["CR", "EN", "VU"])),
+                        required_fields=("sci_name", field))
 
 
 def b_restricted_range(ctx):
+    """Species whose WHOLE range (all features of the species) is < 100,000 km2."""
     ee = ee_module()
 
-    def small(fc):
-        return fc.map(lambda f: f.set("rk2", f.geometry().area(ee.ErrorMargin(1000)).divide(1e6))).filter(ee.Filter.lt("rk2", 100000))
+    def small(fc, full):
+        names = fc.aggregate_array("sci_name").distinct()
+        parts = full.filter(ee.Filter.inList("sci_name", names)).map(
+            lambda f: f.set("rk2", f.geometry().area(ee.ErrorMargin(1000)).divide(1e6)))
+        groups = ee.List(parts.reduceColumns(ee.Reducer.sum().group(groupField=1, groupName="sci_name"),
+                                             ["rk2", "sci_name"]).get("groups"))
+        small_names = groups.filter(ee.Filter.lt("sum", 100000)).map(lambda g: ee.Dictionary(g).get("sci_name"))
+        return fc.filter(ee.Filter.inList("sci_name", small_names))
     return _range_count(ctx, [("mammals", MAMMALS_ASSET), ("birds", BIRDS_ASSET), ("plants", PLANTS_ASSET)], small)
 
 
@@ -539,7 +581,7 @@ def b_star(ctx):
         return PendingSpec("pending_input", "No IBAT STAR-t raster supplied")
     ee = ee_module()
     img = ee.Image(asset).select([0])
-    lazy = {"sum": img.reduceRegion(reducer=ee.Reducer.sum(), geometry=ctx.unit_region, scale=1000, crs=ctx.crs,
+    lazy = {"sum": img.reduceRegion(reducer=ee.Reducer.sum(), geometry=ctx.unit_region, crs=img.projection(), scale=None,
                                      maxPixels=1e13).values().get(0)}
     return CustomSpec(lazy, lambda raw: (raw.get("sum"), "ok" if raw.get("sum") is not None else "no_valid_pixels", {}),
                       period="IBAT STAR-t", native_scale_m=1000)

@@ -9,7 +9,7 @@ Approach 2 - condition reference (``reference_condition`` metrics)
     stage 2 quantile: gHM <= the stratum's ``least_quantile`` (default 10th percentile)
     stage 3 manual  : gHM <= manual_hmi, only if the analyst set it
   A stratified pixel sample is drawn and every condition metric is read at the same
-  pixels. Too few pixels -> ``reference_insufficient``; there is no silent fallback.
+  pixels; layers finer than the 30 m sampling grid are averaged to it first. Too few pixels -> ``reference_insufficient``; there is no silent fallback.
 
 Approach 4 - regional context (``regional_context`` metrics; 3Bee-style control ring
   [VENDOR precedent]): square blocks of the same areal support as the site are placed
@@ -63,7 +63,7 @@ def ring(footprint: BaseGeometry, cfg: PoolConfig) -> BaseGeometry:
     return outer.difference(inner)
 
 
-def condition_metric_images(ctx: L.ExtractionContext) -> Dict[str, Any]:
+def condition_metric_images(ctx: L.ExtractionContext, sample_scale_m: float = 30.0) -> Dict[str, Any]:
     """Images for every reference_condition metric, built exactly as for the site."""
     ee = ee_module()
     imgs: Dict[str, Any] = {}
@@ -75,7 +75,16 @@ def condition_metric_images(ctx: L.ExtractionContext) -> Dict[str, Any]:
         except Exception:  # noqa: BLE001 - a missing layer simply has no reference
             continue
         if isinstance(spec, L.StatsSpec):
-            imgs[c.id] = spec.image.select(["v"]).rename(c.id)
+            img = spec.image.select(["v"])
+            native = c.native_scale_m or 30
+            if native < sample_scale_m:
+                # Point samples read one pixel. Layers finer than the sampling grid are first
+                # averaged to that grid so a reference value is a local mean, as a site value is,
+                # not a single 1 m or 10 m pixel (review finding 8).
+                img = (img.setDefaultProjection(crs=ctx.crs, scale=native)
+                       .reduceResolution(reducer=ee.Reducer.mean(), bestEffort=False, maxPixels=65535)
+                       .reproject(crs=ctx.crs, scale=sample_scale_m))
+            imgs[c.id] = img.rename(c.id)
     return imgs
 
 
@@ -106,7 +115,8 @@ def build_condition_pool(footprint: BaseGeometry, ctx_base: Dict[str, Any], cfg:
     eco = ee.Feature(eco_fc.first())
     region = to_ee(rg).intersection(eco.geometry(), ee.ErrorMargin(30))
     ctx = L.ExtractionContext(region=region, unit_region=region, **ctx_base)
-    mask, _ = nm.build_mask(region, ctx_base["start"], ctx_base["end_exclusive"], ctx_base.get("options", {}).get("min_probability", 0.5))
+    mask, _ = nm.build_mask(region, ctx_base["start"], ctx_base["end_exclusive"],
+                            ctx_base.get("options", {}).get("min_probability", 0.5), crs=ctx_base["crs"])
     ctx.mask = mask
     ghm, _ = L.ghm_image(region)
     stratum = mask.select("stratum")
@@ -147,7 +157,7 @@ def build_condition_pool(footprint: BaseGeometry, ctx_base: Dict[str, Any], cfg:
     notes = []
     if not usable:
         return ConditionPool(raw["eco"], stages, samples, 0, ["no natural stratum with enough least-disturbed pixels"])
-    imgs = condition_metric_images(ctx)
+    imgs = condition_metric_images(ctx, cfg.sample_scale_m)
     coords = ee.Image.pixelCoordinates(ee.Projection(crs))
     cell = coords.select("x").divide(cfg.bootstrap_cell_m).floor().multiply(100000).add(
         coords.select("y").divide(cfg.bootstrap_cell_m).floor()).rename("cell")
