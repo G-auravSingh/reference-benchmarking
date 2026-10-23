@@ -8,11 +8,16 @@ from typing import Dict, Tuple
 
 from shapely.geometry import Polygon, shape
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import transform, unary_union
+import shapely
+from shapely.ops import unary_union
 
 
 def _strip_z(geom: BaseGeometry) -> BaseGeometry:
-    return transform(lambda x, y, z=None: (x, y), geom)
+    return shapely.force_2d(geom)
+
+
+def _reproject(geom: BaseGeometry, transformer) -> BaseGeometry:
+    return shapely.transform(geom, lambda x, y: transformer.transform(x, y), interleaved=False)
 
 
 def _normalise_geometry(geom: BaseGeometry) -> BaseGeometry:
@@ -26,21 +31,40 @@ def _normalise_geometry(geom: BaseGeometry) -> BaseGeometry:
     return geom
 
 
+def _parse_coords(text: str):
+    coords = []
+    for token in (text or "").strip().split():
+        vals = token.split(",")
+        if len(vals) >= 2:
+            coords.append((float(vals[0]), float(vals[1])))
+    return coords
+
+
 def _iter_lxml_placemarks(root):
+    """Yield (name, geometry) for every Placemark, keeping holes and all parts.
+
+    Each kml:Polygon contributes its outer ring and every inner ring; a Placemark
+    holding several polygons (MultiGeometry) becomes a MultiPolygon. Nothing is
+    silently reduced to the first coordinate list.
+    """
+    from shapely.geometry import MultiPolygon
     ns = {"kml": "http://www.opengis.net/kml/2.2"}
     for pm in root.findall(".//kml:Placemark", ns):
         name_el = pm.find("kml:name", ns)
         name = (name_el.text or "").strip() if name_el is not None else ""
-        coords_el = pm.find(".//kml:coordinates", ns)
-        if coords_el is None or not coords_el.text:
+        polys = []
+        for poly_el in pm.findall(".//kml:Polygon", ns):
+            outer = poly_el.find("kml:outerBoundaryIs//kml:coordinates", ns)
+            if outer is None:
+                continue
+            shell = _parse_coords(outer.text)
+            if len(shell) < 3:
+                continue
+            holes = [_parse_coords(h.text) for h in poly_el.findall("kml:innerBoundaryIs//kml:coordinates", ns)]
+            polys.append(Polygon(shell, [h for h in holes if len(h) >= 3]))
+        if not polys:
             continue
-        coords = []
-        for token in coords_el.text.strip().split():
-            vals = token.split(",")
-            if len(vals) >= 2:
-                coords.append((float(vals[0]), float(vals[1])))
-        if len(coords) >= 3:
-            yield name or "site", Polygon(coords)
+        yield name or "site", (polys[0] if len(polys) == 1 else MultiPolygon(polys))
 
 
 def _extract_with_fastkml(data: bytes) -> Dict[str, BaseGeometry]:
@@ -99,22 +123,22 @@ def read_kml(path: str | Path) -> Tuple[BaseGeometry, Dict[str, BaseGeometry]]:
     else:
         raise ValueError("Expected a .kml or .kmz file")
 
+    # The namespace-aware XML parser is used first: it is deterministic and keeps
+    # holes and multi-part placemarks. fastkml is only a fallback for documents the
+    # XML parser cannot read (for example a non-standard namespace).
+    from lxml import etree
     geoms: Dict[str, BaseGeometry] = {}
-    try:
-        geoms = _extract_with_fastkml(data)
-    except Exception:
-        geoms = {}
-
-    # fastkml can successfully parse a KML document but return no geometry
-    # for otherwise valid Polygon placemarks (API/version differences).
-    # Always fall back to the namespace-aware XML parser when that happens.
+    root = etree.fromstring(data)
+    used = {}
+    for name, geom in _iter_lxml_placemarks(root):
+        geom = _normalise_geometry(geom)
+        if geom.is_empty:
+            continue
+        used[name] = used.get(name, 0) + 1
+        key = name if used[name] == 1 else f"{name}_{used[name]}"
+        geoms[key] = geom
     if not geoms:
-        from lxml import etree
-        root = etree.fromstring(data)
-        for name, geom in _iter_lxml_placemarks(root):
-            geom = _normalise_geometry(geom)
-            if not geom.is_empty:
-                geoms[name] = geom
+        geoms = _extract_with_fastkml(data)
 
     if not geoms:
         raise ValueError(f"No usable polygon geometries found in {path}")
@@ -142,7 +166,7 @@ def area_ha(geom: BaseGeometry) -> float:
 
     epsg = _utm_epsg(geom)
     transformer = Transformer.from_crs("EPSG:4326", epsg, always_xy=True)
-    projected = transform(transformer.transform, geom)
+    projected = _reproject(geom, transformer)
     return float(projected.area / 10_000.0)
 
 
@@ -151,10 +175,10 @@ def projected_buffer(geom: BaseGeometry, distance_m: float) -> BaseGeometry:
     from pyproj import Transformer
 
     epsg = _utm_epsg(geom)
-    fwd = Transformer.from_crs("EPSG:4326", epsg, always_xy=True).transform
-    inv = Transformer.from_crs(epsg, "EPSG:4326", always_xy=True).transform
-    projected = transform(fwd, geom)
-    return _normalise_geometry(transform(inv, projected.buffer(distance_m)))
+    fwd = Transformer.from_crs("EPSG:4326", epsg, always_xy=True)
+    inv = Transformer.from_crs(epsg, "EPSG:4326", always_xy=True)
+    projected = _reproject(geom, fwd)
+    return _normalise_geometry(_reproject(projected.buffer(distance_m), inv))
 
 
 def make_shapely_domains(geom: BaseGeometry, riparian_buffer_m: float, context_buffer_km: float) -> Dict[str, BaseGeometry]:

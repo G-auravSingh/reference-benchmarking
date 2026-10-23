@@ -220,13 +220,29 @@ def _load_handoff_manifest(path: Path) -> ProjectInput:
         attrs = dict(e.attributes)
         attrs.update({k: v for k, v in item.items() if k not in {"path", "file", "geojson", "tile_path"}})
         emus.append(EMU(emu_id, e.geometry, domain, parent, e.area_ha, item.get("source_project"), attrs))
-    project_id = str(data.get("project_id") or data.get("project") or path.stem)
-    return ProjectInput(project_id, str(data.get("project_name") or project_id), str(path), emus, str(data.get("domain") or data.get("project_domain") or "auto"), data.get("metadata") or {})
+    # Site Selection manifests carry ``project_name`` only; the file stem
+    # (``tile_manifest``) is never a meaningful project id (M5).
+    project_id = str(data.get("project_id") or data.get("project_name") or data.get("project") or path.parent.name or path.stem)
+    meta = dict(data.get("metadata") or {})
+    boundary_path = _find_boundary_file(root)
+    if boundary_path is not None:
+        meta["boundary_file"] = str(boundary_path)
+    return ProjectInput(project_id, str(data.get("project_name") or project_id), str(path), emus, str(data.get("domain") or data.get("project_domain") or "auto"), meta)
+
+
+def _safe_id(text: str) -> str:
+    out = "".join(ch if ch.isalnum() else "_" for ch in str(text)).strip("_")
+    return out or "unit"
 
 
 def _load_kml_project(path: Path) -> ProjectInput:
     union, parts = read_kml(path)
-    emus = [EMU(f"EMU_{i:03d}", g, "auto", None, area_ha(g), None, {"source_name": n}) for i,(n,g) in enumerate(parts.items(), 1)]
+    stem = _safe_id(path.stem)
+    if len(parts) == 1:
+        (n, g), = parts.items()
+        emus = [EMU(stem, g, "auto", None, area_ha(g), None, {"source_name": n, "source_file": path.name})]
+    else:
+        emus = [EMU(f"{stem}_{i:02d}", g, "auto", None, area_ha(g), None, {"source_name": n, "source_file": path.name}) for i, (n, g) in enumerate(parts.items(), 1)]
     # If a KML contains one site polygon, retain it as one EMU. If it contains
     # multiple placemarks, each named polygon is an EMU; the union is only used as
     # the project envelope by callers that need it.
@@ -241,8 +257,67 @@ def _load_handoff_zip(path: Path) -> ProjectInput:
         z.extractall(tmp)
     manifests = list(tmp.rglob("tile_manifest.json")) + list(tmp.rglob("project_manifest.json"))
     if not manifests:
-        raise ValueError("Handoff ZIP must contain tile_manifest.json or project_manifest.json")
+        kmls = sorted(list(tmp.rglob("*.kml")) + list(tmp.rglob("*.kmz")))
+        if kmls:
+            project = load_project_inputs(kmls, project_id=_safe_id(path.stem))
+            project.source_path = str(path)
+            return project
+        raise ValueError("Handoff ZIP must contain tile_manifest.json, project_manifest.json or KML files")
+    if len(manifests) > 1:
+        raise ValueError("Handoff ZIP contains more than one manifest: " + ", ".join(str(m.relative_to(tmp)) for m in manifests))
     return _load_handoff_manifest(manifests[0])
+
+
+BOUNDARY_FILE_NAMES = ("aoi_boundary.geojson", "site_boundary.geojson", "project_boundary.geojson")
+
+
+def _find_boundary_file(root: Path) -> Optional[Path]:
+    hits = [p for name in BOUNDARY_FILE_NAMES for p in root.rglob(name)]
+    if len(hits) > 1:
+        raise ValueError("More than one site-boundary file found: " + ", ".join(str(h) for h in hits))
+    return hits[0] if hits else None
+
+
+def load_boundary(source: str | Path | BaseGeometry) -> BaseGeometry:
+    """Load a site boundary (GeoJSON, KML/KMZ or geometry) as one (multi)polygon."""
+    if isinstance(source, BaseGeometry):
+        geom = _normalise_geometry(source)
+    else:
+        path = Path(source)
+        if not path.exists():
+            raise FileNotFoundError(path)
+        if path.suffix.lower() in {".kml", ".kmz"}:
+            geom, _ = read_kml(path)
+        else:
+            emus, _ = _load_geojson(path)
+            if not emus:
+                raise ValueError(f"No polygon in boundary file {path}")
+            geom = _normalise_geometry(unary_union([e.geometry for e in emus]))
+    if geom.is_empty or not geom.is_valid or geom.geom_type not in {"Polygon", "MultiPolygon"}:
+        raise ValueError("Site boundary must be a valid Polygon or MultiPolygon")
+    return geom
+
+
+def load_project_inputs(sources: Iterable[str | Path], *, project_id: Optional[str] = None,
+                        project_name: Optional[str] = None, domain: str = "auto") -> ProjectInput:
+    """Combine several files (for example one KML per site) into one project.
+
+    EMU ids are derived from file names (and placemark order) so they never collide.
+    """
+    paths = [Path(s) for s in sources]
+    if not paths:
+        raise ValueError("No input files supplied")
+    emus: List[EMU] = []
+    for p in paths:
+        sub = load_project_input(p, domain=domain)
+        for e in sub.emus:
+            emus.append(e)
+    pid = project_id or _safe_id(os.path.commonprefix([p.stem for p in paths])) or "project"
+    project = ProjectInput(pid, project_name or pid, ";".join(str(p) for p in paths), emus, domain)
+    errors = project.validate()
+    if errors:
+        raise ValueError("Invalid combined project input: " + "; ".join(errors))
+    return project
 
 
 def load_project_input(source: str | Path | BaseGeometry, *, project_id: Optional[str] = None,
