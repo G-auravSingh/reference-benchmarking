@@ -274,6 +274,13 @@ def _geomean_draws(arrs: Sequence[np.ndarray]) -> np.ndarray:
     return np.exp(np.mean(np.log(stack), axis=0))
 
 
+def _geomean_point(values: Sequence[float]) -> float:
+    vals = [float(v) for v in values]
+    if any(v <= 0 for v in vals):
+        return 0.0
+    return float(math.prod(vals) ** (1.0 / len(vals)))
+
+
 @dataclass
 class PillarResult:
     unit_id: str
@@ -310,7 +317,7 @@ def aggregate_pillar(scores: Iterable[MetricScore], unit_id: str, pillar: str, m
         return PillarResult(unit_id, pillar, None, (None, None), None, "insufficient_evidence", len(usable), len(comps),
                             {}, None, names, [f"needs >= {min_metrics} scored metrics across >= {min_components} components"])
     comp_draws = {k: _geomean_draws([s.draws for s in v]) for k, v in comps.items()}
-    comp_point = {k: float(_geomean_draws([np.array([s.score]) for s in v])[0]) for k, v in comps.items()}
+    comp_point = {k: _geomean_point([s.score for s in v]) for k, v in comps.items()}
     pillar_draws = np.min(np.vstack(list(comp_draws.values())), axis=0)
     point = min(comp_point.values())
     limiting = min(comp_point, key=comp_point.get)
@@ -349,7 +356,7 @@ def headline(pillars: Mapping[str, PillarResult], unit_id: str) -> Headline:
     have_core = p1 is not None and p1.score is not None and p2 is not None and p2.score is not None
     if have_core:
         draws = _geomean_draws([p.draws for p in used])
-        point = float(_geomean_draws([np.array([p.score]) for p in used])[0])
+        point = _geomean_point([p.score for p in used])
         names = [p.pillar for p in used]
         status = "scored" if len(names) == 3 else "scored_without_P3"
         cond = (point, _interval(draws), draws, names, status)

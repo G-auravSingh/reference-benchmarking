@@ -1,5 +1,23 @@
-profile:
-  name: terrestrial
-  version: 1.1.0
-  allow_terrestrial_metrics: true
-  notes: Terrestrial EO core with optional field/acoustic/eDNA evidence.
+# Darukaa Adaptive v1.1.0 - terrestrial profile (first draft, 23 Oct 2026).
+# Every value is documented in darukaa_adaptive/config.py and docs/decisions/.
+window_start: "2025-08-01"
+window_end: "2026-08-31"
+baseline_year: 2020
+site_cluster_distance_m: 1000
+min_support_px: 4
+natural_mask_min_probability: 0.5
+raster_paths:
+  flii_gee_asset: projects/darukaa-earth-product/assets/flii_global_2019
+  # msa_gee_asset: <upload GLOBIO4 MSA 2015 and set here>
+  # grip4_asset: <set after the EE probe lists projects/sat-io/open-datasets/GRIP4>
+scoring:
+  role_mode: recommended
+  min_metrics_per_pillar: 3
+  min_components_per_pillar: 3
+  n_bootstrap: 200
+pool:
+  radius_km: 25
+  exclusion_m: 1000
+  strict_hmi: 0.05
+  least_quantile: 0.10
+  n_per_stratum: 300

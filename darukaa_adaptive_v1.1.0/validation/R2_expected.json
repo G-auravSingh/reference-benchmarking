@@ -1,0 +1,54 @@
+{
+  "registered": "2026-10-23",
+  "status": "pre-registered before any run; expectations are priors from ecology and dataset documentation, not ground truth",
+  "how_to_check": "darukaa_adaptive.validation_check.check_controls({control: bundle_dir}, this_file) compares the run tables with these rules; every MISS or NO_DATA needs a documented reason before rung R3",
+  "controls": {
+    "R2_forest_SilentValley": {
+      "values": {
+        "natural_extent_pct": [">=", 85],
+        "natural_gross_loss_pct": ["<=", 2],
+        "tree_cover_loss_rate": ["<=", 0.5],
+        "built_fraction": ["<=", 0.01],
+        "ghm": ["<=", 0.15],
+        "night_lights": ["<=", 1.0],
+        "ndvi_peak_season": [">=", 0.7],
+        "canopy_height_m": [">=", 15]
+      },
+      "pillars": {"P1": [">=", 80], "P2": [">=", 70], "P4": [">=", 70]},
+      "headline": {"condition_status": "scored_without_P3"}
+    },
+    "R2_cropland_Ludhiana": {
+      "values": {
+        "natural_extent_pct": ["<=", 15],
+        "managed_area_pct": [">=", 80],
+        "built_fraction": ["<=", 0.15],
+        "ghm": [">=", 0.4]
+      },
+      "pillars": {"P4": ["<=", 60]},
+      "headline": {"condition_status_not": "scored"},
+      "note": "Condition applies to natural pixels only; with few natural pixels P2 should be insufficient or low-support, not a confident score."
+    },
+    "R2_builtup_Pune": {
+      "values": {
+        "built_fraction": [">=", 0.6],
+        "natural_extent_pct": ["<=", 15],
+        "ghm": [">=", 0.6],
+        "night_lights": [">=", 10]
+      },
+      "pillars": {"P4": ["<=", 30]},
+      "headline": {"condition_status_not": "scored"}
+    },
+    "R2_small_forest": {
+      "statuses": {
+        "bii": "scored_context_scale",
+        "eii_functional": "scored_context_scale",
+        "ghm": "scored_context_scale",
+        "night_lights": "scored_context_scale",
+        "fire_frequency": "scored_context_scale",
+        "natural_extent_pct": "ok",
+        "ndvi_peak_season": "ok"
+      },
+      "relative_to": {"control": "R2_forest_SilentValley", "metric": "ndvi_peak_season", "max_relative_difference": 0.15}
+    }
+  }
+}

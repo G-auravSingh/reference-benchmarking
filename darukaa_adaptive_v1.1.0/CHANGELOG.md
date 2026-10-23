@@ -1,3 +1,44 @@
+## 2026-10-23 - first draft of the rebuilt pipeline (version remains 1.1.0)
+
+- Rebuilt the assessment around an approved metric catalogue (`docs/methodology/metric_catalogue_v1.md`), aligned with the four Nature Positive State of Nature indicators.
+  - P1 Ecosystem extent.
+  - P2 Ecosystem condition, on natural pixels only.
+  - P3 Species, not covered (licence-restricted).
+  - P4 Pressure, kept separate.
+  - A managed-land result outside the Nature Positive panel.
+- Introduced sites with EMUs nested inside them (D-23-8):
+  - The site is the supplied boundary or the union of clustered EMUs.
+  - Separated polygons become separate sites.
+  - Coarse layers are measured at site scale, with a 4-pixel context window.
+- New natural mask: Nature Trace Forest Typology 2020 for tree cover, SBTN Natural Lands v1.1 elsewhere, and Dynamic World for change. Uncertain pixels are reported separately.
+- New references (D-23-14):
+  - Condition: a least-disturbed, type-stratified pixel pool in the same ecoregion, outside every site plus 1 km.
+  - Pressure: same-support blocks in the surrounding ring.
+  - Both use a spatial-block bootstrap.
+- Scoring:
+  - Bounded pressure response (decision 4).
+  - Confidence rating beside every score.
+  - Four status layers.
+  - Condition headline from P1 and P2 (plus P3 when scored).
+  - Pressure reported separately.
+  - Area-share labels on project numbers.
+- Extraction:
+  - Explicit scale and CRS on every reduction; `bestEffort` is never used.
+  - Coverage-weighted means.
+  - Support recorded as covered-pixel equivalents.
+  - Per-layer error isolation.
+- Inputs:
+  - The project id now comes from the manifest.
+  - Boundary files are discovered automatically.
+  - Projects can be built from several KML files.
+  - KML holes and multi-part placemarks are kept.
+- Removed superseded code and documents:
+  - The old pipeline, registry, vendored legacy calculators and reference engine.
+  - The aquatic modules, pending the aquatic design.
+  - 17 dated or overlapping documents.
+- New Colab notebook with an Earth Engine probe (CR1), pre-registered R2 controls, and a metric-role table defaulting to "all scoreable" (amendment A2).
+- Evidence: 53 offline tests (unit and mocked end-to-end). Not yet run against Earth Engine.
+
 ## 2026-10-11 — pre-Colab scoring-coverage and area-contract repair (version remains 1.1.0)
 
 - Default scoring now follows the active scientific disposition rather than allowing `score_all_scoreable_metrics=True` to accidentally promote context-only metrics.

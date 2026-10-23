@@ -1,10 +1,23 @@
 from pathlib import Path
 
-def test_required_files_exist():
-    root=Path(__file__).resolve().parents[1]
-    for rel in ['README.md','CHANGELOG.md','VALIDATION.md','requirements.txt','setup.py','pytest.ini','docs/METHODOLOGY.md','docs/REFERENCE_CONDITION_METHODOLOGY.md','profiles/aquatic_lake.yaml','profiles/terrestrial.yaml','profiles/mixed.yaml','docs/VALIDATION_SCIENTIFIC_SOURCES.md','darukaa_adaptive/evidence.py','darukaa_adaptive/reference_engine.py','darukaa_adaptive/inputs.py','darukaa_adaptive/aggregation.py','darukaa_adaptive/handoff.py','docs/EMU_AND_HANDOFF_SPECIFICATION.md','docs/METRIC_REGISTRY_AND_EXTENSIBILITY.md','notebooks/Darukaa_Adaptive_Biodiversity_Assessment_Colab.ipynb','darukaa_adaptive/report.py']:
-        assert (root/rel).exists(), rel
+ROOT = Path(__file__).resolve().parents[1]
 
-def test_no_nested_release_folder():
-    root=Path(__file__).resolve().parents[1]
-    assert not (root/'darukaa_adaptive_v1.1.0').exists()
+
+def test_required_files_exist():
+    for rel in ["README.md", "CHANGELOG.md", "requirements.txt", "setup.py", "pytest.ini", "profiles/terrestrial.yaml",
+                "docs/methodology/metric_catalogue_v1.md", "docs/decisions/README.md",
+                "notebooks/Darukaa_Adaptive_Biodiversity_Assessment_Colab.ipynb", "validation/R2_controls.geojson",
+                "validation/R2_expected.json"]:
+        assert (ROOT / rel).exists(), rel
+
+
+def test_package_imports_without_earth_engine():
+    import importlib
+    for mod in ("catalogue", "config", "inputs", "units", "measurement", "scorecard", "layers", "extraction",
+                "reference_pool", "assessment", "outputs", "probe", "natural_mask", "ee_utils"):
+        importlib.import_module(f"darukaa_adaptive.{mod}")
+
+
+def test_version_is_1_1_0():
+    import darukaa_adaptive
+    assert darukaa_adaptive.__version__ == "1.1.0"

@@ -320,7 +320,8 @@ def _overlap_spec(ctx, fc, label):
     near = fc.filterBounds(ctx.unit_region.buffer(50000))
     inter = near.filterBounds(ctx.unit_region).geometry().intersection(ctx.unit_region, ee.ErrorMargin(10))
     lazy = {"overlap_m2": inter.area(ee.ErrorMargin(10)), "unit_m2": ctx.unit_region.area(ee.ErrorMargin(10)),
-            "n_near": near.size(), "distance_m": ctx.unit_region.distance(near.geometry(), ee.ErrorMargin(10))}
+            "n_near": near.size(),
+            "distance_m": ee.Algorithms.If(near.size().gt(0), ctx.unit_region.distance(near.geometry(), ee.ErrorMargin(10)), None)}
 
     def parse(raw):
         unit = raw.get("unit_m2") or 0

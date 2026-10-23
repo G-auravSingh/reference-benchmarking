@@ -81,7 +81,7 @@ def plan_unit(unit: Unit, metric_ids: Iterable[str], ctx_base: Dict[str, Any], m
         native = c.native_scale_m
         region, buf = unit.geometry, 0.0
         rule = REGION_RULES.get(mid)
-        if rule and unit.level != "reference_block":
+        if rule:  # applied to reference blocks too, so site and reference share the same support
             kind, dist = rule
             outer = projected_buffer(unit.geometry, dist)
             region = outer if kind == "buffer" else outer.difference(unit.geometry)
@@ -121,7 +121,7 @@ def _lazy_for(plan: Planned) -> Dict[str, Any]:
         out = {"stats": reduce_stats(img, region, spec.scale, crs)}
         if spec.by_stratum:
             out["strata"] = img.addBands(ctx.mask.select("stratum")).reduceRegion(
-                reducer=ee.Reducer.mean().combine(ee.Reducer.sum(), sharedInputs=True).group(groupField=1, groupName="stratum"),
+                reducer=ee.Reducer.mean().combine(ee.Reducer.count(), sharedInputs=True).group(groupField=1, groupName="stratum"),
                 geometry=region, scale=spec.scale, crs=crs, maxPixels=1e13, tileScale=4)
         for k, v in spec.extras.items():
             out[f"x_{k}"] = v
@@ -161,7 +161,7 @@ def _measure(plan: Planned, unit: Unit, raw: Dict[str, Any]) -> Measurement:
         extras = {k[2:]: v for k, v in raw.items() if k.startswith("x_")}
         if "strata" in raw:
             groups = (raw.get("strata") or {}).get("groups", [])
-            extras["by_stratum"] = {int(g["stratum"]): {"mean": g.get("mean"), "weight": g.get("sum")} for g in groups
+            extras["by_stratum"] = {int(g["stratum"]): {"mean": g.get("mean"), "weight": g.get("count")} for g in groups
                                     if g.get("mean") is not None}
         m = Measurement(mid, unit.unit_id, unit.level, value, status_ok if value is not None else "no_valid_pixels",
                         covered_pixel_equivalent=st.get("covered_pixel_equivalent"), touched_pixels=st.get("centre_pixels"),

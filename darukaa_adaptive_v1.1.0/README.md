@@ -1,129 +1,72 @@
-# Darukaa Adaptive Biodiversity Assessment v1.1.0
+# Darukaa Adaptive v1.1.0
 
-A generalized, evidence-aware biodiversity baseline framework designed to operate downstream of Darukaa Site Selection.
+Darukaa Adaptive is an ex-situ biodiversity baseline assessment for any project geometry: one polygon, separate sites, or many adjacent management units. It measures open satellite and geospatial metrics in Google Earth Engine. It then compares them with reference conditions and reports four pillars, aligned with the Nature Positive Initiative State of Nature indicators.
 
-## Production architecture
+> **Status: first draft of the rebuilt pipeline (23 Oct 2026).**
+>
+> | Evidence level | Status |
+> |---|---|
+> | Offline unit tests | Pass |
+> | Mocked tests | Pass |
+> | Live Earth Engine run | Not yet |
+>
+> Do not interpret scores until validation rungs CR1 and R2 are complete (see `VALIDATION.md`).
 
-```text
-Site Selection / project geometry
-            ↓
-Standardized EMU handoff
-            ↓
-Domain + ecological characterization
-            ↓
-Reference population construction
-            ↓
-Metric extraction + QA/QC
-            ↓
-Reference benchmarking
-            ↓
-0–100 metric attainment
-            ↓
-Metric → subdimension (geometric mean)
-            ↓
-Subdimension → pillar (limiting factor)
-            ↓
-P1/P2/P3 condition (geometric mean + limiting pillar)
-            +
-P4 anthropogenic pressure
-            ↓
-Project aggregation + EMU ecological comparison
-            ↓
-Client report + auditable manifest
+## What it reports
+
+| Pillar | Nature Positive basis | Measured at | Default scored metrics |
+|---|---|---|---|
+| P1 Ecosystem extent | Extent indicator | Site | natural extent %, gross loss since 2020, tree-cover loss rate, core natural area |
+| P2 Ecosystem condition (natural pixels only) | Condition indicator | Site and EMU | peak-season NDVI, canopy height, BII, EII functional, FLII (forest only); Sentinel-2 LAI pending |
+| P3 Species | Extinction risk, populations | Site | none: licence-restricted data, reported as "not covered"; screening records only |
+| P4 Pressure | Outside Nature Positive (TNFD pressures) | Site | built-up share, gHM, roads, fire frequency, night lights |
+| Managed land | Outside the Nature Positive panel | Site and EMU | contextual only |
+
+How the outputs are labelled:
+
+- Every metric is **preparatory** under the Nature Positive measurement guidance.
+- Landscape results are labelled as context.
+- Each metric's status is reported as four separate facts: whether it ran, whether it was measured validly, whether there was enough to score, and whether the result is interpretable.
+- Every score carries a 90% bootstrap interval and a High/Medium/Low confidence rating.
+
+## Layout
+
+```
+darukaa_adaptive/
+  catalogue.py        metric contracts (single source of truth) and role resolution
+  config.py           run configuration; every parameter tied to a decision
+  inputs.py, site.py  handoff ZIP / manifest / GeoJSON / KML(s) / boundary loading
+  units.py            sites (full boundary) with EMUs nested inside; context windows
+  natural_mask.py     ForTy 2020 + SBTN v1.1 natural mask, Dynamic World change
+  layers.py           one Earth Engine builder per metric
+  extraction.py       one measurement path for sites, EMUs and reference blocks
+  reference_pool.py   least-disturbed condition pool; regional context blocks
+  measurement.py      measurement records and the four status layers
+  scorecard.py        response functions, bootstrap, confidence, aggregation
+  assessment.py       end-to-end run
+  outputs.py          CSV tables, manifest, HTML report, ZIP
+  probe.py            read-only Earth Engine probe (CR1)
+  validation_check.py compare run bundles with pre-registered expectations
+docs/decisions/       approved decisions and the file audit
+docs/methodology/     metric_catalogue_v1.md (approved specification)
+validation/           R2 control polygons and expected answers
+notebooks/            Colab notebook
 ```
 
-## Inputs
+## Running
 
-Preferred production input is the Site Selection handoff ZIP with `tile_manifest.json` and EMU GeoJSON tiles. The parser also supports GeoJSON FeatureCollections, KML/KMZ and single polygons.
+Open `notebooks/Darukaa_Adaptive_Biodiversity_Assessment_Colab.ipynb` in Colab and follow its sections.
 
-An EMU may be multipart/disconnected. The framework does not assume contiguity is required for ecological identity.
+Offline tests:
 
-## Domains
+```bash
+pip install -r requirements.txt
+pytest -q
+```
 
-- `terrestrial`
-- `aquatic`
-- `mixed`
-- `auto`
+## Rules this code follows
 
-Domain-specific profiles determine which metrics and reference populations apply. Mixed projects retain aquatic and terrestrial reference populations separately.
-
-## Reference framework
-
-Reference selection is finite:
-
-1. strict contemporary low-pressure;
-2. empirical least-disturbed contemporary within the ecologically eligible population;
-3. explicit manual HMI threshold after diagnostics;
-4. otherwise reference unavailable.
-
-Ecological eligibility precedes HMI ranking. HMI is a pressure screen, not a substitute for ecological comparability. Manual KML/CSV reference files are not supported.
-
-## Scoring
-
-The common 0–100 score is **reference attainment**, not a claim of absolute ecological intactness.
-
-- complementary metrics within a subdimension: geometric mean;
-- subdimensions within a pillar: limiting factor;
-- P1/P2/P3 overall condition: geometric mean;
-- limiting pillar and metric are always reported;
-- P4 pressure remains separate.
-
-Statistical benchmarks such as z-scores and robust z-scores are retained as diagnostics when reference dispersion permits. They are not silently substituted for the common client-facing score.
-
-## Project aggregation and comparison
-
-Project summaries are generated only after EMU-level assessment. The package outputs:
-
-- project metric score aggregation;
-- project pillar aggregation;
-- project overall scorecard;
-- EMU ecological comparison table with pillar scores, concerns and limiting metrics;
-- project HTML report with project overview, pillar/metric summaries, EMU comparison, concern-band distribution, evidence gaps, output-QA flags and EMU/reference index;
-- `emu_condition_concern_distribution.csv`, including counts and area shares for complete three-pillar condition bands and separate partial/insufficient-evidence categories;
-- `project_output_qa.json` with explicit review flags;
-- one auditable manifest linking EMUs to their output directories and recording the final QA state and downloadable archive.
-
-Area-weighting is the default project aggregation for normalized common scores, while metric-level raw values remain available. Missing EMUs are represented through coverage fields rather than converted to zero. Overall EMU concern bands are assigned only where P1, P2 and P3 are all scored. Area shares use summed EMU area and assume non-overlapping EMUs; this assumption is disclosed in the report. Condition and anthropogenic pressure remain separate. Automated output-QA PASS is not ecological certification.
-
-## Current indicators
-
-The active production registry is deliberately conservative. It includes only indicators whose calculation and interpretation are implemented in this release. Future EO, field, acoustic and eDNA indicators can be registered through the same contract; field-derived indicators without a defensible comparator remain contextual until reference/threshold requirements are satisfied.
-
-## Reproducibility
-
-The manifest records the input SHA-256, package version, configuration, Git commit when available, metric provenance, reference governance, scoring eligibility and aggregation coverage.
-
-For client runs, pin the exact verified Git commit in the Colab notebook rather than using `main`.
-
-## Validation
-
-The package contains automated tests for:
-
-- input/handoff parsing;
-- Site Selection `tile_paths` manifests;
-- multipart EMUs;
-- finite reference policy;
-- metric benchmarking;
-- scoring hierarchy;
-- pressure separation;
-- project aggregation;
-- EMU comparison;
-- configuration validation;
-- package integrity.
-
-A passing software suite does not substitute for live Earth Engine acceptance. Dataset/API failures are technical failures, not ecological findings.
-
-## Metric selection (v1.1.0 scientific production contract)
-
-Metric calculation is independent of metric selection. The registry exposes every registered metric with its pillar, construct, direction, source, reference type, native scale and scoreability class. By default, all `default_scored` metrics are scored. A client can demote any of these to contextual in the Colab notebook using `METRIC_OVERRIDES`, without modifying the calculator or package code. Diagnostic, removed and hard-context metrics remain non-scoreable unless their scientific contract is changed in a future audited release.
-
-The active metric registry is deliberately smaller than the historical audit inventory. Metrics that are invalid, misleadingly named, redundant, or based on unvalidated composites are removed from runtime calculation and reporting. See `docs/METRIC_CONTRACT_MATRIX.csv` for the 62 original metric IDs plus the MSA candidate (63 audit rows), including dispositions, caveats and source/provenance fields.
-
-
-## Pre-Colab metric and area release gates (2026-10-11)
-
-- `score_all_scoreable_metrics=true` means every metric classified as scientifically scoreable is included by default, subject to valid observations, minimum spatial support, an approved reference and metric-specific response QA. It does not force context-only or invalid metrics into a score.
-- NDVI uses a reference-distribution p05-to-median response, not a ratio. `habitat_health` remains contextual by default due redundancy with NDVI. EII remains contextual pending source/path QA; BII remains the independent fallback.
-- Headline pillar scores require at least three scored metrics across three subdimensions; a condition headline requires all P1-P3 pillars and biodiversity evidence.
-- A multi-EMU handoff must include or be reconciled against the independent project boundary. The sum/union of EMU polygons is reported as EMU footprint only until that check passes.
-- See `docs/PRECOLAB_METRIC_AND_AREA_AUDIT_2026-10-11.md` before running Colab.
+- Missing, failed or invalid data never becomes zero or a score.
+- Condition and pressure are kept separate.
+- Sources are labelled by type: standard, vendor/tool, academic dataset or Darukaa evidence.
+- Scientific changes are made only through `docs/decisions/`.

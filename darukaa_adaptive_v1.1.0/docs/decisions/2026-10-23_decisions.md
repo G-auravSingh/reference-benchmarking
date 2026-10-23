@@ -123,3 +123,14 @@ Evidence base:
 - An automated session check asked for re-authoring to a Claude identity so that GitHub shows commits as Verified. This was declined because the user's rule takes precedence.
 - Commits are unsigned, so GitHub shows them as Unverified.
 - Gaurav supplied a time-limited PAT on 23 Oct to push. It is not stored in any file or in the git config, and Gaurav will revoke it.
+
+## Later on 23 Oct
+
+**D-23-16. KBA and protected-area overlap stay in the catalogue.** They are screening metrics. Their commercial-licence terms are recorded but set aside for now, per Gaurav.
+
+**D-23-17. Aquatic modules removed from the active package.** `water.py`, `metrics.py` and the aquatic profiles were taken out pending the aquatic design. Their last version is commit 43bd210, kept as evidence for that redesign.
+
+**D-23-18. The human disturbance index (HDI) stays retired.** HDI was built as 1 minus the distance to Dynamic World built-up land, capped at 1.5 km. The 1.5 km decay was arbitrary, and the index overlapped gHM and the built-up share.
+- A proposed successor is in the catalogue as `built_up_within_1km_pct`: the share of built land in a 1 km ring around the site.
+- Its suggested role is CONTEXTUAL.
+- **Status: proposed.** It is excluded from runs until approved.

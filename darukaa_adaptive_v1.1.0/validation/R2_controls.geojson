@@ -1,0 +1,149 @@
+{
+ "type": "FeatureCollection",
+ "metadata": {
+  "project_id": "R2_controls",
+  "note": "Pre-registered control polygons (23 Oct 2026). Locations chosen from map knowledge, not checked on imagery; verify visually before the run."
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "emu_id": "R2_forest_SilentValley",
+    "description": "Dense natural evergreen forest, Silent Valley National Park core (Kerala)",
+    "area_ha": 496.77
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       76.4552351067325,
+       11.1049568810636
+      ],
+      [
+       76.4552351067325,
+       11.1250431189364
+      ],
+      [
+       76.43476489326748,
+       11.1250431189364
+      ],
+      [
+       76.43476489326748,
+       11.1049568810636
+      ],
+      [
+       76.4552351067325,
+       11.1049568810636
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "emu_id": "R2_cropland_Ludhiana",
+    "description": "Irrigated cropland, rural Ludhiana district (Punjab)",
+    "area_ha": 497.99
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       75.56168247366435,
+       30.7099568810636
+      ],
+      [
+       75.56168247366435,
+       30.730043118936397
+      ],
+      [
+       75.53831752633565,
+       30.730043118936397
+      ],
+      [
+       75.53831752633565,
+       30.7099568810636
+      ],
+      [
+       75.56168247366435,
+       30.7099568810636
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "emu_id": "R2_builtup_Pune",
+    "description": "Dense built-up core, Pune city",
+    "area_ha": 497.07
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       73.86659131979691,
+       18.504956881063602
+      ],
+      [
+       73.86659131979691,
+       18.5250431189364
+      ],
+      [
+       73.84540868020308,
+       18.5250431189364
+      ],
+      [
+       73.84540868020308,
+       18.504956881063602
+      ],
+      [
+       73.86659131979691,
+       18.504956881063602
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "emu_id": "R2_small_forest",
+    "description": "0.5 ha square at the centre of the forest control",
+    "area_ha": 0.5
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       76.44532362345527,
+       11.114682446999641
+      ],
+      [
+       76.44532362345527,
+       11.11531755300036
+      ],
+      [
+       76.44467637654472,
+       11.11531755300036
+      ],
+      [
+       76.44467637654472,
+       11.114682446999641
+      ],
+      [
+       76.44532362345527,
+       11.114682446999641
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}
