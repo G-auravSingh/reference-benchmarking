@@ -1,0 +1,120 @@
+"""Offline tests of the Earth Engine layer using a recording mock (no EE calls)."""
+import sys
+from unittest import mock
+
+import pytest
+from shapely.geometry import box
+
+from darukaa_adaptive import catalogue as cat
+from darukaa_adaptive import layers as L
+from darukaa_adaptive.ee_utils import parse_stats
+from darukaa_adaptive.extraction import Unit, month_starts, pick_peak_window, plan_unit
+from darukaa_adaptive.reference_pool import PoolConfig, regional_blocks
+from darukaa_adaptive.site import area_ha
+
+
+@pytest.fixture
+def fake_ee(monkeypatch):
+    ee = mock.MagicMock(name="ee")
+    monkeypatch.setitem(sys.modules, "ee", ee)
+    return ee
+
+
+def _ctx_base():
+    return {"crs": "EPSG:32643", "start": "2025-08-01", "end_exclusive": "2026-09-01", "mask": mock.MagicMock(),
+            "peak_window": ("2025-09-01", "2025-12-01"), "raster_paths": {}, "options": {}}
+
+
+def test_every_catalogue_metric_has_a_builder():
+    missing = [c.id for c in cat.CATALOGUE if c.status == "approved" and c.id not in L.BUILDERS]
+    assert missing == []
+
+
+def test_reduce_stats_sets_scale_and_crs_and_never_best_effort(fake_ee):
+    from darukaa_adaptive.ee_utils import reduce_stats
+    img = mock.MagicMock()
+    reduce_stats(img, "REGION", 300, "EPSG:32643")
+    calls = [c for c in img.mock_calls if c[0].endswith("reduceRegion")]
+    calls += [c for c in fake_ee.mock_calls if c[0].endswith("reduceRegion")]
+    assert calls, "reduceRegion was not called"
+    for c in calls:
+        kw = c.kwargs
+        assert kw["scale"] == 300 and kw["crs"] == "EPSG:32643"
+        assert "bestEffort" not in kw
+
+
+def test_parse_stats_uses_exact_keys():
+    raw = {"v_mean": 0.5, "v_p5": 0.1, "v_p50": 0.45, "v_p95": 0.9, "v_stdDev": 0.2, "w_sum": 12.5, "w_count": 13,
+           "v_p55": 999}
+    st = parse_stats(raw)
+    assert st["p5"] == 0.1 and st["p50"] == 0.45 and st["covered_pixel_equivalent"] == 12.5 and st["centre_pixels"] == 13
+    assert parse_stats({"v_mean": float("nan")})["mean"] is None
+
+
+def test_small_unit_gets_context_window_for_coarse_layer_but_not_for_fine(fake_ee):
+    tiny = Unit("E1", "emu", box(73.8, 18.6, 73.8005, 18.6005))  # ~0.3 ha
+    plans = {p.metric: p for p in plan_unit(tiny, ["eii_functional", "ndvi_peak_season", "natural_extent_pct"], _ctx_base())}
+    assert plans["eii_functional"].context_buffer_m > 0
+    assert area_ha(plans["eii_functional"].region_geom) >= 4 * 9 - 0.01
+    assert plans["ndvi_peak_season"].context_buffer_m == 0
+    assert plans["natural_extent_pct"].context_buffer_m == 0
+
+
+def test_road_and_population_use_one_km_buffer(fake_ee):
+    u = Unit("S", "site", box(73.8, 18.6, 73.81, 18.61))
+    plans = {p.metric: p for p in plan_unit(u, ["road_density", "population_density"], _ctx_base())}
+    for p in plans.values():
+        assert area_ha(p.region_geom) > area_ha(u.geometry) * 2
+
+
+def test_pending_metrics_never_carry_values(fake_ee):
+    from darukaa_adaptive.extraction import _measure
+    u = Unit("S", "site", box(73.8, 18.6, 73.81, 18.61))
+    p = {pl.metric: pl for pl in plan_unit(u, ["msa", "lai_s2"], _ctx_base())}
+    m = _measure(p["msa"], u, {})
+    assert m.status == "pending_input" and m.value is None and m.ran
+    m = _measure(p["lai_s2"], u, {})
+    assert m.status == "not_run" and m.value is None and not m.ran
+
+
+def test_ratio_measure_handles_baseline_floor(fake_ee):
+    from darukaa_adaptive.extraction import _measure
+    u = Unit("S", "site", box(73.8, 18.6, 73.81, 18.61))
+    p = {pl.metric: pl for pl in plan_unit(u, ["tree_cover_loss_rate"], _ctx_base())}["tree_cover_loss_rate"]
+    # 0.5 ha baseline -> not applicable (decision 3), never 100
+    m = _measure(p, u, {"sums": {"num": 0.0, "den": 5000.0, "x_baseline_forest_ha": 5000.0, "x_loss_ha": 0.0}})
+    assert m.status == "not_applicable_no_forest_baseline" and m.value is None
+    # 20 ha baseline, 1 ha lost over 5 years -> 1 %/yr
+    m = _measure(p, u, {"sums": {"num": 1e4, "den": 2e5, "x_baseline_forest_ha": 2e5, "x_loss_ha": 1e4}})
+    assert m.value == pytest.approx(1.0) and m.extras["baseline_forest_ha"] == pytest.approx(20.0)
+
+
+def test_error_in_one_layer_is_recorded_not_hidden(fake_ee):
+    from darukaa_adaptive.extraction import _measure
+    u = Unit("S", "site", box(73.8, 18.6, 73.81, 18.61))
+    p = {pl.metric: pl for pl in plan_unit(u, ["ghm"], _ctx_base())}["ghm"]
+    m = _measure(p, u, {"stats": RuntimeError("asset not found")})
+    assert m.status == "error" and not m.ran and "asset not found" in m.error
+
+
+def test_month_starts_and_peak_window():
+    months = month_starts("2025-08-01", "2026-09-01")
+    assert len(months) == 13 and months[0] == ("2025-08-01", "2025-09-01") and months[-1][1] == "2026-09-01"
+    vals = {m[0]: 0.3 for m in months}
+    vals.update({"2025-09-01": 0.6, "2025-10-01": 0.7, "2025-11-01": 0.65})
+    (a, b), basis = pick_peak_window(vals, months)
+    assert (a, b) == ("2025-09-01", "2025-12-01") and "peak" in basis
+    (a, b), basis = pick_peak_window({}, months)
+    assert (a, b) == ("2025-08-01", "2026-09-01") and "full window" in basis
+
+
+def test_regional_blocks_are_outside_exclusion_and_match_site_support():
+    site = box(73.80, 18.60, 73.81, 18.61)  # ~117 ha -> ~1.08 km side
+    cfg = PoolConfig(radius_km=10, n_regional_blocks=40)
+    blocks = regional_blocks(site, site, cfg)
+    assert 0 < len(blocks) <= 40
+    from darukaa_adaptive.site import projected_buffer
+    excl = projected_buffer(site, cfg.exclusion_m)
+    for _, g, _ in blocks:
+        assert not g.intersects(excl)
+        assert area_ha(g) == pytest.approx(area_ha(site), rel=0.05)
