@@ -97,7 +97,29 @@ Evidence base:
 - The assessment window stays 2025-08-01 to 2026-08-31 (decision 9 of 16 Oct).
 - Each metric records the years it actually used.
 
-## Access
+## Catalogue and references
 
-- Push access was granted on 23 Oct. The git proxy still refused the push, because the repo is not in this session's authorised source set.
-- Commits are kept locally until the push works.
+**D-23-13. Metric catalogue v1 approved, with Gaurav's amendments C1–C10.** The full specification is `docs/methodology/metric_catalogue_v1.md`. Its main points:
+- **Natural mask.** Built from Nature Trace ForTy 2020 (10 m) and SBTN Natural Lands v1.1 (30 m). Dynamic World is used only to detect change.
+- **Habitat health.** Rebuilt as Plan Vivo PV Nature Pillar 4 (SBI). This corrects the 23 Oct draft, which misdescribed `habitat_health`.
+- **FLII.** Kept for forest pixels only.
+- **EII.**
+  - The functional component is scored.
+  - The parent index and the structural component are contextual: structural is built from gHM, which is a pressure layer.
+  - The compositional component is diagnostic, because it duplicates BII.
+- **MSA.** GLOBIO4 2015, contextual.
+- **Scale.** The finest available source is used for each metric (for example Sentinel-2 LAI, Landsat land-surface temperature, 1 m canopy height).
+- **Extraction rules.** No `bestEffort`. Values are coverage-weighted. Support counts as covered-pixel equivalents.
+- **Licence removals.** WDPA, KBA, BirdLife, IUCN, STAR and LIFE are removed.
+- **P3 coverage.** P3 has no scored metric; only screening metrics from GBIF CC0/CC-BY records and India's WPA 2022 schedules.
+- **New open metrics:** roads (GRIP4), fire, forest disturbance alerts, population, JRC surface water, GEDI, GLAD forest height.
+
+**D-23-14. Approach 2 reference pool approved** for condition, and Approach 4 for pressure and landscape context. It must work for every project type. R and the minimum stratum size are set from probe evidence.
+
+## Access and commit identity
+
+**D-23-15. Commits stay authored as Gaurav Singh.**
+- Gaurav reconfirmed this on 23 Oct.
+- An automated session check asked for re-authoring to a Claude identity so that GitHub shows commits as Verified. This was declined because the user's rule takes precedence.
+- Commits are unsigned, so GitHub shows them as Unverified.
+- Gaurav supplied a time-limited PAT on 23 Oct to push. It is not stored in any file or in the git config, and Gaurav will revoke it.
