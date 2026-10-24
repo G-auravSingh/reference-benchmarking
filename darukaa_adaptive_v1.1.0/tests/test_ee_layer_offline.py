@@ -161,3 +161,25 @@ def test_fire_spec_records_images_per_year(fake_ee):
     u, p = _plan("fire_frequency")
     spec, _ = p.spec
     assert set(spec.extras["images_per_year"]) == {str(y) for y in range(2016, 2026)}
+
+
+def test_context_window_grows_when_support_falls_short(monkeypatch):
+    """R2 run 24 Oct: a 4-pixel window held 3.x natural pixel-equivalents for EII."""
+    import darukaa_adaptive.extraction as X
+    calls = []
+
+    def fake_once(unit, ids, ctx_base, min_px, factors):
+        calls.append(dict(factors))
+        out = {}
+        for mid in ids:
+            f = factors.get(mid, 1.0)
+            st, v = ("below_min_support", None) if f < 2 else ("scored_context_scale", 0.7)
+            out[mid] = Measurement(mid, unit.unit_id, unit.level, v, st, covered_pixel_equivalent=3.8 * f, context_buffer_m=150 * f)
+        return out
+    from darukaa_adaptive.measurement import Measurement
+    monkeypatch.setattr(X, "_measure_once", fake_once)
+    res = X.measure_units([Unit("S", "site", box(73.8, 18.6, 73.8005, 18.6005))], ["eii_functional", "ndvi_peak_season"], _ctx_base())
+    by = {m.metric: m for m in res}
+    assert by["eii_functional"].status == "scored_context_scale" and by["eii_functional"].value == 0.7
+    assert calls[1] == {"eii_functional": 2.0}       # only the coarse metric is retried
+    assert by["ndvi_peak_season"].status == "below_min_support"  # fine metric: no window, stays unsupported

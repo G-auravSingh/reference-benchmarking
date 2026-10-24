@@ -73,9 +73,16 @@ def pick_peak_window(monthly: Dict[str, Optional[float]], months: Sequence[Tuple
     return (months[best][0], months[best + length - 1][1]), f"peak 3-month mean NDVI {best_val:.3f}"
 
 
-def plan_unit(unit: Unit, metric_ids: Iterable[str], ctx_base: Dict[str, Any], min_px: float = 4.0) -> List[Planned]:
-    """Choose the measurement region for each metric and build its spec (lazy)."""
+def plan_unit(unit: Unit, metric_ids: Iterable[str], ctx_base: Dict[str, Any], min_px: float = 4.0,
+              support_factor: Optional[Dict[str, float]] = None) -> List[Planned]:
+    """Choose the measurement region for each metric and build its spec (lazy).
+
+    ``support_factor`` enlarges the context window for metrics whose first window did
+    not reach the support gate (partial natural cover or grid misalignment means a
+    window of exactly ``min_px`` pixel areas can hold fewer valid pixel-equivalents).
+    """
     plans: List[Planned] = []
+    support_factor = support_factor or {}
     for mid in metric_ids:
         c = cat.get(mid)
         native = c.native_scale_m
@@ -90,7 +97,7 @@ def plan_unit(unit: Unit, metric_ids: Iterable[str], ctx_base: Dict[str, Any], m
             # Decision 5: a raster layer whose native pixels the unit cannot hold
             # min_px times is measured over the smallest window that can, and is
             # labelled context scale (never presented as site-resolved).
-            win, buf = context_window(unit.geometry, native, max(min_px, c.min_support_px))
+            win, buf = context_window(unit.geometry, native, max(min_px, c.min_support_px) * support_factor.get(mid, 1.0))
             if buf > 0:
                 region = win
                 spec, ctx = _build(mid, region, unit, ctx_base)
@@ -205,17 +212,37 @@ def measure_units(units: Sequence[Unit], metric_ids: Sequence[str], ctx_base: Di
     """Measure every metric on every unit; one EE evaluation per unit."""
     out: List[Measurement] = []
     for unit in units:
-        plans = plan_unit(unit, metric_ids, ctx_base, min_px)
-        lazy: Dict[str, Any] = {}
-        for p in plans:
-            for k, v in _lazy_for(p).items():
-                lazy[f"{p.metric}|{k}"] = v
-        raw = evaluate(lazy) if lazy else {}
-        for p in plans:
-            prefix = f"{p.metric}|"
-            part = {k[len(prefix):]: v for k, v in raw.items() if k.startswith(prefix)}
+        result = _measure_once(unit, metric_ids, ctx_base, min_px, {})
+        # Decision 5 asks for a window that actually holds min_px valid native pixels.
+        # Coarse metrics that fell short are re-measured with a larger window (x2, x4).
+        for factor in (2.0, 4.0):
+            short = [m.metric for m in result.values() if m.status == "below_min_support"
+                     and (cat.get(m.metric).native_scale_m or 0) >= 30]
+            if not short:
+                break
             try:
-                out.append(_measure(p, unit, part))
-            except Exception as exc:  # noqa: BLE001 - parsing failure is recorded, not hidden
-                out.append(failed(p.metric, unit.unit_id, unit.level, exc))
+                retry = _measure_once(unit, short, ctx_base, min_px, {k: factor for k in short})
+            except ValueError:  # window would exceed the maximum buffer; keep the first result
+                break
+            result.update(retry)
+        out.extend(result[mid] for mid in metric_ids)
     return out
+
+
+def _measure_once(unit: Unit, metric_ids: Sequence[str], ctx_base: Dict[str, Any], min_px: float,
+                  factors: Dict[str, float]) -> Dict[str, Measurement]:
+    plans = plan_unit(unit, metric_ids, ctx_base, min_px, factors)
+    lazy: Dict[str, Any] = {}
+    for p in plans:
+        for k, v in _lazy_for(p).items():
+            lazy[f"{p.metric}|{k}"] = v
+    raw = evaluate(lazy) if lazy else {}
+    res: Dict[str, Measurement] = {}
+    for p in plans:
+        prefix = f"{p.metric}|"
+        part = {k[len(prefix):]: v for k, v in raw.items() if k.startswith(prefix)}
+        try:
+            res[p.metric] = _measure(p, unit, part)
+        except Exception as exc:  # noqa: BLE001 - parsing failure is recorded, not hidden
+            res[p.metric] = failed(p.metric, unit.unit_id, unit.level, exc)
+    return res

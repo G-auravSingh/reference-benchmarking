@@ -165,10 +165,13 @@ def build_condition_pool(footprint: BaseGeometry, ctx_base: Dict[str, Any], cfg:
     fc = stack.stratifiedSample(numPoints=cfg.n_per_stratum, classBand="stratum", region=region, scale=s30,
                                 projection=crs, seed=cfg.seed, classValues=usable,
                                 classPoints=[cfg.n_per_stratum] * len(usable), dropNulls=False, tileScale=8, geometries=False)
-    got = evaluate({"fc": fc})
-    if isinstance(got["fc"], Exception):
-        raise RuntimeError(f"Reference sampling failed: {got['fc']}")
-    feats = [f["properties"] for f in got["fc"]["features"]]
+    # A FeatureCollection is fetched on its own: nested inside an ee.Dictionary it does
+    # not come back with a "features" list (R2 run, 24 Oct: KeyError 'features').
+    try:
+        got = fc.getInfo()
+    except Exception as exc:  # noqa: BLE001 - surfaced to the caller with context
+        raise RuntimeError(f"Reference sampling failed: {exc}") from exc
+    feats = [f["properties"] for f in got.get("features", [])]
     for mid in imgs:
         for code in usable:
             rows = [p for p in feats if int(p["stratum"]) == code and p.get(mid) is not None]

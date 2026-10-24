@@ -151,7 +151,8 @@ def monthly_ndvi_means(region, months, crs: str, cloud_prob_max: float = 50.0):
 
 def chm_image():
     ee = ee_module()
-    return ee.ImageCollection(META_CHM_ASSET).mosaic().select([0]).rename("v")
+    # Single band "cover_code" = canopy height in metres (EE probe 24 Oct: forest control 15.7 m).
+    return ee.ImageCollection(META_CHM_ASSET).mosaic().select(["cover_code"]).rename("v")
 
 
 def bii_image(end_exclusive: str):
@@ -424,7 +425,11 @@ def b_eii(band):
 def b_flii(ctx):
     ee = ee_module()
     asset = ctx.raster_paths.get("flii_gee_asset", FLII_ASSET)
-    return StatsSpec(ee.Image(asset).select([0]).rename("v"), 300, weight="strata:10", period="FLII 2019")
+    # The FLII raster stores the 0-10 index multiplied by 1000 (EE probe 24 Oct: forest
+    # control mean 9085). The factor is applied here and the 0-10 range check still guards it.
+    scale_factor = ctx.opt("flii_scale_factor", 0.001)
+    img = ee.Image(asset).select([0]).multiply(scale_factor).rename("v")
+    return StatsSpec(img, 300, weight="strata:10", period="FLII 2019", extras={"scale_factor": scale_factor})
 
 
 def b_msa(ctx):

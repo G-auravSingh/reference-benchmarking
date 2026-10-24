@@ -51,7 +51,7 @@ def asset_checks() -> Dict[str, Any]:
         out[k] = _try(lambda a=a: {"size": col(a).limit(5000).size().getInfo(), **_image_info(ee, ee.Image(col(a).first()))})
     out["bii_years"] = _try(lambda: sorted(set(ee.ImageCollection(L.BII_ASSET).aggregate_array("system:time_start")
                                                .map(lambda t: ee.Date(t).get("year")).getInfo())))
-    out["grip4_assets"] = _try(lambda: [a["id"] for a in ee.data.listAssets({"parent": GRIP4_FOLDER}).get("assets", [])])
+    out["grip4_south_east_asia_fields"] = _try(lambda: ee.FeatureCollection(f"{GRIP4_FOLDER}/South-East-Asia").first().propertyNames().getInfo())
     for k, a in {"kba": L.KBA_ASSET, "wdpa": L.WDPA_ASSET, "mammals": L.MAMMALS_ASSET, "birds": L.BIRDS_ASSET, "plants": L.PLANTS_ASSET}.items():
         out[f"{k}_fields"] = _try(lambda a=a: ee.FeatureCollection(a).first().propertyNames().getInfo())
     out["mammals_category_values"] = _try(lambda: ee.FeatureCollection(L.MAMMALS_ASSET).aggregate_histogram("category").getInfo())

@@ -10,9 +10,9 @@ Each rung must pass before the next starts. The evidence levels used below are:
 
 | Rung | What | Status (23 Oct 2026) |
 |---|---|---|
-| R1 Offline | Unit and mocked end-to-end tests, plus an independent review of the EE code (10 findings fixed) | **Pass**: 58 tests, Python 3.13 (unit tests and mocks only) |
-| CR1 Probe | Read-only EE probe. Notebook section 4; send back `probe_results.json` | Pending |
-| R2a Controls | Forest, cropland, built-up and small-forest polygons with pre-registered expectations (`validation/`). Notebook section 6; send back `R2_controls_bundle.zip` | Pending |
+| R1 Offline | Unit and mocked end-to-end tests, plus an independent review of the EE code (10 findings fixed) | **Pass**: 59 tests, Python 3.13 (unit tests and mocks only) |
+| CR1 Probe | Read-only EE probe. Notebook section 4; send back `probe_results.json` | **Done** (24 Oct, live EE, commit 80f1ce38). See `validation/R2_review_2026-10-24.md` |
+| R2a Controls | Forest, cropland, built-up and small-forest polygons with pre-registered expectations (`validation/`). Notebook section 6; send back `R2_controls_bundle.zip` | **Run 1** (24 Oct): 28 PASS, 3 MISS, 1 NO_DATA. Two code bugs fixed; one pressure-reference decision open. Re-run pending |
 | R2b Single real polygon | Corbett Karpa (151 ha) | Pending |
 | R3 Separated polygons | Corbett: 4 sites, 1–30 km apart | Pending |
 | R4 Adjacent, fragmented EMUs | Tata, 9 EMUs inside a 126.7 ha boundary | Pending |

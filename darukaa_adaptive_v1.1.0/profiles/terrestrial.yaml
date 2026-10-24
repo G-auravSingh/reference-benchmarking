@@ -9,7 +9,7 @@ natural_mask_min_probability: 0.5
 raster_paths:
   flii_gee_asset: projects/darukaa-earth-product/assets/flii_global_2019
   # msa_gee_asset: <upload GLOBIO4 MSA 2015 and set here>
-  # grip4_asset: <set after the EE probe lists projects/sat-io/open-datasets/GRIP4>
+  grip4_asset: projects/sat-io/open-datasets/GRIP4/South-East-Asia   # GRIP region 6 (South and East Asia); community catalogue ID
 scoring:
   role_mode: recommended
   min_metrics_per_pillar: 3
