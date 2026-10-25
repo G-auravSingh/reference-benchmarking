@@ -47,6 +47,8 @@ def fake_measure_units(units, metric_ids, ctx_base, min_px=4.0):
                 out.append(Measurement(mid, u.unit_id, u.level, None, "pending_input", notes="synthetic"))
                 continue
             extras = {}
+            if mid == "natural_extent_pct":
+                extras["natural_2020_pct"] = 95.0 if u.level != "reference_block" else float(rng.uniform(80, 100))
             if cat.get(mid).reference_type == "reference_condition" and (cat.get(mid).native_scale_m or 99) <= 30:
                 extras["by_stratum"] = {10: {"mean": v, "weight": 100.0}}
             out.append(Measurement(mid, u.unit_id, u.level, float(v), "ok", covered_pixel_equivalent=1e4,
@@ -90,7 +92,7 @@ def test_end_to_end_bundle(mocked, tmp_path):
     from darukaa_adaptive.outputs import write_bundle
     from darukaa_adaptive.validation_check import check_bundle
     cfg = AssessmentConfig(output_dir=str(tmp_path))
-    cfg.pool.n_regional_blocks = 40
+    cfg.pool.n_regional_blocks = 120
     res = A.run_assessment(_project(), cfg, progress=lambda *_: None)
     assert len(res.units.sites) == 1 and len(res.headlines) == 1
     h = res.headlines[0]

@@ -82,7 +82,7 @@ Evidence base:
   - SoulForest: the AOI is 44.3 ha, the EMUs 41 ha.
 - This reverses decision 11 of 16 Oct.
 
-**D-23-9. Pressure scoring (P4).**
+**D-23-9. Pressure scoring (P4).** *Superseded on 25 Oct by D-25-1. The P4 reference is now low-pressure blocks; the all-region comparison is kept as context.*
 - P4 is scored 0–100 against a regional reference: same ecoregion, all land, no human-modification filter.
 - The scoring function is the bounded one from decision 4 of 16 Oct. A site at or below the least-pressured reference level scores 100; a site at the regional p95 scores 0.
 - The native value and a published absolute class (where one exists) are shown beside the score.

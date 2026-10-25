@@ -218,3 +218,43 @@ def test_area_weighted_rollup_labels_contribution():
     assert r.value == pytest.approx(80.0)
     assert r.n_contributing == 2 and r.area_share_pct == pytest.approx(40.0)
     assert "2 of 3 units, 40.0% of area" in r.label
+
+
+# ------------------------------------------------------------------ option B pressure reference (D-25-1)
+def test_low_pressure_blocks_are_selected_by_natural_share_with_ladder():
+    from darukaa_adaptive.reference_pool import PoolConfig, select_low_pressure_blocks
+    cfg = PoolConfig()
+    strict = {f"b{i}": 95.0 for i in range(25)} | {f"c{i}": 10.0 for i in range(50)}
+    ids, stage = select_low_pressure_blocks(strict, cfg)
+    assert len(ids) == 25 and stage.startswith("strict")
+    converted = {f"b{i}": 0.7 * i for i in range(120)}       # a converted ring: max 83 % natural
+    ids, stage = select_low_pressure_blocks(converted, cfg)
+    assert len(ids) == 24 and stage.startswith("quantile") and min(converted[b] for b in ids) >= 0.7 * 96
+    ids, stage = select_low_pressure_blocks({"a": 99.0, "b": None}, cfg)
+    assert ids == [] and stage == "reference_insufficient"
+
+
+def test_intensive_region_no_longer_flatters_pressure():
+    """R2 run 1: Ludhiana cropland scored P4 = 100 against an all-cropland ring (option A)."""
+    rng = np.random.default_rng(3)
+    ring_all = _ref("ghm", "regional_context", rng.uniform(0.45, 0.75, 120))
+    low = _ref("ghm", "regional_context", rng.uniform(0.02, 0.08, 25), nblocks=10)
+    low.min_n = 20
+    m = Measurement("ghm", "u", "site", 0.61, "ok", covered_pixel_equivalent=700)
+    s = score_metric(m, "scored", low, worst_ref=ring_all)
+    assert s.score < 30 and s.reference_status == "ok" and "low-pressure" in s.basis
+    a = score_metric(Measurement("built_fraction", "u", "site", 0.04, "ok"), "scored", None)
+    assert a.score is None and a.reference_status == "reference_missing"
+    missing_worst = score_metric(m, "scored", low, worst_ref=None)
+    assert missing_worst.score is None and missing_worst.reference_status == "regional_distribution_missing"
+
+
+def test_ghm_absolute_class():
+    from darukaa_adaptive.scorecard import ghm_class
+    assert ghm_class(0.01).startswith("low") and ghm_class(0.61).startswith("high") and ghm_class(0.98).startswith("very high")
+
+
+def test_no_pressure_metric_selects_its_own_reference():
+    for c in cat.CATALOGUE:
+        if c.pillar == "P4" and c.can_score:
+            assert c.reference_type == "low_pressure"

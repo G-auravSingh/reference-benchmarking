@@ -30,7 +30,7 @@ PILLARS = {
 }
 CONDITION_PILLARS = ("P1", "P2", "P3")
 ROLES = ("scored", "contextual", "screening", "diagnostic")
-REFERENCE_TYPES = ("reference_condition", "regional_context", "natural_scale", "none")
+REFERENCE_TYPES = ("reference_condition", "regional_context", "low_pressure", "natural_scale", "none")
 DIRECTIONS = ("higher_is_better", "lower_is_better", "descriptive")
 LEVELS = ("site", "emu", "site_and_emu")
 GRANULARITY = ("preparatory", "medium", "high")
@@ -313,25 +313,25 @@ CATALOGUE: Tuple[MetricContract, ...] = (
     # ------------------------------------------------------------------ P4 pressure
     _m(id="built_fraction", name="Built-up share", pillar="P4", component="land_use",
        definition="Share of site pixels whose modal Dynamic World class in the window is built.", unit="fraction",
-       direction="lower_is_better", level="site", datasets=(DW,), reference_type="regional_context", recommended_role="scored",
+       direction="lower_is_better", level="site", datasets=(DW,), reference_type="low_pressure", recommended_role="scored",
        role_reason="Direct land-use pressure.", can_score=True, value_range=(0, 1), framework_tags=("TNFD:C1.0", "ESRS:E4-5")),
     _m(id="ghm", name="Human modification (gHM v3)", pillar="P4", component="land_use",
        definition="Coverage-weighted mean of All_threats_combined, 2022, at 90 m.", unit="index 0-1",
-       direction="lower_is_better", level="site", datasets=(TNC_HM,), reference_type="regional_context", recommended_role="scored",
+       direction="lower_is_better", level="site", datasets=(TNC_HM,), reference_type="low_pressure", recommended_role="scored",
        role_reason="Integrated pressure layer; native-scale rebuild (H4).", can_score=True, value_range=(0, 1),
        framework_tags=("TNFD:pressure", "ESRS:E4-5")),
     _m(id="road_density", name="Road density", pillar="P4", component="access",
        definition="Road length per area in the site plus 1 km (GRIP4).", unit="km/km2", direction="lower_is_better",
-       level="site", datasets=(GRIP,), reference_type="regional_context", recommended_role="scored",
+       level="site", datasets=(GRIP,), reference_type="low_pressure", recommended_role="scored",
        role_reason="Access pressure; vector source has no scale limit.", can_score=True, value_range=(0, None),
        map_spec=MapSpec(kind="vector", legend="roads")),
     _m(id="fire_frequency", name="Fire frequency", pillar="P4", component="disturbance",
        definition="Share of years 2016-2025 with a MODIS burned-area detection (coverage-weighted).", unit="fraction of years",
-       direction="lower_is_better", level="site", datasets=(MCD64,), reference_type="regional_context", recommended_role="scored",
+       direction="lower_is_better", level="site", datasets=(MCD64,), reference_type="low_pressure", recommended_role="scored",
        role_reason="Common disturbance in Indian dry forests; Vale used fire (TOR p.119).", can_score=True, value_range=(0, 1)),
     _m(id="night_lights", name="Night-time lights", pillar="P4", component="light",
        definition="Median monthly VIIRS avg_rad in the window (cf_cvg > 0).", unit="nW/cm2/sr", direction="lower_is_better",
-       level="site", datasets=(VIIRS,), reference_type="regional_context", recommended_role="scored",
+       level="site", datasets=(VIIRS,), reference_type="low_pressure", recommended_role="scored",
        role_reason="Light pressure; no finer open source.", can_score=True, value_range=(0, None)),
     _m(id="forest_disturbance_alerts", name="Forest disturbance alerts", pillar="P4", component="disturbance",
        definition="Area of integrated deforestation alerts in the window.", unit="ha", direction="descriptive", level="site",
@@ -339,7 +339,7 @@ CATALOGUE: Tuple[MetricContract, ...] = (
        can_score=False),
     _m(id="population_density", name="Population density", pillar="P4", component="access",
        definition="WorldPop 2020 people per km2 in the site plus 1 km.", unit="people/km2", direction="lower_is_better",
-       level="site", datasets=(WORLDPOP,), reference_type="regional_context", recommended_role="contextual",
+       level="site", datasets=(WORLDPOP,), reference_type="low_pressure", recommended_role="contextual",
        role_reason="Modelled; overlaps gHM.", can_score=True, value_range=(0, None)),
     _m(id="lst_day", name="Land surface temperature (day)", pillar="P4", component="climate",
        definition="Median Landsat C2 surface temperature in the window.", unit="degC", direction="descriptive", level="site",
@@ -354,7 +354,7 @@ CATALOGUE: Tuple[MetricContract, ...] = (
        role_reason="Climate exposure.", can_score=False),
     _m(id="built_up_within_1km_pct", name="Built-up land within 1 km", pillar="P4", component="land_use",
        definition="Share of built land (DW, window) in a 1 km ring around the site; successor to the retired HDI proximity index.",
-       unit="%", direction="lower_is_better", level="site", datasets=(DW,), reference_type="regional_context",
+       unit="%", direction="lower_is_better", level="site", datasets=(DW,), reference_type="low_pressure",
        recommended_role="contextual", role_reason="Edge pressure from nearby settlement; overlaps gHM.", can_score=True,
        value_range=(0, 100), status="proposed"),
 

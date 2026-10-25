@@ -53,6 +53,8 @@ class AssessmentConfig:
         "fire_first_year": 2016, "fire_last_year": 2025,
         "s2_cloud_prob_max": 50.0, "s2_scene_cloud_max": 60.0,
         "iucn_category_field": "category",
+        "flii_scale_factor": 0.001,            # EE probe 24 Oct: FLII stored x1000
+        "peak_window_buffer_m": 1000.0,        # D-25-2
     })
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     pool: PoolConfig = field(default_factory=PoolConfig)

@@ -25,7 +25,7 @@ from .inputs import ProjectInput
 from .layers import AREAL_METRICS, monthly_ndvi_means
 from .measurement import Measurement, status_layers
 from .reference_pool import (ConditionPool, build_condition_pool, regional_blocks, regional_sample,
-                             same_ecoregion)
+                             same_ecoregion, select_low_pressure_blocks)
 from .scorecard import (Headline, MetricScore, PillarResult, ReferenceSample, aggregate_pillar, area_weighted,
                         headline, score_metric, _interval)
 from .site import projected_buffer
@@ -132,7 +132,10 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
     # Peak-greenness window (Plan Vivo Pillar 4 convention), one per project so that
     # every site and its reference use the same window.
     months = month_starts(start, end_excl)
-    raw = evaluate(monthly_ndvi_means(to_ee(footprint), months, crs, config.options.get("s2_cloud_prob_max", 50.0)))
+    # Window chosen over the sites plus 1 km (D-25-2): small or patchy sites (agroforestry,
+    # fragments) otherwise pick a window from too few clear pixels.
+    peak_region = to_ee(projected_buffer(footprint, config.options.get("peak_window_buffer_m", 1000.0)))
+    raw = evaluate(monthly_ndvi_means(peak_region, months, crs, config.options.get("s2_cloud_prob_max", 50.0)))
     monthly = {k: (v if isinstance(v, (int, float)) else None) for k, v in raw.items()}
     peak, peak_basis = pick_peak_window(monthly, months)
     progress(f"[2/6] Peak window {peak[0]}..{peak[1]} ({peak_basis})")
@@ -168,10 +171,15 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
         except Exception as exc:  # noqa: BLE001 - recorded; condition metrics then cannot be scored
             flags.append({"severity": "REVIEW", "code": "condition_reference_failed", "message": str(exc)})
 
-    # Regional context (Approach 4): blocks with each site's areal support.
+    # Regional blocks (Approach 4) feed two references:
+    #  * regional_context metrics (P1 loss rates, managed land): all ring blocks;
+    #  * low_pressure metrics (P4, option B, D-25-1): reference = blocks selected by 2020
+    #    natural share (not by any pressure metric); worst = p95 of all ring blocks.
     progress("[5/6] Measuring regional reference blocks")
     regional: Dict[Tuple[str, str], ReferenceSample] = {}
-    regional_ids = sorted(m for m in scored_now if cat.get(m).reference_type == "regional_context")
+    low_ref: Dict[Tuple[str, str], ReferenceSample] = {}
+    regional_ids = sorted(m for m in scored_now if cat.get(m).reference_type in ("regional_context", "low_pressure"))
+    block_ids = sorted(set(regional_ids) | {"natural_extent_pct"})
     block_info: Dict[str, Any] = {}
     for s in units.sites:
         if not regional_ids:
@@ -181,27 +189,49 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
         except Exception as exc:  # noqa: BLE001
             flags.append({"severity": "REVIEW", "code": "regional_blocks_failed", "message": f"{s.site_id}: {exc}"})
             continue
-        block_info[s.site_id] = {"n_blocks": len(blocks)}
-        bms = measure_units([Unit(b, "reference_block", g) for b, g, _ in blocks], regional_ids, ctx_base, config.min_support_px)
+        bms = measure_units([Unit(b, "reference_block", g) for b, g, _ in blocks], block_ids, ctx_base, config.min_support_px)
         cells = {b: cell for b, _, cell in blocks}
+        nat2020 = {m.unit_id: m.extras.get("natural_2020_pct") for m in bms
+                   if m.metric == "natural_extent_pct" and m.measured_valid}
+        low_ids, stage = select_low_pressure_blocks(nat2020, config.pool)
+        block_info[s.site_id] = {"n_blocks": len(blocks), "low_pressure_blocks": len(low_ids), "low_pressure_stage": stage}
         for mid in regional_ids:
             vals = {m.unit_id: (m.value if m.measured_valid else None) for m in bms if m.metric == mid}
             regional[(s.site_id, mid)] = regional_sample(mid, vals, cells, config.pool)
+            if cat.get(mid).reference_type == "low_pressure":
+                sub = {b: v for b, v in vals.items() if b in set(low_ids)}
+                rs = regional_sample(mid, sub, cells, config.pool)
+                rs.method = f"low-pressure blocks ({stage})"
+                rs.min_n = min(config.pool.min_n, config.pool.low_pressure_min_blocks)
+                low_ref[(s.site_id, mid)] = rs
 
     # Scores
     progress("[6/6] Scoring")
     site_of_emu = {e.emu_id: s.site_id for s in units.sites for e in s.emus}
     scores: List[MetricScore] = []
+    nb, seed = config.scoring.n_bootstrap, config.scoring.bootstrap_seed
     for m in measurements:
         c = cat.get(m.metric)
         role = roles[m.metric].applied_role
+        sid = m.unit_id if m.level == "site" else site_of_emu.get(m.unit_id)
         if c.reference_type == "regional_context":
-            sid = m.unit_id if m.level == "site" else site_of_emu.get(m.unit_id)
-            scores.append(score_metric(m, role, regional.get((sid, m.metric)), config.scoring.n_bootstrap, config.scoring.bootstrap_seed))
+            scores.append(score_metric(m, role, regional.get((sid, m.metric)), nb, seed))
+        elif c.reference_type == "low_pressure":
+            sc = score_metric(m, role, low_ref.get((sid, m.metric)), nb, seed, worst_ref=regional.get((sid, m.metric)))
+            ctx = regional.get((sid, m.metric))
+            if role == "scored" and m.measured_valid and ctx is not None and ctx.usable:
+                a = ReferenceSample(m.metric, "regional_context", ctx.values, ctx.blocks, min_n=ctx.min_n, min_blocks=ctx.min_blocks)
+                med, p95 = float(np.median(a.values)), float(np.percentile(a.values, 95))
+                from .scorecard import bounded_regional, ghm_class
+                sc.context_score = bounded_regional(float(m.value), med, p95, c.direction, c.value_range[1])[0]
+            if m.metric == "ghm" and m.measured_valid:
+                from .scorecard import ghm_class
+                sc.absolute_class = ghm_class(float(m.value))
+            scores.append(sc)
         elif c.reference_type == "reference_condition":
             scores.append(score_with_strata(m, role, pool, config))
         else:
-            scores.append(score_metric(m, role, None, config.scoring.n_bootstrap, config.scoring.bootstrap_seed))
+            scores.append(score_metric(m, role, None, nb, seed))
 
     pillars: List[PillarResult] = []
     headlines: List[Headline] = []

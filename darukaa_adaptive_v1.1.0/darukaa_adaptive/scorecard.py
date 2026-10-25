@@ -9,6 +9,11 @@ Response functions (catalogue reference types)
   worst = regional p95; if the regional distribution is degenerate (worst <= ref) the
   contract's upper value bound is used; if that is also unavailable the metric is not
   scored. For higher-is-better regional metrics the mirror form is used.
+* ``low_pressure`` (P4 pressure, lower is better; option B, D-25-1): the same bounded
+  function, but ref = median of *low-pressure* blocks in the same ring and ecoregion,
+  selected by their 2020 natural-ecosystem share (ForTy/SBTN), never by a pressure
+  metric, so the reference is not circular with what is scored; worst = p95 of all
+  ring blocks. The all-land regional score (option A) is kept as a context figure.
 * ``natural_scale``: the value on its 0-100 scale, no reference ratio.
 
 Intervals come from a spatial-block bootstrap of the reference sample: blocks are
@@ -166,6 +171,8 @@ class MetricScore:
     basis: str
     confidence: Optional[str]
     confidence_reasons: List[str] = field(default_factory=list)
+    context_score: Optional[float] = None     # all-land regional comparison (option A), context only
+    absolute_class: Optional[str] = None      # published class where one exists (option C), context only
 
     def row(self) -> Dict[str, object]:
         return {
@@ -177,6 +184,7 @@ class MetricScore:
             "reference_worst": self.reference_worst, "reference_n": self.reference_n,
             "reference_blocks": self.reference_blocks, "basis": self.basis,
             "confidence": self.confidence, "confidence_reasons": "; ".join(self.confidence_reasons),
+            "score_vs_surroundings": self.context_score, "absolute_class": self.absolute_class,
         }
 
 
@@ -211,8 +219,21 @@ def confidence_rating(m: Measurement, contract: cat.MetricContract, interval, re
     return level, reasons
 
 
+GHM_CLASSES = ((0.1, "low"), (0.4, "moderate"), (0.7, "high"), (float("inf"), "very high"))
+
+
+def ghm_class(value: Optional[float]) -> Optional[str]:
+    """Human-modification class (Kennedy et al. 2019, Glob Change Biol 25:811) [ACAD]."""
+    if value is None:
+        return None
+    for upper, label in GHM_CLASSES:
+        if value <= upper:
+            return f"{label} (gHM; Kennedy et al. 2019)"
+    return None
+
+
 def score_metric(m: Measurement, role: str, ref: Optional[ReferenceSample], n_boot: int = 200,
-                 seed: int = 20261023) -> MetricScore:
+                 seed: int = 20261023, worst_ref: Optional[ReferenceSample] = None) -> MetricScore:
     c = cat.get(m.metric)
     base = dict(metric=m.metric, unit_id=m.unit_id, pillar=c.pillar, component=c.component, role=role, value=m.value)
     empty = dict(score=None, interval=(None, None), draws=None, reference_value=None, reference_worst=None,
@@ -253,6 +274,18 @@ def score_metric(m: Measurement, role: str, ref: Optional[ReferenceSample], n_bo
             boot_worst = boot["p95"]
         point, basis = bounded_regional(obs, point_ref, point_worst, c.direction, fallback)
         draws = np.array([bounded_regional(obs, r, w, c.direction, fallback)[0] for r, w in zip(boot["median"], boot_worst)], dtype=float)
+        worst = point_worst
+    elif c.reference_type == "low_pressure":
+        if c.direction != "lower_is_better":
+            raise ValueError("low_pressure scoring is defined for lower-is-better metrics")
+        if worst_ref is None or not worst_ref.usable:
+            return MetricScore(**base, **empty, reference_status="regional_distribution_missing", basis="")
+        wboot = block_bootstrap(worst_ref, n_boot, seed + 1)
+        point_worst = float(np.percentile(worst_ref.values, 95))
+        fallback = c.value_range[1]
+        point, basis = bounded_regional(obs, point_ref, point_worst, c.direction, fallback)
+        basis = f"low-pressure reference median; worst = {basis.replace('regional_p95', 'all-ring p95')}"
+        draws = np.array([bounded_regional(obs, r, w, c.direction, fallback)[0] for r, w in zip(boot["median"], wboot["p95"])], dtype=float)
         worst = point_worst
     else:
         return MetricScore(**base, **empty, reference_status="no_reference_type", basis="")

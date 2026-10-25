@@ -54,6 +54,9 @@ class PoolConfig:
     n_regional_blocks: int = 120
     block_min_m: float = 300.0
     block_max_m: float = 3000.0
+    low_pressure_natural_min_pct: float = 90.0   # option B (D-25-1): strict stage
+    low_pressure_top_share: float = 0.20         # option B: fallback stage (most natural 20% of blocks)
+    low_pressure_min_blocks: int = 20
     seed: int = 20261023
 
 
@@ -240,3 +243,24 @@ def regional_sample(metric: str, block_values: Dict[str, Optional[float]], cells
     return ReferenceSample(metric, "regional_context", np.array([block_values[b] for b in ids], dtype=float),
                            np.array([cells[b] for b in ids]), stratum="regional_blocks",
                            method="same-ecoregion ring blocks, no disturbance filter", min_n=cfg.min_n, min_blocks=cfg.min_blocks)
+
+
+def select_low_pressure_blocks(natural_2020_pct: Dict[str, Optional[float]], cfg: PoolConfig) -> Tuple[List[str], str]:
+    """Choose low-pressure reference blocks by 2020 natural-ecosystem share (option B, D-25-1).
+
+    The selection variable comes from the natural mask (ForTy 2020 / SBTN v1.1 2020),
+    which is not an input to any P4 pressure metric, so the reference is not chosen by
+    the quantity it is used to score. Ladder: blocks >= ``low_pressure_natural_min_pct``
+    natural; otherwise the most natural ``low_pressure_top_share`` of blocks. Too few
+    blocks -> empty list and stage ``reference_insufficient`` (no silent fallback).
+    """
+    vals = {b: v for b, v in natural_2020_pct.items() if v is not None}
+    strict = [b for b, v in vals.items() if v >= cfg.low_pressure_natural_min_pct]
+    if len(strict) >= cfg.low_pressure_min_blocks:
+        return sorted(strict), f"strict: >= {cfg.low_pressure_natural_min_pct:.0f}% natural in 2020"
+    ranked = sorted(vals, key=lambda b: vals[b], reverse=True)
+    top = ranked[: int(round(len(ranked) * cfg.low_pressure_top_share))]
+    if len(top) >= cfg.low_pressure_min_blocks:
+        floor = vals[top[-1]]
+        return sorted(top), f"quantile: most natural {cfg.low_pressure_top_share:.0%} of blocks (>= {floor:.1f}% natural)"
+    return [], "reference_insufficient"

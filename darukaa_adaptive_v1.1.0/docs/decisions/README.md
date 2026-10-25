@@ -19,6 +19,7 @@ This folder holds the approved methodology and process decisions. Read it before
 | `2026-10-16_phase1_decisions.md` | The 14 decisions from the Phase 1 audit, re-verified on 23 Oct, with the current status of each |
 | `2026-10-22_plan_decisions.md` | Reporting-scale and managed-land decisions from the one-week plan |
 | `2026-10-23_decisions.md` | Method approval, pillar restructure, assessment units, pressure scoring, headline rule |
+| `2026-10-25_decisions.md` | Pressure reference (option B, without circularity) and peak-window buffer, after the first live run |
 | `audit-2026-10.md` | Keep, change or delete verdict for each file, plus the batch log |
 
 **Process rules** (approved 23 Oct):

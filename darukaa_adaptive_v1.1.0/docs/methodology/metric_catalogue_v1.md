@@ -116,7 +116,16 @@ A pixel is classified in this order:
 
 **P3 scored status:** not covered. The report states "Species extinction risk and populations: not covered. Licence-restricted data. Screening records and in-situ hooks shown" (comply or explain, TOR p.83). The headline uses P1 and P2 (D-23-10).
 
-## P4 Pressure (SITE; regional_context reference; native value and absolute class shown beside each score)
+## P4 Pressure (SITE; low_pressure reference, D-25-1; native value, all-ring comparison and absolute class shown beside each score)
+
+**Reference for P4 (option B, approved 25 Oct).**
+- **Reference value.** The median over *low-pressure* blocks in the same ring and ecoregion.
+  - These blocks are chosen by their 2020 natural-ecosystem share from ForTy and SBTN: at least 90% natural, or failing that the most natural 20% of blocks, with at least 20 blocks either way.
+  - Because no pressure metric is used to choose them, the reference is not circular with what it scores.
+- **Worst value.** The 95th percentile of all ring blocks, falling back to the contract maximum if that is not usable.
+- **Context figures shown beside the score, not used in it:**
+  - the all-ring comparison (option A);
+  - for gHM, the Kennedy et al. 2019 class (option C).
 
 | ID | Dataset and scale | Role | Notes |
 |---|---|---|---|
@@ -169,7 +178,7 @@ A pixel is classified in this order:
 
 A natural EMU pixel is benchmarked against the sample for its own type. When a stratum is too small, the result is `reference_insufficient`; there is no silent fallback.
 
-**Approach 4 for pressure and landscape context** [VENDOR precedent: 3Bee control rings]. All pixels in the ecoregion within R, outside the site.
+**Approach 4 for regional context** [VENDOR precedent: 3Bee control rings]. All ring blocks in the ecoregion, outside the site. Used for P1 loss rates and managed land. For P4 it supplies only the worst value and the 'versus surroundings' context figure; the P4 reference itself is the low-pressure block subset (D-25-1).
 
 **Robustness requirements for any project type:**
 - R and the minimum stratum size are set from probe evidence and logged.
