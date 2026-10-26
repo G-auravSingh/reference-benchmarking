@@ -261,3 +261,16 @@ def test_no_pressure_metric_selects_its_own_reference():
     for c in cat.CATALOGUE:
         if c.pillar == "P4" and c.can_score:
             assert c.reference_type == "low_pressure"
+
+
+def test_pillar_reports_the_metric_that_sets_it():
+    """Karpa run 26 Oct: one Medium-confidence metric (canopy height) set P2 to 0.3."""
+    from darukaa_adaptive.scorecard import MetricScore
+    def ms(metric, score, conf, reasons=()):
+        c = cat.get(metric)
+        return MetricScore(metric, "u", c.pillar, c.component, "scored", 1.0, score, (score, score), np.full(10, score),
+                           "ok", None, None, None, None, "", conf, list(reasons))
+    p = aggregate_pillar([ms("ndvi_peak_season", 95, "High"), ms("canopy_height_m", 0.3, "Medium", ["data 6 years from assessment window"]),
+                          ms("bii", 86, "Medium")], "u", "P2")
+    assert p.limiting_metric == "canopy_height_m" and p.limiting_confidence == "Medium"
+    assert any("pillar set by canopy_height_m" in f for f in p.flags)

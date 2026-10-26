@@ -527,11 +527,20 @@ def b_lst_night(ctx):
 
 
 def b_aridity(ctx):
+    """P / PET over the latest 12 months that TerraClimate covers, up to the window end.
+
+    TerraClimate is released with a lag of about a year (Karpa run 26 Oct: no 2025 PET),
+    so the period is anchored on its latest month instead of a fixed calendar year.
+    """
     ee = ee_module()
-    y = ctx.window_end_year - 1
-    p = ee.ImageCollection(CHIRPS_ASSET).filterDate(f"{y}-01-01", f"{y + 1}-01-01").select("precipitation").sum()
-    pet = ee.ImageCollection(TERRACLIMATE_ASSET).filterDate(f"{y}-01-01", f"{y + 1}-01-01").select("pet").sum().multiply(0.1)
-    return StatsSpec(p.divide(pet).rename("v"), 4638.3, weight="none", period=f"{y} (CHIRPS / TerraClimate PET)")
+    terra = ee.ImageCollection(TERRACLIMATE_ASSET).filterDate("2000-01-01", ctx.end_exclusive)
+    last = ee.Date(terra.sort("system:time_start", False).first().get("system:time_start"))
+    start, end = last.advance(-11, "month"), last.advance(1, "month")
+    p = ee.ImageCollection(CHIRPS_ASSET).filterDate(start, end).select("precipitation").sum()
+    pet = terra.filterDate(start, end).select("pet").sum().multiply(0.1)
+    return StatsSpec(p.divide(pet).rename("v"), 4638.3, weight="none",
+                     period="12 months to latest TerraClimate month (CHIRPS / TerraClimate PET)",
+                     extras={"period_end": end.format("YYYY-MM")})
 
 
 def b_managed_area(ctx):
@@ -566,11 +575,32 @@ def _range_count(ctx, assets, filt=None, required_fields=("sci_name",)):
 
 
 def b_threatened_range(ctx):
+    """Threatened (CR/EN/VU) species per asset. The Red List category field differs between
+    the Darukaa-held snapshots (probe 26 Oct: mammals 'category'; birds have no 'category'),
+    so it is configured per asset and checked lazily; a missing field is an error."""
     ee = ee_module()
-    field = ctx.opt("iucn_category_field", "category")
-    return _range_count(ctx, [("mammals", MAMMALS_ASSET), ("birds", BIRDS_ASSET)],
-                        lambda fc, full: fc.filter(ee.Filter.inList(field, ["CR", "EN", "VU"])),
-                        required_fields=("sci_name", field))
+    fields = ctx.opt("iucn_category_fields", {"mammals": "category", "birds": None})
+    lazy, parts = {}, []
+    skipped = [n for n in ("mammals", "birds") if not fields.get(n)]
+    for name, asset in (("mammals", MAMMALS_ASSET), ("birds", BIRDS_ASSET)):
+        field = fields.get(name)
+        if not field:   # category field not confirmed for this asset: excluded and reported, never guessed
+            continue
+        full = ee.FeatureCollection(ctx.raster_paths.get(name, asset))
+        fc = full.filterBounds(ctx.unit_region).filter(ee.Filter.inList(field, ["CR", "EN", "VU"]))
+        lazy[name] = fc.aggregate_array("sci_name").distinct().size()
+        lazy[f"fields_{name}"] = full.first().propertyNames().containsAll(["sci_name", field])
+
+    def parse(raw):
+        missing = [k[7:] for k, v in raw.items() if k.startswith("fields_") and not v]
+        if missing:
+            raise ValueError(f"range asset(s) {missing} lack the configured category field ({fields})")
+        counts = {k: int(v) for k, v in raw.items() if not k.startswith("fields_") and v is not None}
+        if not counts:
+            raise ValueError("no range asset has a confirmed category field")
+        counts["excluded_unconfirmed_field"] = skipped
+        return float(sum(v for v in counts.values() if isinstance(v, int))), "ok", counts
+    return CustomSpec(lazy, parse, period="Darukaa-held IUCN range snapshots")
 
 
 def b_restricted_range(ctx):
@@ -583,7 +613,9 @@ def b_restricted_range(ctx):
             lambda f: f.set("rk2", f.geometry().area(ee.ErrorMargin(1000)).divide(1e6)))
         groups = ee.List(parts.reduceColumns(ee.Reducer.sum().group(groupField=1, groupName="sci_name"),
                                              ["rk2", "sci_name"]).get("groups"))
-        small_names = groups.filter(ee.Filter.lt("sum", 100000)).map(lambda g: ee.Dictionary(g).get("sci_name"))
+        # ee.List.filter only accepts filters on 'item'; map to names (or null) and drop nulls.
+        small_names = groups.map(lambda g: ee.Algorithms.If(ee.Number(ee.Dictionary(g).get("sum")).lt(100000),
+                                                            ee.Dictionary(g).get("sci_name"), None), True)
         return fc.filter(ee.Filter.inList("sci_name", small_names))
     return _range_count(ctx, [("mammals", MAMMALS_ASSET), ("birds", BIRDS_ASSET), ("plants", PLANTS_ASSET)], small)
 

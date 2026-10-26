@@ -183,3 +183,13 @@ def test_context_window_grows_when_support_falls_short(monkeypatch):
     assert by["eii_functional"].status == "scored_context_scale" and by["eii_functional"].value == 0.7
     assert calls[1] == {"eii_functional": 2.0}       # only the coarse metric is retried
     assert by["ndvi_peak_season"].status == "below_min_support"  # fine metric: no window, stays unsupported
+
+
+def test_threatened_count_excludes_asset_without_confirmed_category_field(fake_ee):
+    """Karpa run 26 Oct: the birds snapshot has no 'category' field."""
+    from darukaa_adaptive.extraction import _measure
+    u, p = _plan("threatened_species_range_count")
+    spec, _ = p.spec
+    assert set(spec.lazy) == {"mammals", "fields_mammals"}          # birds not queried
+    m = _measure(p, u, {"mammals": 4, "fields_mammals": True})
+    assert m.value == 4 and m.extras["excluded_unconfirmed_field"] == ["birds"]

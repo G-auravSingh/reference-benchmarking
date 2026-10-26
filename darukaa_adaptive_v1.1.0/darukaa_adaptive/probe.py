@@ -55,6 +55,10 @@ def asset_checks() -> Dict[str, Any]:
     for k, a in {"kba": L.KBA_ASSET, "wdpa": L.WDPA_ASSET, "mammals": L.MAMMALS_ASSET, "birds": L.BIRDS_ASSET, "plants": L.PLANTS_ASSET}.items():
         out[f"{k}_fields"] = _try(lambda a=a: ee.FeatureCollection(a).first().propertyNames().getInfo())
     out["mammals_category_values"] = _try(lambda: ee.FeatureCollection(L.MAMMALS_ASSET).aggregate_histogram("category").getInfo())
+    out["birds_redlist_values"] = _try(lambda: {f: ee.FeatureCollection(L.BIRDS_ASSET).limit(5000).aggregate_histogram(f).getInfo()
+                                                for f in ("RedList_IU", "RedList__1", "RedList__5")})
+    out["terraclimate_last"] = _try(lambda: ee.Date(ee.ImageCollection(L.TERRACLIMATE_ASSET).sort("system:time_start", False)
+                                                    .first().get("system:time_start")).format("YYYY-MM").getInfo())
     return out
 
 
@@ -97,6 +101,20 @@ def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, st
             "natural_weight_mean_300m": mask.select("natural_now").unmask(0).toFloat().setDefaultProjection(crs=crs, scale=10)
                 .reduceResolution(ee.Reducer.mean(), False, 65535).reproject(crs=crs, scale=300)
                 .reduceRegion(ee.Reducer.mean(), g, 300, crs, maxPixels=1e13).get("natural_now").getInfo()})
+        # Canopy-height cross-check (Karpa run 26 Oct: Meta 1 m read ~0 m on DW woodland).
+        r["canopy_height_sources"] = _try(lambda: {
+            "meta_hist_m": L.chm_image().reduceRegion(ee.Reducer.fixedHistogram(0, 30, 15), g, 10, crs, maxPixels=1e13).getInfo(),
+            "glad_mean_m": ee.Dictionary(px(ee.ImageCollection(L.GLAD_HEIGHT_ASSET).mosaic().select([0]).updateMask(
+                ee.ImageCollection(L.GLAD_HEIGHT_ASSET).mosaic().select([0]).lte(60)), 30)).getInfo(),
+            "gedi_rh98": ee.ImageCollection(L.GEDI_L2A_ASSET).filterBounds(g).map(
+                lambda i: ee.Image(i).select("rh98").updateMask(ee.Image(i).select("quality_flag").eq(1).And(
+                    ee.Image(i).select("degrade_flag").eq(0)))).mean().reduceRegion(
+                ee.Reducer.mean().combine(ee.Reducer.count(), sharedInputs=True), g, 25, crs, maxPixels=1e13).getInfo(),
+            "dw_trees_prob_window": ee.ImageCollection(nm.DW_ASSET).filterBounds(g).filterDate(window[0], window[1])
+                .select("trees").mean().reduceRegion(ee.Reducer.mean(), g, 10, crs, maxPixels=1e13).getInfo(),
+            "forty_class_hist": nm.forty_class(g)[0].reduceRegion(ee.Reducer.frequencyHistogram(), g, 10, crs, maxPixels=1e13).getInfo(),
+            "sbtn_class_hist": ee.Image(nm.SBTN_ASSET).select("classification").reduceRegion(
+                ee.Reducer.frequencyHistogram(), g, 30, crs, maxPixels=1e13).getInfo()})
         r["glad_height_codes"] = _try(lambda: ee.ImageCollection(L.GLAD_HEIGHT_ASSET).mosaic().select([0]).reduceRegion(
             ee.Reducer.frequencyHistogram(), g, 30, crs, maxPixels=1e13).getInfo())
         r["fire_images_per_year"] = _try(lambda: {y: ee.ImageCollection(L.MCD64_ASSET).filterDate(f"{y}-01-01", f"{y+1}-01-01").size().getInfo()

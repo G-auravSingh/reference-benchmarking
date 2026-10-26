@@ -328,13 +328,16 @@ class PillarResult:
     limiting_component: Optional[str]
     metrics: List[str]
     flags: List[str] = field(default_factory=list)
+    limiting_metric: Optional[str] = None
+    limiting_confidence: Optional[str] = None
 
     def row(self) -> Dict[str, object]:
         return {"unit_id": self.unit_id, "pillar": self.pillar, "pillar_name": cat.PILLARS[self.pillar],
                 "score_0_100": self.score, "score_low": self.interval[0], "score_high": self.interval[1],
                 "concern": concern_label(self.score), "concern_0_10": concern_0_10(self.score), "status": self.status,
                 "n_metrics": self.n_metrics, "n_components": self.n_components,
-                "limiting_component": self.limiting_component, "metrics": ", ".join(self.metrics),
+                "limiting_component": self.limiting_component, "limiting_metric": self.limiting_metric,
+                "limiting_metric_confidence": self.limiting_confidence, "metrics": ", ".join(self.metrics),
                 "component_scores": "; ".join(f"{k}={v:.1f}" for k, v in self.components.items()),
                 "flags": "; ".join(self.flags)}
 
@@ -355,8 +358,12 @@ def aggregate_pillar(scores: Iterable[MetricScore], unit_id: str, pillar: str, m
     point = min(comp_point.values())
     limiting = min(comp_point, key=comp_point.get)
     flags = [f"component {k} scored 0" for k, v in comp_point.items() if v == 0]
+    lim = min(comps[limiting], key=lambda s: s.score)
+    if lim.confidence in ("Medium", "Low"):
+        # Non-compensatory pillars inherit the weakness of their weakest metric; say so.
+        flags.append(f"pillar set by {lim.metric} ({lim.confidence} confidence: {'; '.join(lim.confidence_reasons)})")
     return PillarResult(unit_id, pillar, float(point), _interval(pillar_draws), pillar_draws, "scored", len(usable),
-                        len(comps), comp_point, limiting, names, flags)
+                        len(comps), comp_point, limiting, names, flags, lim.metric, lim.confidence)
 
 
 @dataclass

@@ -213,16 +213,28 @@ def measure_units(units: Sequence[Unit], metric_ids: Sequence[str], ctx_base: Di
     out: List[Measurement] = []
     for unit in units:
         result = _measure_once(unit, metric_ids, ctx_base, min_px, {})
-        # Decision 5 asks for a window that actually holds min_px valid native pixels.
-        # Coarse metrics that fell short are re-measured with a larger window (x2, x4).
-        for factor in (2.0, 4.0):
-            short = [m.metric for m in result.values() if m.status == "below_min_support"
+        # Decision 5 asks for a window that actually holds min_px *valid* native pixels.
+        # Coarse metrics that fell short are re-measured with a larger window. The first
+        # retry scales the window by the shortfall in valid (e.g. natural-weighted)
+        # pixel-equivalents, so a large site with little natural land (Corbett Karpa:
+        # 151 ha, 10 % natural, EII 2.9 pixel-equivalents) still reaches the gate; the
+        # second retry doubles that. Windows beyond 5 km are refused (ValueError).
+        unit_ha = area_ha(unit.geometry)
+        for attempt in (1, 2):
+            short = [m for m in result.values() if m.status == "below_min_support"
                      and (cat.get(m.metric).native_scale_m or 0) >= 30]
             if not short:
                 break
+            factors = {}
+            for m in short:
+                px = (cat.get(m.metric).native_scale_m or 30.0) ** 2 / 1e4  # ha per native pixel
+                held = max(unit_ha / px, min_px)
+                covered = m.covered_pixel_equivalent or 0.0
+                f = max(2.0, 1.2 * held / max(covered, 0.25))
+                factors[m.metric] = f * (2.0 if attempt == 2 else 1.0)
             try:
-                retry = _measure_once(unit, short, ctx_base, min_px, {k: factor for k in short})
-            except ValueError:  # window would exceed the maximum buffer; keep the first result
+                retry = _measure_once(unit, list(factors), ctx_base, min_px, factors)
+            except ValueError:  # window would exceed the maximum buffer; keep the earlier result
                 break
             result.update(retry)
         out.extend(result[mid] for mid in metric_ids)
