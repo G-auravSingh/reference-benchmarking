@@ -65,3 +65,54 @@ The report was produced with the older methodology and is Darukaa's own earlier 
 - Proposed:
   1. Report P1 (extent, with gross gain beside it) and P2 (condition) side by side, and drop the combined P1 × P2 number.
   2. Show a restoration panel (candidate gain in ha and as % of site) prominently, labelled preparatory.
+
+## Run 2 (27 Oct 2026, commit 1bfc37a7)
+
+**Evidence.** End-to-end Colab run on live Earth Engine: `probe_results.json` (controls plus Karpa) and `Corbett_Karpa.zip`, read offline here.
+
+### Results
+
+| Item | Value | Note |
+|---|---|---|
+| Natural extent (P1) | 1.9, High confidence | Set by core area (1.9%); extent is 9.6% |
+| Condition (P2) | 0.3 (0.2–0.4), Medium | Set by `canopy_height_m`; function component 86.4, composition 85.6 |
+| Species (P3) | not covered | Licence-restricted (comply or explain) |
+| Pressure (P4) | 67.3 (57.8–79.3), Low | Set by population density (WorldPop 2020: 211 per km² against a reference of 100) |
+| SoN score | 0.8 (0.6–0.9), Medium | Weakest pillar P2; coverage "extent and condition only; species not covered"; no divergence flag (the gap is under 20 points) |
+| Candidate gross gain | 128.2 ha | Shrub 98.3, trees 29.5, grass 0.4 |
+| Gross loss | 0.76 ha | All from other natural land, converted to cropland; no natural-forest loss |
+| Low-pressure reference | 24 blocks within 25 km | All at least 82% natural (D-26-1) |
+
+**F-2 is addressed.** The report now leads with the pillar profile and the restoration panel (D-27-2, D-27-3).
+
+### F-1 evidence: canopy-height sources on the probe units
+
+Whole-unit means, all classes:
+
+| Unit | Meta v1 (1 m) | GLAD (30 m) | GEDI rh98 (footprints) | DW tree probability | ForTy / SBTN 2020 |
+|---|---|---|---|---|---|
+| Silent Valley forest | 15.7 m | 17.0 m | 23.9 m (500) | 0.72 | ForTy primary or regenerating forest |
+| Small forest (0.5 ha) | 4.8 m | 14.6 m (5.6 px) | none | 0.72 | ForTy naturally regenerating |
+| Karpa | 0.003 m | 0.0 m (all pixels code 0) | 3.3 m (95) | 0.20 | ForTy "other land"; SBTN mostly class 15, with about 10% class 3 |
+| Ludhiana cropland | 0.05 m | 0.03 m | 4.9 m (328) | 0.09 | SBTN 12 |
+| Pune built-up | 1.4 m | 0.18 m | 15.3 m (319) | 0.04 | SBTN 13 |
+
+**Reading the table:**
+- **Small forest.** The sources disagree: Meta reads 4.8 m where GLAD reads 14.6 m. Meta v1's known underestimation (MAE 4.3 m) makes this a likely source error.
+- **Karpa.** The sources do not disagree. Meta and GLAD both read about 0 m, and GEDI reads 3.3 m over the whole site. In 2020, SBTN's map shows Karpa's natural land as about 10% class 3 (natural short vegetation, if the class codes are as I recall). That share matches the mask's 10.1% natural in 2020.
+- **The "woodland" (8.9 ha) and "shrub" (5.6 ha) strata** come from current Dynamic World labels. The 0.3 is therefore a 2018–2020 structural reading of land that Dynamic World now labels woody. It is not a source error. Whether the reading still describes the site cannot be known from data that predates the change.
+- **GEDI over built-up land** (Pune, 15.3 m) reads buildings. GEDI is valid only on natural vegetated pixels, which is how `gedi_rh98_m` is already weighted.
+- The SBTN class codes above are from my reading of the SBTN v1.1 legend and have not been re-checked against the asset metadata.
+
+The proposal is P-27-4 in `docs/decisions/2026-10-27_decisions.md`.
+
+### Other findings and fixes
+
+- **Birds' Red List field confirmed.** `RedList__5` holds CR/DD/EN/LC/NT/VU; `RedList_IU` is an ID and `RedList__1` is the taxonomic order. Birds now count in `threatened_species_range_count` (mechanical; completes the 26 Oct exclusion).
+- **Aridity reported a 0-year data gap** although TerraClimate ends 2024-12. Its period text carries no year, so the gap was missed. Fixed: the gap is now read from the recorded `period_end`. Aridity is contextual, so no score changed.
+  - Remaining metrics whose recorded period has no year: KBA and WDPA ("current release") and the IUCN range snapshots. None is scored. Their gap is shown as 0 and should be read as "not recorded".
+- **JRC GFC2020 V2 is deprecated** (Earth Engine warning: superseded by V4). The probe now reads V4 bands; the switch follows once they are confirmed.
+- **CHMv2 is not reachable in Earth Engine.**
+  - Listing Meta and WRI's project is denied.
+  - `projects/sat-io/open-datasets/facebook` is not a folder.
+  - The 403 warning in the Colab log is this listing call; it is harmless.

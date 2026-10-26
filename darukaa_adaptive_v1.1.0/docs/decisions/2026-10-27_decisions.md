@@ -120,6 +120,30 @@ Gaurav asked for a single SoN score for when one is needed, such as investor scr
   - `condition_*` becomes `son_*`.
   - `R2_expected.json` keys become `son_status` and `son_status_not`. The expectations themselves are unchanged.
 
+## P-27-4. Canopy height at changing or young sites (F-1): proposal, awaiting approval
+
+Evidence: Karpa run 2 and the probe of 27 Oct (`validation/R2b_Karpa_review_2026-10-26.md`, "Run 2").
+
+There are two different problems:
+- **Source error.** On the small forest, Meta v1 reads 4.8 m against GLAD's 14.6 m.
+- **Stale epoch.** At Karpa, every source agrees on about 0 m for 2018–2020, but Dynamic World now labels the land woody.
+
+### Options compared
+
+| Option | Rule | Small forest | Karpa | Weakness |
+|---|---|---|---|---|
+| A | `source_disagreement` when independent sources over the same natural pixels differ by more than 50% (GLAD where it has at least 4 px, GEDI where it has at least 10 footprints) | not scored | still 0.3 | Misses the stale-epoch case |
+| B | Epoch check. Canopy height is scored only on natural pixels whose Dynamic World mode in the source epoch (2018–2020) was already the same woody class. Pixels that became woody later are excluded and reported in ha. If support falls below the minimum, the status is `source_predates_state`. | unchanged | depends on 2018–2020 labels: not scored if the woody cover is newer; kept (as real low structure) if it was already woody | Adds a Dynamic World 2018–2020 composite |
+| C | Score canopy height only on ForTy 2020 natural forest; contextual on woodland and shrub | unchanged | not scored. P2 then has 2 components and is withheld under the 3-component gate. | Drops structure for all non-forest natural types |
+
+### Recommendation
+
+**A and B together.** A catches source error and B catches stale epochs. Both are explicit statuses, never a zero, and the excluded area is reported.
+
+C is not recommended: it removes structure for savanna, woodland and shrub types everywhere, not only where the data is stale.
+
+CHMv2 (via a Cloud Storage bucket) would reduce A cases but not B: its imagery is also mostly 2018–2020.
+
 ## Sources (accessed 27 Oct 2026)
 
 - [ACAD] Meta AI blog, "Mapping the World's Forests with Greater Precision: Introducing Canopy Height Maps v2": https://ai.meta.com/blog/world-resources-institute-dino-canopy-height-maps-v2/

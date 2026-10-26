@@ -76,7 +76,7 @@ def asset_checks() -> Dict[str, Any]:
     for k, f in images.items():
         out[k] = _try(lambda f=f: _image_info(ee, f()))
     cols = {"forty": nm.FORTY_ASSET, "meta_chm": L.META_CHM_ASSET, "glad_height": L.GLAD_HEIGHT_ASSET,
-            "bii": L.BII_ASSET, "ghm": L.GHM_ASSET, "jrc_gfc2020": L.JRC_GFC_ASSET, "gedi_l2a": L.GEDI_L2A_ASSET,
+            "bii": L.BII_ASSET, "ghm": L.GHM_ASSET, "jrc_gfc2020": L.JRC_GFC_ASSET, "jrc_gfc2020_v4": "JRC/GFC2020/V4", "gedi_l2a": L.GEDI_L2A_ASSET,
             "mcd64a1": L.MCD64_ASSET, "viirs": L.VIIRS_ASSET, "worldpop": L.WORLDPOP_ASSET, "dynamic_world": nm.DW_ASSET}
     for k, a in cols.items():
         out[k] = _try(lambda a=a: {"size": col(a).limit(5000).size().getInfo(), **_image_info(ee, ee.Image(col(a).first()))})

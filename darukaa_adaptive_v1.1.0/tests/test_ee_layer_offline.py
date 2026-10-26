@@ -125,6 +125,7 @@ def _plan(metric, ctx_extra=None):
     u = Unit("S", "site", box(73.8, 18.6, 73.81, 18.61))
     base = _ctx_base()
     base["raster_paths"] = {"grip4_asset": "projects/x/GRIP4/South-East-Asia"}
+    base.update(ctx_extra or {})
     return u, {pl.metric: pl for pl in plan_unit(u, [metric], base)}[metric]
 
 
@@ -186,9 +187,9 @@ def test_context_window_grows_when_support_falls_short(monkeypatch):
 
 
 def test_threatened_count_excludes_asset_without_confirmed_category_field(fake_ee):
-    """Karpa run 26 Oct: the birds snapshot has no 'category' field."""
+    """An asset whose category field is not configured is excluded and reported, never guessed."""
     from darukaa_adaptive.extraction import _measure
-    u, p = _plan("threatened_species_range_count")
+    u, p = _plan("threatened_species_range_count", {"options": {"iucn_category_fields": {"mammals": "category", "birds": None}}})
     spec, _ = p.spec
     assert set(spec.lazy) == {"mammals", "fields_mammals"}          # birds not queried
     m = _measure(p, u, {"mammals": 4, "fields_mammals": True})
@@ -241,3 +242,12 @@ def test_gross_loss_and_gain_are_split_by_type(fake_ee):
     u2, p2 = _plan("natural_gross_loss_pct")
     spec2, _ = p2.spec
     assert {"loss_from_natural_forest_ha", "loss_from_other_natural_ha", "loss_to_crops_ha", "loss_to_built_ha"} <= set(spec2.extras)
+
+
+def test_bird_red_list_field_confirmed_by_probe_is_the_default(fake_ee):
+    """Probe 27 Oct (live EE): birds 'RedList__5' holds CR/DD/EN/LC/NT/VU; 'RedList_IU' is an ID, 'RedList__1' the order."""
+    from darukaa_adaptive.config import AssessmentConfig
+    assert AssessmentConfig().options["iucn_category_fields"] == {"mammals": "category", "birds": "RedList__5"}
+    u, p = _plan("threatened_species_range_count", {"options": AssessmentConfig().options})
+    spec, _ = p.spec
+    assert set(spec.lazy) == {"mammals", "fields_mammals", "birds", "fields_birds"}

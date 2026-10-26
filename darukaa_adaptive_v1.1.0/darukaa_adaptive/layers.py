@@ -618,10 +618,11 @@ def _range_count(ctx, assets, filt=None, required_fields=("sci_name",)):
 
 def b_threatened_range(ctx):
     """Threatened (CR/EN/VU) species per asset. The Red List category field differs between
-    the Darukaa-held snapshots (probe 26 Oct: mammals 'category'; birds have no 'category'),
-    so it is configured per asset and checked lazily; a missing field is an error."""
+    the Darukaa-held snapshots (probes 26-27 Oct: mammals 'category'; birds 'RedList__5'),
+    so it is configured per asset and checked lazily; a missing field is an error and an
+    unconfigured asset is excluded and reported."""
     ee = ee_module()
-    fields = ctx.opt("iucn_category_fields", {"mammals": "category", "birds": None})
+    fields = ctx.opt("iucn_category_fields", {"mammals": "category", "birds": "RedList__5"})
     lazy, parts = {}, []
     skipped = [n for n in ("mammals", "birds") if not fields.get(n)]
     for name, asset in (("mammals", MAMMALS_ASSET), ("birds", BIRDS_ASSET)):

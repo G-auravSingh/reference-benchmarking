@@ -1,4 +1,8 @@
-## 2026-10-27 - canopy-height source (version remains 1.1.0)
+## 2026-10-27 - canopy-height source, SoN score, Karpa run 2 fixes (version remains 1.1.0)
+
+- Birds now count in the threatened-species range count. The probe confirmed the Red List field `RedList__5`.
+- The data-period gap is read from the recorded data end when the period text has no year. Aridity was showing 0 years instead of 2.
+- The probe also reads JRC GFC2020 V4, because V2 is deprecated.
 
 - The 1 m canopy-height source is now configurable (D-27-1). The default stays Meta/WRI v1; CHMv2 is switched on once the probe confirms its Earth Engine asset. A partial setting is an error. The source is recorded on every measurement.
 - The probe searches for CHMv2 and compares it with v1 on the probe units.

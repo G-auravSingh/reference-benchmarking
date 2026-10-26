@@ -8,12 +8,12 @@ Each rung must pass before the next starts. The evidence levels used below are:
 - real Earth Engine (EE) run
 - end-to-end Colab run
 
-| Rung | What | Status (26 Oct 2026) |
+| Rung | What | Status (27 Oct 2026) |
 |---|---|---|
-| R1 Offline | Unit and mocked end-to-end tests, plus an independent review of the EE code (10 findings fixed) | **Pass**: 67 tests, Python 3.13 (unit tests and mocks only) |
+| R1 Offline | Unit and mocked end-to-end tests, plus an independent review of the EE code (10 findings fixed) | **Pass**: 75 tests, Python 3.13 (unit tests and mocks only) |
 | CR1 Probe | Read-only EE probe. Notebook section 4; send back `probe_results.json` | **Done** (24 Oct, live EE, commit 80f1ce38). See `validation/R2_review_2026-10-24.md` |
 | R2a Controls | Forest, cropland, built-up and small-forest polygons with pre-registered expectations (`validation/`). Notebook section 6; send back `R2_controls_bundle.zip` | **Run 3** (26 Oct, commit 157d84b8): 30 PASS, 0 MISS, 2 NO_DATA. The 2 NO_DATA are cropland and built-up P4, withheld by design under D-26-1 (`reference_insufficient`). **Passed**, with that documented reason. See `validation/R2b_Karpa_review_2026-10-26.md` |
-| R2b Single real polygon | Corbett Karpa (151 ha) | **Run 1** (26 Oct): ran end to end. Three layer errors fixed. F-1 (canopy height) open, pending the CHMv2 probe. F-2 (headline for restoration sites) addressed by D-27-2 and D-27-3, to be confirmed on the Karpa re-run |
+| R2b Single real polygon | Corbett Karpa (151 ha) | **Run 1** (26 Oct): ran end to end. Three layer errors fixed. **Run 2** (27 Oct, commit 1bfc37a7): new report confirmed (F-2 closed). F-1 diagnosed (source error on the small forest; stale epoch at Karpa), with proposal P-27-4 open. Birds' Red List field confirmed |
 | R3 Separated polygons | Corbett: 4 sites, 1–30 km apart | Pending |
 | R4 Adjacent, fragmented EMUs | Tata, 9 EMUs inside a 126.7 ha boundary | Pending |
 | R5 Other project types | SoulForest, FCF GV, FCF Soova; aquatic once the design exists | Pending |

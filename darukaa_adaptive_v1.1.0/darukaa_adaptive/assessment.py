@@ -102,9 +102,14 @@ def period_gap(m: Measurement, window_end_year: int) -> float:
     """Years between the data used and the assessment window, from the recorded period."""
     import re
     years = [int(y) for y in re.findall(r"(?<!\d)(20\d\d|19\d\d)(?!\d)", m.effective_period or "")]
-    extra_year = m.extras.get("bii_year") if isinstance(m.extras, dict) else None
+    extras = m.extras if isinstance(m.extras, dict) else {}
+    extra_year = extras.get("bii_year")
     if isinstance(extra_year, (int, float)):
         years.append(int(extra_year))
+    end = extras.get("period_end")          # exclusive "YYYY-MM" end of the data actually used
+    if isinstance(end, str) and re.fullmatch(r"\d{4}-\d{2}", end):
+        y, mo = int(end[:4]), int(end[5:])
+        years.append(y - 1 if mo == 1 else y)
     if not years:
         return 0.0
     return float(max(0, window_end_year - max(years)))

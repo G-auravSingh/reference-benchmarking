@@ -307,3 +307,12 @@ def test_pillar_reports_the_metric_that_sets_it():
                           ms("bii", 86, "Medium")], "u", "P2")
     assert p.limiting_metric == "canopy_height_m" and p.limiting_confidence == "Medium"
     assert any("pillar set by canopy_height_m" in f for f in p.flags)
+
+
+def test_period_gap_reads_recorded_data_end_when_the_period_text_has_no_year():
+    """Karpa run 27 Oct: aridity used TerraClimate to 2024-12 but reported a 0-year gap."""
+    from darukaa_adaptive.assessment import period_gap
+    from darukaa_adaptive.measurement import Measurement
+    m = Measurement("aridity_index", "S", "site", 0.98, "ok",
+                    effective_period="12 months to latest TerraClimate month", extras={"period_end": "2025-01"})
+    assert period_gap(m, 2026) == 2.0     # last month of data is 2024-12 (period_end is exclusive)
