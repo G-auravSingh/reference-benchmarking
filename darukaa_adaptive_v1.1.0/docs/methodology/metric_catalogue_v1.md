@@ -114,7 +114,7 @@ A pixel is classified in this order:
 | `star_t`, `life_score`, IUCN range richness | — | **NOT USED** (C7) | Commercial use needs an IBAT licence or IUCN permission. Optional: write to IUCN to ask whether Red List *Categories* can be used per species, and whether a pilot waiver exists. |
 | in-situ `acoustic_*`, `edna_*`, `field_*` | client data | CONTEXTUAL (hooks) | Not scored this week. |
 
-**P3 scored status:** not covered. The report states "Species extinction risk and populations: not covered. Licence-restricted data. Screening records and in-situ hooks shown" (comply or explain, TOR p.83). The headline uses P1 and P2 (D-23-10).
+**P3 scored status:** not covered. The report states "Species extinction risk and populations: not covered. Licence-restricted data. Screening records and in-situ hooks shown" (comply or explain, TOR p.83). The pillar profile is the primary view (D-27-2). The secondary SoN score is the equal-weight geometric mean of P1 and P2, plus P3 when scored, labelled as a Darukaa composite (D-27-3).
 
 ## P4 Pressure (SITE; low_pressure reference, D-25-1; native value, all-ring comparison and absolute class shown beside each score)
 
@@ -146,7 +146,7 @@ A pixel is classified in this order:
   - managed area;
   - ForTy managed class shares (planted, plantation, tree crops) and DW shares;
   - peak-season NDVI and canopy height on managed pixels, against the same managed class in the region (regional_context).
-- **Label:** "Managed-land vegetation [DARUKAA]". It never feeds the condition headline.
+- **Label:** "Managed-land vegetation [DARUKAA]". It never feeds the SoN score.
 
 ## Scored metrics per pillar (default; every metric can be switched on in Colab, A2)
 

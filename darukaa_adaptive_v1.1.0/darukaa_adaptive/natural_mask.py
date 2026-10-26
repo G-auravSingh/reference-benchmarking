@@ -118,6 +118,7 @@ def build_mask(region, start: str, end_exclusive: str, min_probability: float = 
         nat2020.rename("natural_2020"), natural_now.rename("natural_now"), loss.rename("loss"),
         gain_candidate.rename("gain_candidate"), managed.rename("managed"), uncertain.rename("uncertain"),
         stratum.rename("stratum"), label.rename("dw_label"), sbtn_cls.rename("sbtn_class"),
+        has_forty.And(forty_nat).rename("forest_2020"),
     ]).updateMask(label.mask())
     if crs is None:
         raise ValueError("build_mask needs a metric CRS (e.g. the site's UTM zone)")

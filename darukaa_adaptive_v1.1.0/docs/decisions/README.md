@@ -21,7 +21,7 @@ This folder holds the approved methodology and process decisions. Read it before
 | `2026-10-23_decisions.md` | Method approval, pillar restructure, assessment units, pressure scoring, headline rule |
 | `2026-10-25_decisions.md` | Pressure reference (option B, without circularity) and peak-window buffer, after the first live run |
 | `2026-10-26_decisions.md` | Low-pressure reference floor and search widening; fire-year validity |
-| `2026-10-27_decisions.md` | Canopy-height source switch to CHMv2 (when readable in Earth Engine); headline option C; proposed SoN composite score |
+| `2026-10-27_decisions.md` | Canopy-height source switch to CHMv2 (when readable in Earth Engine); headline option C; SoN composite score (D-27-3) |
 | `audit-2026-10.md` | Keep, change or delete verdict for each file, plus the batch log |
 
 **Process rules** (approved 23 Oct):

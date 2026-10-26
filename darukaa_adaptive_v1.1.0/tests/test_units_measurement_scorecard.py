@@ -206,11 +206,44 @@ def test_headline_uses_p1_p2_and_keeps_pressure_separate():
     p2 = aggregate_pillar([_ms("ndvi_peak_season", 64), _ms("lai_s2", 64), _ms("bii", 64)], "u", "P2")
     p4 = aggregate_pillar([_ms("built_fraction", 10), _ms("road_density", 10), _ms("fire_frequency", 10)], "u", "P4")
     h = headline({"P1": p1, "P2": p2, "P4": p4}, "u")
-    assert h.condition_score == pytest.approx(72.0)
-    assert h.condition_pillars == ["P1", "P2"] and h.condition_status == "scored_without_P3"
+    assert h.son_score == pytest.approx(72.0)
+    assert h.son_pillars == ["P1", "P2"] and h.son_status == "scored_without_P3"
     assert h.pressure_score == pytest.approx(10.0)
     h2 = headline({"P1": p1, "P4": p4}, "u")
-    assert h2.condition_score is None and "P2" in h2.condition_status
+    assert h2.son_score is None and "P2" in h2.son_status and h2.weakest_pillar is None
+
+
+def _ms_c(metric, score, conf):
+    m = _ms(metric, score)
+    m.confidence = conf
+    return m
+
+
+def test_son_score_carries_weakest_pillar_confidence_coverage_and_label():
+    """P-27-2 (approved 27 Oct): equal-weight geometric mean, always with its companions."""
+    p1 = aggregate_pillar([_ms("natural_extent_pct", 90), _ms("tree_cover_loss_rate", 90), _ms("natural_core_area_pct", 90)], "u", "P1")
+    p2 = aggregate_pillar([_ms_c("ndvi_peak_season", 40, "Medium"), _ms("lai_s2", 60), _ms("bii", 60)], "u", "P2")
+    h = headline({"P1": p1, "P2": p2}, "u")
+    assert h.son_score == pytest.approx((90 * 40) ** 0.5)
+    assert h.weakest_pillar == "P2" and h.weakest_pillar_score == pytest.approx(40)
+    assert h.son_confidence == "Medium"                      # lowest of the contributing pillars
+    assert "species" in h.coverage_label and "not covered" in h.coverage_label
+    assert "Darukaa composite" in h.label and "not a Nature Positive standard metric" in h.label
+    assert h.son_divergence_flag is None                    # 60 - 40 = 20, not more than 20
+    p1b = aggregate_pillar([_ms("natural_extent_pct", 95), _ms("tree_cover_loss_rate", 95), _ms("natural_core_area_pct", 95)], "u", "P1")
+    p2b = aggregate_pillar([_ms("ndvi_peak_season", 20), _ms("lai_s2", 60), _ms("bii", 60)], "u", "P2")
+    hb = headline({"P1": p1b, "P2": p2b}, "u")
+    assert hb.son_divergence_flag and "P2" in hb.son_divergence_flag
+    row = hb.row()
+    for k in ("son_score_0_100", "weakest_pillar", "weakest_pillar_score", "son_confidence", "coverage_label", "son_divergence_flag"):
+        assert k in row
+
+
+def test_son_score_never_includes_pressure():
+    p1 = aggregate_pillar([_ms("natural_extent_pct", 80), _ms("tree_cover_loss_rate", 80), _ms("natural_core_area_pct", 80)], "u", "P1")
+    p2 = aggregate_pillar([_ms("ndvi_peak_season", 80), _ms("lai_s2", 80), _ms("bii", 80)], "u", "P2")
+    p4 = aggregate_pillar([_ms("built_fraction", 1), _ms("road_density", 1), _ms("fire_frequency", 1)], "u", "P4")
+    assert headline({"P1": p1, "P2": p2, "P4": p4}, "u").son_score == pytest.approx(80)
 
 
 def test_area_weighted_rollup_labels_contribution():

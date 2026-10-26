@@ -230,3 +230,14 @@ def test_chmv2_search_keeps_only_matching_assets_and_records_errors(fake_ee):
     assert [a["id"] for a in folders[P.CHMV2_SEARCH_FOLDERS[0]]] == ["projects/meta-forest-monitoring-okw37/assets/CanopyHeight_v2"]
     assert "error" in folders[P.CHMV2_SEARCH_FOLDERS[1]]
     assert set(out["candidates"]) == {"projects/user/pasted", "projects/meta-forest-monitoring-okw37/assets/CanopyHeight_v2"}
+
+
+def test_gross_loss_and_gain_are_split_by_type(fake_ee):
+    """Nature Positive rule: gross loss and gross gain by ecosystem type, never netted."""
+    from darukaa_adaptive.extraction import _measure
+    u, p = _plan("natural_gross_gain_ha")
+    spec, _ = p.spec
+    assert {"gain_trees_ha", "gain_shrub_and_scrub_ha", "gain_grass_ha", "gain_flooded_vegetation_ha", "gain_water_ha"} <= set(spec.extras)
+    u2, p2 = _plan("natural_gross_loss_pct")
+    spec2, _ = p2.spec
+    assert {"loss_from_natural_forest_ha", "loss_from_other_natural_ha", "loss_to_crops_ha", "loss_to_built_ha"} <= set(spec2.extras)

@@ -62,14 +62,18 @@ def tables(res: AssessmentResult) -> Dict[str, pd.DataFrame]:
     roles = pd.DataFrame(cat.catalogue_table(res.roles))
     units = pd.DataFrame([s.to_dict() for s in res.units.sites])
     proj = []
-    for k in ("condition", "pressure", "P1", "P2", "P3", "P4"):
+    for k in ("P1", "P2", "P3", "P4", "son", "pressure"):
         r = res.project[k]
         proj.append({"item": k, "value_0_100": r["value"], "low": r["interval"][0], "high": r["interval"][1],
-                     "concern": concern_label(r["value"]), "label": r["label"]})
+                     "concern": concern_label(r["value"]), "confidence": r.get("confidence"),
+                     "weakest_pillar": r.get("weakest_pillar"), "coverage_label": r.get("coverage_label"),
+                     "divergence_flag": r.get("divergence_flag"),
+                     "limiting_metrics": ", ".join(r.get("limiting_metrics") or []), "label": r["label"]})
     return {
         "metrics": pd.DataFrame(mrows), "scores": pd.DataFrame(srows), "pillars": pd.DataFrame(prow),
         "site_headlines": pd.DataFrame(hrow), "project_summary": pd.DataFrame(proj), "metric_roles": roles,
-        "units": units, "nature_positive_coverage": pd.DataFrame(res.project["nature_positive_coverage"]),
+        "units": units, "restoration_and_change": pd.DataFrame(res.project["restoration"]["sites"]),
+        "nature_positive_coverage": pd.DataFrame(res.project["nature_positive_coverage"]),
         "reference_condition_pool": pd.DataFrame(res.references.get("condition_pool") or []),
         "flags": pd.DataFrame(res.flags),
     }
@@ -83,6 +87,28 @@ def _fmt(x, nd=1):
     return html.escape(str(x))
 
 
+def _pillar_tile(key: str, r: Dict) -> str:
+    if r["value"] is None:
+        body = f"<div class='big'>–</div><div class='muted'>not scored: {html.escape(r['label'])}</div>"
+    else:
+        lim = ", ".join(r.get("limiting_metrics") or []) or "–"
+        body = (f"<div class='big'>{_fmt(r['value'])}</div><div>90% interval {_fmt(r['interval'][0])}–{_fmt(r['interval'][1])}"
+                f" · confidence {_fmt(r.get('confidence'))}</div><div class='muted'>set by: {html.escape(lim)}; {html.escape(r['label'])}</div>")
+    return f"<div class='tile'><div class='muted'>{html.escape(cat.PILLARS[key])}</div>{body}</div>"
+
+
+def _restoration_table(rest: Dict) -> str:
+    tot = rest["totals"]
+    rows = [("Candidate gross gain, all types", "candidate_gain_ha")] + [(f"  gain as {k[5:-3].replace('_', ' ')}", k) for k in
+            ("gain_trees_ha", "gain_shrub_and_scrub_ha", "gain_grass_ha", "gain_flooded_vegetation_ha", "gain_water_ha")]
+    rows += [("Gross loss, all types", "gross_loss_ha"), ("  loss from natural forest (2020)", "loss_from_natural_forest_ha"),
+             ("  loss from other natural (2020)", "loss_from_other_natural_ha"), ("  converted to cropland", "loss_to_crops_ha"),
+             ("  converted to built-up", "loss_to_built_ha")]
+    body = "".join(f"<tr><td>{html.escape(lab)}</td><td>{_fmt(tot[k]['value'], 2)}</td><td>{tot[k]['sites_with_value']} of {tot[k]['sites']}"
+                   f"{' (partial)' if tot[k]['partial'] else ''}</td></tr>" for lab, k in rows)
+    return f"<table><thead><tr><th>Item</th><th>ha</th><th>sites with a valid value</th></tr></thead><tbody>{body}</tbody></table>"
+
+
 def html_report(res: AssessmentResult, t: Dict[str, pd.DataFrame]) -> str:
     p = res.project
     cov = t["nature_positive_coverage"]
@@ -92,7 +118,7 @@ def html_report(res: AssessmentResult, t: Dict[str, pd.DataFrame]) -> str:
         head = "".join(f"<th>{html.escape(c)}</th>" for c in cols)
         body = "".join("<tr>" + "".join(f"<td>{_fmt(r.get(c), 2)}</td>" for c in cols) + "</tr>" for r in df.to_dict("records"))
         return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
-    cond, pres = p["condition"], p["pressure"]
+    son, pres = p["son"], p["pressure"]
     mt = t["metrics"]
     site_rows = mt[mt["level"] == "site"]
     return f"""<!doctype html><html><head><meta charset='utf-8'><title>Darukaa Adaptive assessment: {html.escape(res.units.project_id)}</title>
@@ -103,9 +129,17 @@ table{{border-collapse:collapse;font-size:12px;width:100%;margin:8px 0}}th,td{{b
 <p class='muted'>Darukaa Adaptive v{VERSION} · commit {_git_commit()[:10]} · assessment window {res.config.window_start} to {res.config.window_end} · baseline year {res.config.baseline_year} · generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC</p>
 <p class='note'>All results are <b>preparatory</b> under the Nature Positive Initiative measurement guidance (satellite data, natural/non-natural classification, no ground-truthing). They support screening and baseline description; they do not support nature-positive claims. Landscape results are context and are not attributable to the project.</p>
 <h2>Nature Positive State of Nature indicators [standard]</h2>{table(cov, ['indicator','covered','how'])}
-<h2>Headline (Darukaa 0–100 index [Darukaa])</h2>
-<div class='tile'><div class='muted'>Ecosystem condition (P1+P2{'+P3' if any('P3' in str(h) for h in t['site_headlines'].get('condition_pillars', [])) else ''})</div><div class='big'>{_fmt(cond['value'])}</div><div>90% interval {_fmt(cond['interval'][0])}–{_fmt(cond['interval'][1])} · concern {concern_label(cond['value']) or '–'}</div><div class='muted'>{html.escape(cond['label'])}</div></div>
-<div class='tile'><div class='muted'>Pressure (P4, reported separately)</div><div class='big'>{_fmt(pres['value'])}</div><div>90% interval {_fmt(pres['interval'][0])}–{_fmt(pres['interval'][1])}</div><div class='muted'>{html.escape(pres['label'])}; 100 = at or below the low-pressure reference of the same ecoregion</div></div>
+<h2>State of nature profile (by pillar)</h2>
+<p class='muted'>Primary view (D-27-2). Each pillar takes its weakest component, so a strong component never hides a weak one. Area-weighted across sites. Condition covers natural and semi-natural land only.</p>
+{''.join(_pillar_tile(k, p[k]) for k in ('P1','P2','P3'))}
+<div class='tile'><div class='muted'>{cat.PILLARS['P4']} (reported separately, not part of the state of nature)</div><div class='big'>{_fmt(pres['value'])}</div><div>90% interval {_fmt(pres['interval'][0])}–{_fmt(pres['interval'][1])} · confidence {_fmt(pres.get('confidence'))}</div><div class='muted'>{html.escape(pres['label'])}; 100 = at or below the low-pressure reference of the same ecoregion</div></div>
+<h2>Restoration and change since 2020 (gross, by type)</h2>
+<p class='muted'>{html.escape(p['restoration']['note'])} Losses and gains are never netted.</p>
+{_restoration_table(p['restoration'])}
+<h2>SoN composite score (secondary)</h2>
+<div class='tile'><div class='muted'>{html.escape(son['label'])}</div><div class='big'>{_fmt(son['value'])}</div><div>90% interval {_fmt(son['interval'][0])}–{_fmt(son['interval'][1])} · confidence {_fmt(son.get('confidence'))} · coverage: {html.escape(son.get('coverage_label') or '–')}</div><div>Weakest pillar: {_fmt(son.get('weakest_pillar'))} ({_fmt(son.get('weakest_pillar_score'))})</div>{f"<div class='note'>{html.escape(son['divergence_flag'])}</div>" if son.get('divergence_flag') else ''}</div>
+<p class='muted'>Equal-weight geometric mean of the scored state pillars (P1, P2, plus P3 when covered); withheld unless P1 and P2 are both scored; pressure is never included. The Nature Positive State of Nature indicators define no composite number; read the pillar profile first.</p>
+<h2>Sites: headline</h2>{table(t['site_headlines'], ['unit_id','son_score_0_100','son_low','son_high','son_confidence','coverage_label','weakest_pillar','weakest_pillar_score','weakest_pillar_metric','son_divergence_flag','pressure_score_0_100','pressure_confidence','son_status'])}
 <h2>Sites</h2>{table(t['units'], ['site_id','boundary_source','area_ha','emu_ids','emu_share_of_site_pct','flags'])}
 <h2>Pillars by unit</h2>{table(t['pillars'][t['pillars']['status']!='insufficient_evidence'] if not t['pillars'].empty else t['pillars'], ['unit_id','pillar_name','score_0_100','score_low','score_high','concern','limiting_component','n_metrics','component_scores','flags'])}
 <p class='muted'>Pillars without enough scored evidence are listed in pillars.csv with status insufficient_evidence; they are not shown as numbers.</p>

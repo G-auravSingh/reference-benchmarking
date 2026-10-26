@@ -26,8 +26,8 @@ from .layers import AREAL_METRICS, monthly_ndvi_means
 from .measurement import Measurement, status_layers
 from .reference_pool import (ConditionPool, build_condition_pool, regional_blocks, regional_sample,
                              same_ecoregion, select_low_pressure_blocks)
-from .scorecard import (Headline, MetricScore, PillarResult, ReferenceSample, aggregate_pillar, area_weighted,
-                        headline, score_metric, _interval)
+from .scorecard import (SON_DIVERGENCE_POINTS, SON_LABEL, Headline, MetricScore, PillarResult, ReferenceSample,
+                        aggregate_pillar, area_weighted, coverage_label, headline, lowest_confidence, score_metric, _interval)
 from .site import projected_buffer
 from .units import AssessmentUnits, Site, build_units
 
@@ -276,13 +276,18 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
     # Project roll-up across sites (D-23-6)
     site_area = {s.site_id: s.area_ha for s in units.sites}
     project: Dict[str, Any] = {"n_sites": len(units.sites), "total_site_area_ha": units.total_site_area_ha}
-    cond = area_weighted([(h.unit_id, site_area[h.unit_id], h.condition_score, h.condition_draws) for h in headlines])
+    son = area_weighted([(h.unit_id, site_area[h.unit_id], h.son_score, h.son_draws) for h in headlines])
     pres = area_weighted([(h.unit_id, site_area[h.unit_id], h.pressure_score, h.pressure_draws) for h in headlines])
-    project["condition"] = cond.__dict__
     project["pressure"] = pres.__dict__
+    project["pressure"]["confidence"] = lowest_confidence([h.pressure_confidence for h in headlines if h.pressure_score is not None])
     for p in ("P1", "P2", "P3", "P4"):
         rows = [pr for pr in pillars if pr.pillar == p and pr.unit_id in site_area]
         project[p] = area_weighted([(pr.unit_id, site_area[pr.unit_id], pr.score, pr.draws) for pr in rows]).__dict__
+        project[p]["confidence"] = lowest_confidence([pr.limiting_confidence for pr in rows if pr.score is not None])
+        lim = [pr for pr in rows if pr.score is not None]
+        project[p]["limiting_metrics"] = sorted({pr.limiting_metric for pr in lim if pr.limiting_metric})
+    project["son"] = son_rollup(son, headlines, project)
+    project["restoration"] = restoration_summary(measurements, units)
     project["nature_positive_coverage"] = nature_positive_coverage(scores, roles)
 
     refs = {"condition_pool": (pool.summary() if pool else []), "ecoregion": (pool.ecoregion if pool else None),
@@ -294,6 +299,61 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
                           "message": f"{s.unit_id}/{s.metric}: {s.reference_status}"})
     return AssessmentResult(project.get("project_id", units.project_id), config, units, roles, peak, peak_basis,
                             measurements, scores, pillars, headlines, project, refs, flags)
+
+
+def son_rollup(son, headlines: Sequence[Headline], project: Dict[str, Any]) -> Dict[str, Any]:
+    """Project SoN score (area-weighted over sites) with the same companions as the site score (P-27-2)."""
+    out = dict(son.__dict__)
+    scored = [h for h in headlines if h.son_score is not None]
+    pillars = sorted({p for h in scored for p in h.son_pillars})
+    state = {p: project[p]["value"] for p in ("P1", "P2", "P3") if p in pillars and project[p]["value"] is not None}
+    weakest = min(state, key=state.get) if state else None
+    out.update({
+        "label": f"{SON_LABEL}; {son.label}",
+        "pillars": pillars, "coverage_label": coverage_label(pillars) if pillars else "",
+        "confidence": lowest_confidence([h.son_confidence for h in scored]) if scored else None,
+        "weakest_pillar": weakest, "weakest_pillar_score": state.get(weakest) if weakest else None,
+        "divergence_flag": None})
+    if out["value"] is not None and weakest and out["value"] - state[weakest] > SON_DIVERGENCE_POINTS:
+        out["divergence_flag"] = (f"SoN score {out['value']:.1f} exceeds the weakest pillar {weakest} ({state[weakest]:.1f}) "
+                                  f"by more than {SON_DIVERGENCE_POINTS:.0f} points: the composite hides a weak pillar")
+    return out
+
+
+GAIN_KEYS = ("gain_trees_ha", "gain_shrub_and_scrub_ha", "gain_grass_ha", "gain_flooded_vegetation_ha", "gain_water_ha")
+LOSS_KEYS = ("loss_from_natural_forest_ha", "loss_from_other_natural_ha", "loss_to_crops_ha", "loss_to_built_ha")
+
+
+def restoration_summary(measurements: Sequence[Measurement], units: AssessmentUnits) -> Dict[str, Any]:
+    """Gross loss and candidate gross gain by type per site, never netted (Nature Positive rule).
+
+    A site whose loss or gain measurement is not valid contributes no number; the total
+    then says it is partial instead of treating the site as zero.
+    """
+    by = {(m.unit_id, m.metric): m for m in measurements if m.level == "site"}
+    rows = []
+    for s in units.sites:
+        g = by.get((s.site_id, "natural_gross_gain_ha"))
+        l = by.get((s.site_id, "natural_gross_loss_pct"))
+        g_ok = g is not None and g.status == "ok" and g.value is not None
+        l_ok = l is not None and l.status == "ok"
+        row = {"site_id": s.site_id, "area_ha": s.area_ha,
+               "candidate_gain_ha": g.value if g_ok else None, "gain_status": g.status if g else "not_run",
+               "gross_loss_ha": (l.extras or {}).get("gross_loss_ha") if l_ok else None,
+               "loss_status": l.status if l else "not_run"}
+        for k in GAIN_KEYS:
+            row[k] = (g.extras or {}).get(k) if g_ok else None
+        for k in LOSS_KEYS:
+            row[k] = (l.extras or {}).get(k) if l_ok else None
+        rows.append(row)
+
+    def total(key):
+        vals = [r[key] for r in rows]
+        known = [v for v in vals if v is not None]
+        return {"value": sum(known) if known else None, "sites_with_value": len(known), "sites": len(vals),
+                "partial": len(known) < len(vals)}
+    return {"sites": rows, "totals": {k: total(k) for k in ("candidate_gain_ha", "gross_loss_ha") + GAIN_KEYS + LOSS_KEYS},
+            "note": "Gross figures by type; never netted. Gain is a candidate: Dynamic World cannot confirm natural status."}
 
 
 def nature_positive_coverage(scores: Sequence[MetricScore], roles: Dict[str, cat.RoleDecision]) -> List[Dict[str, str]]:

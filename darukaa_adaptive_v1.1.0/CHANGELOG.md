@@ -2,7 +2,8 @@
 
 - The 1 m canopy-height source is now configurable (D-27-1). The default stays Meta/WRI v1; CHMv2 is switched on once the probe confirms its Earth Engine asset. A partial setting is an error. The source is recorded on every measurement.
 - The probe searches for CHMv2 and compares it with v1 on the probe units.
-- Decided: headline option C (pillar profile first). Proposed: an SoN composite score (P-27-2).
+- Report leads with the state of nature profile (D-27-2): pillar tiles with confidence and limiting metric, pressure separate, then a restoration and change panel (gross loss and candidate gross gain by type, never netted; new `restoration_and_change.csv`).
+- The SoN score (D-27-3) is an equal-weight geometric mean of the scored state pillars, labelled as a Darukaa composite. It always carries the weakest pillar, coverage, lowest pillar confidence and a divergence flag. `condition_*` headline fields are renamed `son_*`.
 
 ## 2026-10-23 - first draft of the rebuilt pipeline (version remains 1.1.0)
 

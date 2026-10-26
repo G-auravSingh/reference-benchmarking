@@ -279,13 +279,32 @@ def b_gross_loss(ctx):
     base = m.select("natural_2020").And(m.select("uncertain").eq(0))
     return RatioSpec(m.select("loss"), base, 10, 100.0, period=f"2020 -> {ctx.start}..{ctx.end_exclusive}",
                      min_denominator_ha=0.01, na_status="not_applicable_no_natural_baseline",
-                     extras={"gross_loss_ha": (m.select("loss"), "ha")})
+                     extras=_loss_by_type(m))
+
+
+GAIN_TYPES = ("trees", "shrub_and_scrub", "grass", "flooded_vegetation", "water")
+
+
+def _loss_by_type(m):
+    """Gross loss split by 2020 type (ForTy natural forest vs other natural) and by what replaced it.
+
+    Nature Positive rule: gross loss by ecosystem type, never netted against gain.
+    """
+    loss = m.select("loss")
+    lab = m.select("dw_label")
+    return {"gross_loss_ha": (loss, "ha"),
+            "loss_from_natural_forest_ha": (loss.And(m.select("forest_2020")), "ha"),
+            "loss_from_other_natural_ha": (loss.And(m.select("forest_2020").Not()), "ha"),
+            "loss_to_crops_ha": (loss.And(lab.eq(nm.DW["crops"])), "ha"),
+            "loss_to_built_ha": (loss.And(lab.eq(nm.DW["built"])), "ha")}
 
 
 def b_gross_gain(ctx):
     m = ctx.mask
-    return RatioSpec(m.select("gain_candidate"), m.select("dw_label").gte(0), 10, factor=None,
-                     period=f"2020 -> {ctx.start}..{ctx.end_exclusive}", na_status="no_valid_pixels")
+    lab = m.select("dw_label")
+    extras = {f"gain_{t}_ha": (m.select("gain_candidate").And(lab.eq(nm.DW[t])), "ha") for t in GAIN_TYPES}
+    return RatioSpec(m.select("gain_candidate"), lab.gte(0), 10, factor=None,
+                     period=f"2020 -> {ctx.start}..{ctx.end_exclusive}", na_status="no_valid_pixels", extras=extras)
 
 
 def b_core_area(ctx):

@@ -366,46 +366,94 @@ def aggregate_pillar(scores: Iterable[MetricScore], unit_id: str, pillar: str, m
                         len(comps), comp_point, limiting, names, flags, lim.metric, lim.confidence)
 
 
+SON_LABEL = "SoN score: Darukaa composite, preparatory; not a Nature Positive standard metric"
+CONFIDENCE_ORDER = {"High": 2, "Medium": 1, "Low": 0}
+SON_DIVERGENCE_POINTS = 20.0     # P-27-2: flag when the composite exceeds the weakest pillar by more than this
+
+
+def lowest_confidence(levels: Sequence[Optional[str]]) -> Optional[str]:
+    """Lowest of the given ratings; unknown (None) if any rating is missing, never assumed High."""
+    if not levels or any(c not in CONFIDENCE_ORDER for c in levels):
+        return None
+    return min(levels, key=CONFIDENCE_ORDER.get)
+
+
+def coverage_label(pillars: Sequence[str]) -> str:
+    names = {"P1": "extent", "P2": "condition", "P3": "species"}
+    have = [names[p] for p in pillars if p in names]
+    missing = [names[p] for p in ("P1", "P2", "P3") if p not in pillars]
+    lab = " and ".join(have) + " only" if missing else "extent, condition and species"
+    if missing:
+        lab += "; " + ", ".join(missing) + " not covered"
+    return lab
+
+
 @dataclass
 class Headline:
+    """Site headline (D-27-2, P-27-2 approved 27 Oct).
+
+    Primary view is the pillar profile. The SoN score is a secondary Darukaa composite:
+    equal-weight geometric mean of the scored state pillars (P1, P2, plus P3 when scored),
+    withheld unless P1 and P2 are scored, never including pressure, and always carried
+    with the weakest pillar, coverage, lowest pillar confidence, interval and its label.
+    """
     unit_id: str
-    condition_score: Optional[float]
-    condition_interval: Tuple[Optional[float], Optional[float]]
-    condition_draws: Optional[np.ndarray]
-    condition_pillars: List[str]
-    condition_status: str
+    son_score: Optional[float]
+    son_interval: Tuple[Optional[float], Optional[float]]
+    son_draws: Optional[np.ndarray]
+    son_pillars: List[str]
+    son_status: str
     pressure_score: Optional[float]
     pressure_interval: Tuple[Optional[float], Optional[float]]
     pressure_draws: Optional[np.ndarray]
     label: str
+    weakest_pillar: Optional[str] = None
+    weakest_pillar_score: Optional[float] = None
+    weakest_pillar_metric: Optional[str] = None
+    son_confidence: Optional[str] = None
+    coverage_label: str = ""
+    son_divergence_flag: Optional[str] = None
+    pressure_confidence: Optional[str] = None
 
     def row(self) -> Dict[str, object]:
-        return {"unit_id": self.unit_id, "condition_score_0_100": self.condition_score,
-                "condition_low": self.condition_interval[0], "condition_high": self.condition_interval[1],
-                "condition_concern": concern_label(self.condition_score), "condition_concern_0_10": concern_0_10(self.condition_score),
-                "condition_pillars": "+".join(self.condition_pillars), "condition_status": self.condition_status,
+        return {"unit_id": self.unit_id, "son_score_0_100": self.son_score,
+                "son_low": self.son_interval[0], "son_high": self.son_interval[1],
+                "son_concern": concern_label(self.son_score), "son_concern_0_10": concern_0_10(self.son_score),
+                "son_confidence": self.son_confidence, "son_pillars": "+".join(self.son_pillars), "son_status": self.son_status,
+                "coverage_label": self.coverage_label, "weakest_pillar": self.weakest_pillar,
+                "weakest_pillar_score": self.weakest_pillar_score, "weakest_pillar_metric": self.weakest_pillar_metric,
+                "son_divergence_flag": self.son_divergence_flag,
                 "pressure_score_0_100": self.pressure_score, "pressure_low": self.pressure_interval[0],
                 "pressure_high": self.pressure_interval[1], "pressure_concern": concern_label(self.pressure_score),
-                "label": self.label}
+                "pressure_confidence": self.pressure_confidence, "label": self.label}
 
 
 def headline(pillars: Mapping[str, PillarResult], unit_id: str) -> Headline:
-    """Condition = geometric mean of P1 and P2, plus P3 when scored (D-23-10). P4 separate."""
+    """SoN score = equal-weight geometric mean of P1 and P2, plus P3 when scored (P-27-2). P4 separate."""
     p1, p2, p3, p4 = (pillars.get(p) for p in ("P1", "P2", "P3", "P4"))
     used = [p for p in (p1, p2, p3) if p is not None and p.score is not None]
     have_core = p1 is not None and p1.score is not None and p2 is not None and p2.score is not None
-    if have_core:
-        draws = _geomean_draws([p.draws for p in used])
-        point = _geomean_point([p.score for p in used])
-        names = [p.pillar for p in used]
-        status = "scored" if len(names) == 3 else "scored_without_P3"
-        cond = (point, _interval(draws), draws, names, status)
-    else:
-        missing = [n for n, p in (("P1", p1), ("P2", p2)) if p is None or p.score is None]
-        cond = (None, (None, None), None, [], f"withheld: {'+'.join(missing)} not scored")
     pres = (p4.score, p4.interval, p4.draws) if p4 is not None and p4.score is not None else (None, (None, None), None)
-    label = (f"Condition from {'+'.join(cond[3])}" if cond[0] is not None else cond[4]) + "; pressure reported separately"
-    return Headline(unit_id, cond[0], cond[1], cond[2], cond[3], cond[4], pres[0], pres[1], pres[2], label)
+    pres_conf = p4.limiting_confidence if p4 is not None and p4.score is not None else None
+    if not have_core:
+        missing = [n for n, p in (("P1", p1), ("P2", p2)) if p is None or p.score is None]
+        status = f"withheld: {'+'.join(missing)} not scored"
+        return Headline(unit_id, None, (None, None), None, [], status, pres[0], pres[1], pres[2],
+                        f"{status}; pressure reported separately", coverage_label=coverage_label([p.pillar for p in used]),
+                        pressure_confidence=pres_conf)
+    draws = _geomean_draws([p.draws for p in used])
+    point = _geomean_point([p.score for p in used])
+    names = [p.pillar for p in used]
+    weakest = min(used, key=lambda p: p.score)
+    div = None
+    if point - weakest.score > SON_DIVERGENCE_POINTS:
+        div = (f"SoN score {point:.1f} exceeds the weakest pillar {weakest.pillar} ({weakest.score:.1f}) by more than "
+               f"{SON_DIVERGENCE_POINTS:.0f} points: the composite hides a weak pillar")
+    status = "scored" if len(names) == 3 else "scored_without_P3"
+    return Headline(unit_id, point, _interval(draws), draws, names, status, pres[0], pres[1], pres[2],
+                    f"{SON_LABEL}; from {'+'.join(names)}; pressure reported separately",
+                    weakest.pillar, weakest.score, weakest.limiting_metric,
+                    lowest_confidence([p.limiting_confidence for p in used]), coverage_label(names), div, pres_conf)
 
 
 @dataclass

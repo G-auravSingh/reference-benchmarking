@@ -43,13 +43,13 @@ def check_bundle(bundle_dir: str | Path, expected: Dict[str, Any]) -> List[Dict[
         out.append(_rule("pillar", p, float(row["score_0_100"].iloc[0]) if len(row) and pd.notna(row["score_0_100"].iloc[0]) else None, op, target))
     h = expected.get("headline", {})
     if h and len(heads):
-        cs = heads["condition_status"].iloc[0]
-        if "condition_status" in h:
-            out.append({"check": "headline", "item": "condition_status", "expected": h["condition_status"], "actual": cs,
-                        "result": "PASS" if cs == h["condition_status"] else "MISS"})
-        if "condition_status_not" in h:
-            out.append({"check": "headline", "item": "condition_status", "expected": f"not {h['condition_status_not']}", "actual": cs,
-                        "result": "PASS" if cs != h["condition_status_not"] else "MISS"})
+        cs = heads["son_status"].iloc[0]
+        if "son_status" in h:
+            out.append({"check": "headline", "item": "son_status", "expected": h["son_status"], "actual": cs,
+                        "result": "PASS" if cs == h["son_status"] else "MISS"})
+        if "son_status_not" in h:
+            out.append({"check": "headline", "item": "son_status", "expected": f"not {h['son_status_not']}", "actual": cs,
+                        "result": "PASS" if cs != h["son_status_not"] else "MISS"})
     return out
 
 

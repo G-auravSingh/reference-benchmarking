@@ -15,7 +15,7 @@
         "canopy_height_m": [">=", 15]
       },
       "pillars": {"P1": [">=", 80], "P2": [">=", 70], "P4": [">=", 70]},
-      "headline": {"condition_status": "scored_without_P3"}
+      "headline": {"son_status": "scored_without_P3"}
     },
     "R2_cropland_Ludhiana": {
       "values": {
@@ -25,7 +25,7 @@
         "ghm": [">=", 0.4]
       },
       "pillars": {"P4": ["<=", 60]},
-      "headline": {"condition_status_not": "scored"},
+      "headline": {"son_status_not": "scored"},
       "note": "Condition applies to natural pixels only; with few natural pixels P2 should be insufficient or low-support, not a confident score."
     },
     "R2_builtup_Pune": {
@@ -36,7 +36,7 @@
         "night_lights": [">=", 10]
       },
       "pillars": {"P4": ["<=", 30]},
-      "headline": {"condition_status_not": "scored"}
+      "headline": {"son_status_not": "scored"}
     },
     "R2_small_forest": {
       "statuses": {

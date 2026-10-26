@@ -96,8 +96,8 @@ def test_end_to_end_bundle(mocked, tmp_path):
     res = A.run_assessment(_project(), cfg, progress=lambda *_: None)
     assert len(res.units.sites) == 1 and len(res.headlines) == 1
     h = res.headlines[0]
-    assert h.condition_score is not None and h.condition_pillars == ["P1", "P2"]
-    assert h.condition_interval[0] <= h.condition_score <= h.condition_interval[1]
+    assert h.son_score is not None and h.son_pillars == ["P1", "P2"]
+    assert h.son_interval[0] <= h.son_score <= h.son_interval[1]
     assert h.pressure_score is not None
     # the simulated EMU layer errors stay errors: never a value, never a score
     errs = [m for m in res.measurements if m.metric == "night_lights" and m.level == "emu"]
@@ -115,8 +115,14 @@ def test_end_to_end_bundle(mocked, tmp_path):
     assert pending["value"].isna().all() and not pending["sufficient_to_score"].any()
     html = (d / "report.html").read_text()
     assert "preparatory" in html and "not attributable" in html
+    # D-27-2 option C: the pillar profile comes before the composite, and the composite is labelled
+    assert html.index("State of nature profile") < html.index("SoN composite score")
+    assert "not a Nature Positive standard metric" in html and "Restoration and change" in html
+    assert "never netted" in html
+    proj = pd.read_csv(d / "project_summary.csv")
+    assert "son" in set(proj["item"]) and "condition" not in set(proj["item"])
     checks = check_bundle(d, {"values": {"natural_extent_pct": [">=", 85]}, "pillars": {"P1": [">=", 80]},
-                              "headline": {"condition_status": "scored_without_P3"}})
+                              "headline": {"son_status": "scored_without_P3"}})
     assert all(c["result"] == "PASS" for c in checks), checks
 
 
@@ -126,7 +132,7 @@ def test_missing_condition_reference_withholds_condition_not_zero(mocked, monkey
     monkeypatch.setattr(A, "build_condition_pool", broken_pool)
     res = A.run_assessment(_project(), AssessmentConfig(output_dir=str(tmp_path)), progress=lambda *_: None)
     h = res.headlines[0]
-    assert h.condition_score is None and "P2" in h.condition_status
+    assert h.son_score is None and "P2" in h.son_status
     assert any(f["code"] == "condition_reference_failed" for f in res.flags)
 
 

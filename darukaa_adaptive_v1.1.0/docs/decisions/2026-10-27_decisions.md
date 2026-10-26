@@ -31,6 +31,23 @@ Evidence: R2 run 3 and the Corbett Karpa run, both end-to-end Colab runs on live
 - If the probe finds a readable CHMv2 asset with a height band in metres, the default switches to it in a mechanical batch. That batch also updates the catalogue dataset and the metric catalogue.
 - If no Earth Engine asset exists, the only route is importing AWS tiles per site. That is not "as easy as v1", so it will go back to Gaurav before any work.
 
+**CHMv2 source found by Gaurav (27 Oct).** The public AWS bucket is `s3://dataforgood-fb-data/forests/v2/global/dinov3_global_chm_v2_ml3/`. Its layout, from the Meta and WRI notebook `facebookresearch/dinov3/notebooks/chmv2_dataset_exploration.ipynb` (read in full, 27 Oct):
+
+- `chm/<quadkey>.tif`: cloud-optimised GeoTIFFs. Each covers one zoom-level-10 Web Mercator tile and is 32,768 × 32,768 pixels, `uint8`, in metres, EPSG:3857. The GeoTIFF mask band flags cloud in the input imagery.
+- `metadata/`: GeoJSON polygons per tile, each carrying the observation date of the input imagery.
+- `tiles.geojson`: the extent and quadkey of every tile.
+- No Earth Engine asset is named in the notebook.
+
+I could not check tile sizes from here, because the session proxy blocks S3.
+
+**The integration problem.** Earth Engine reads cloud-optimised GeoTIFFs only from Google Cloud Storage (`gs://`), not from S3. Reading CHMv2 "like v1" therefore needs one of:
+
+- **(a)** an Earth Engine asset published by Meta and WRI. The probe lists their folder.
+- **(b)** copying the tiles that cover the sites and the reference search area (z10 tiles are about 35 km across at 20–30° N, so about 9 tiles for a 25 km ring and up to about 49 for 100 km) to a Darukaa Cloud Storage bucket, then reading them with `ee.Image.loadGeoTIFF`. This keeps one Earth Engine code path for sites, EMUs and reference samples.
+- **(c)** reading the tiles in Colab outside Earth Engine. That is a second code path, needs the natural mask pulled to the client, and is not recommended.
+
+Order: run the probe first, then (b) if a bucket is available.
+
 **GLAD and GEDI** stay contextual, as independent cross-checks: Landsat plus GEDI lidar, and spaceborne lidar footprints.
 
 ## D-27-2. Headline presentation: option C (approved by Gaurav, 27 Oct)
@@ -42,9 +59,9 @@ The primary view is the pillar profile, not a single number:
 
 For sites with candidate gain, a restoration panel shows candidate gain by type, as gross figures and never netted.
 
-Implementation is held until P-27-2 is decided, so that the report changes once.
+Implemented together with D-27-3 (see below).
 
-## P-27-2. Overall State of Nature (SoN) score: proposal, awaiting approval
+## D-27-3 (was P-27-2). Overall State of Nature (SoN) score: approved by Gaurav, 27 Oct; implemented
 
 Gaurav asked for a single SoN score for when one is needed, such as investor screening, with option C still the primary view.
 
@@ -58,7 +75,7 @@ Gaurav asked for a single SoN score for when one is needed, such as investor scr
 | 4 | UNDP HDI (since 2010); OECD/JRC Handbook on Constructing Composite Indicators (2008) | Method guidance (not a biodiversity standard) | Geometric mean with equal weights, chosen to limit substitution between dimensions. The handbook advises equal weights when there is no agreed basis for weighting, plus a sensitivity check. | Partly non-compensating; widely understood. |
 | 5 | Nature Positive State of Nature indicators | STD | Defines no composite number. The indicators are "designed to be combined" as a holistic set and embedded *alongside* pressure metrics (Technical Output Report Box 7.1, p. 83; Initial Measurement Guidance App. A, p. 33). | Any single number is therefore a Darukaa construct and must be labelled as one. |
 
-### Recommendation
+### Adopted (approved 27 Oct)
 
 **Definition.** SoN score = equal-weight geometric mean of the scored state pillars: P1 and P2, plus P3 once it is covered. This is the number the code already computes as the headline (D-23-10). The change is in its label and in the information that must travel with it.
 
@@ -81,6 +98,28 @@ Gaurav asked for a single SoN score for when one is needed, such as investor scr
 
 **A NatureMetrics-style "nature risk" view** would combine state with pressure and dependency. It should be a separate product, shown as a state-versus-pressure matrix rather than a merged number, because condition and pressure stay separate under our rules. Not part of this proposal.
 
+### Implementation (27 Oct, offline tests and mocks only)
+
+- `scorecard.headline` returns:
+  - the SoN score, interval and status;
+  - the weakest pillar, with its score and limiting metric;
+  - the lowest pillar confidence (a pillar's confidence is the confidence of the metric that sets it; unknown if any is missing, never assumed High);
+  - the coverage label;
+  - the divergence flag (more than 20 points);
+  - the pressure confidence;
+  - the label.
+- The project roll-up (`project["son"]`) carries the same companions. Each pillar also records its confidence and limiting metrics.
+- Report order:
+  1. Nature Positive coverage;
+  2. the state of nature profile (P1, P2, P3 tiles, then P4 separately);
+  3. restoration and change (gross loss and candidate gross gain by type, never netted, partial totals labelled);
+  4. the SoN composite as a secondary figure;
+  5. the site headline table.
+- Gross loss is split by 2020 type (ForTy natural forest or other natural) and by replacement (cropland or built-up). Candidate gain is split by Dynamic World class. New table: `restoration_and_change.csv`.
+- Field renames:
+  - `condition_*` becomes `son_*`.
+  - `R2_expected.json` keys become `son_status` and `son_status_not`. The expectations themselves are unchanged.
+
 ## Sources (accessed 27 Oct 2026)
 
 - [ACAD] Meta AI blog, "Mapping the World's Forests with Greater Precision: Introducing Canopy Height Maps v2": https://ai.meta.com/blog/world-resources-institute-dino-canopy-height-maps-v2/
@@ -88,6 +127,7 @@ Gaurav asked for a single SoN score for when one is needed, such as investor scr
 - [ACAD] CHMv2 in *Scientific Data*, s41597-026-07882-0 (not accessible): https://www.nature.com/articles/s41597-026-07882-0
 - AWS Open Data registry, CHMv2: https://registry.opendata.aws/dataforgood-fb-forestsv2/
 - Zenodo record 20628959: https://zenodo.org/records/20628959
+- Meta and WRI CHMv2 dataset notebook: https://github.com/facebookresearch/dinov3/blob/main/notebooks/chmv2_dataset_exploration.ipynb
 - GEE community catalogue, Meta trees: https://gee-community-catalog.org/projects/meta_trees/
 - [VENDOR] NatureMetrics Global Nature Risk: https://naturemetrics.com/products/global-nature-risk and https://naturemetrics.com/news/global-nature-risk-why-we-built-it
 - [VENDOR] NatureMetrics Ecosystem Condition Index (8point9 article): https://8point9.com/ecosystem-condition-metric-provides-a-single-score-to-simplify-restoration/
