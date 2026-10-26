@@ -1,3 +1,9 @@
+## 2026-10-27 - canopy-height source (version remains 1.1.0)
+
+- The 1 m canopy-height source is now configurable (D-27-1). The default stays Meta/WRI v1; CHMv2 is switched on once the probe confirms its Earth Engine asset. A partial setting is an error. The source is recorded on every measurement.
+- The probe searches for CHMv2 and compares it with v1 on the probe units.
+- Decided: headline option C (pillar profile first). Proposed: an SoN composite score (P-27-2).
+
 ## 2026-10-23 - first draft of the rebuilt pipeline (version remains 1.1.0)
 
 - Rebuilt the assessment around an approved metric catalogue (`docs/methodology/metric_catalogue_v1.md`), aligned with the four Nature Positive State of Nature indicators.

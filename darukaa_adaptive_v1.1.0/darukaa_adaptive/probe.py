@@ -16,6 +16,11 @@ from . import natural_mask as nm
 from .ee_utils import ee_module, to_ee, utm_crs
 
 GRIP4_FOLDER = "projects/sat-io/open-datasets/GRIP4"
+# P-27-1: no public Earth Engine asset ID for Meta/WRI CHMv2 was found on 27 Oct 2026
+# (Meta blog, AWS registry, Zenodo, GEE community catalogue). These folders are listed
+# read-only to find it; any ID the user pastes is checked too.
+CHMV2_SEARCH_FOLDERS = ("projects/meta-forest-monitoring-okw37/assets", "projects/sat-io/open-datasets/facebook")
+CHMV2_KEYWORDS = ("v2", "chm", "canopy")
 
 
 def _try(fn: Callable[[], Any]) -> Any:
@@ -31,6 +36,32 @@ def _image_info(ee, img) -> Dict[str, Any]:
     return {"bands": [b["id"] for b in bands],
             "crs": bands[0].get("crs") if bands else None,
             "scale_m": img.select(0).projection().nominalScale().getInfo() if bands else None}
+
+
+def chmv2_search(candidates: Sequence[str] = ()) -> Dict[str, Any]:
+    """List likely CHMv2 assets and describe each candidate (bands, scale, size). Read-only."""
+    ee = ee_module()
+    out: Dict[str, Any] = {"folders": {}, "candidates": {}}
+    for folder in CHMV2_SEARCH_FOLDERS:
+        out["folders"][folder] = _try(lambda folder=folder: [
+            {"id": a.get("id") or a.get("name"), "type": a.get("type")}
+            for a in ee.data.listAssets({"parent": folder}).get("assets", [])
+            if any(k in (a.get("id") or a.get("name") or "").lower() for k in CHMV2_KEYWORDS)])
+    found = [a["id"] for v in out["folders"].values() if isinstance(v, list) for a in v if a.get("id")]
+    for cid in dict.fromkeys(list(candidates) + found):
+        if cid == L.META_CHM_ASSET:
+            continue
+        def describe(cid=cid):
+            try:
+                n = ee.ImageCollection(cid).limit(100000).size().getInfo()
+                img, kind = ee.Image(ee.ImageCollection(cid).first()), "ImageCollection"
+            except Exception:  # noqa: BLE001 - may be a single Image, not a collection
+                img, n, kind = ee.Image(cid), None, "Image"
+            props = img.toDictionary().getInfo()
+            return {"kind": kind, "collection_size": n, **_image_info(ee, img),
+                    "properties_sample": dict(list(props.items())[:15])}
+        out["candidates"][cid] = _try(describe)
+    return out
 
 
 def asset_checks() -> Dict[str, Any]:
@@ -62,7 +93,13 @@ def asset_checks() -> Dict[str, Any]:
     return out
 
 
-def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, str]) -> Dict[str, Any]:
+def _load_height(ee, asset: str, band: str, kind: str):
+    src = ee.ImageCollection(asset).mosaic() if kind == "ImageCollection" else ee.Image(asset)
+    return src.select([band])
+
+
+def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, str],
+                chm_candidates: Sequence[Tuple[str, str, str]] = ()) -> Dict[str, Any]:
     ee = ee_module()
     out: Dict[str, Any] = {}
     for uid, geom in units:
@@ -115,6 +152,11 @@ def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, st
             "forty_class_hist": nm.forty_class(g)[0].reduceRegion(ee.Reducer.frequencyHistogram(), g, 10, crs, maxPixels=1e13).getInfo(),
             "sbtn_class_hist": ee.Image(nm.SBTN_ASSET).select("classification").reduceRegion(
                 ee.Reducer.frequencyHistogram(), g, 30, crs, maxPixels=1e13).getInfo()})
+        # P-27-1: CHMv2 beside v1 on the same units (asset, band) pairs confirmed by chmv2_search.
+        r["chmv2_vs_v1"] = {f"{a}:{b}": _try(lambda a=a, b=b, k=k: {
+            "hist_m": _load_height(ee, a, b, k).reduceRegion(
+                ee.Reducer.fixedHistogram(0, 30, 15), g, 10, crs, maxPixels=1e13).getInfo(),
+            **ee.Dictionary(px(_load_height(ee, a, b, k), 10)).getInfo()}) for a, b, k in chm_candidates}
         r["glad_height_codes"] = _try(lambda: ee.ImageCollection(L.GLAD_HEIGHT_ASSET).mosaic().select([0]).reduceRegion(
             ee.Reducer.frequencyHistogram(), g, 30, crs, maxPixels=1e13).getInfo())
         r["fire_images_per_year"] = _try(lambda: {y: ee.ImageCollection(L.MCD64_ASSET).filterDate(f"{y}-01-01", f"{y+1}-01-01").size().getInfo()
@@ -123,8 +165,18 @@ def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, st
     return out
 
 
-def run_probe(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, str], path: str = "probe_results.json") -> Dict[str, Any]:
-    result = {"assets": asset_checks(), "units": unit_checks(units, window), "window": list(window)}
+def run_probe(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, str], path: str = "probe_results.json",
+              chmv2_candidates: Sequence[str] = (), chmv2_band: str = "") -> Dict[str, Any]:
+    """``chmv2_candidates``: CHMv2 asset IDs to check; ``chmv2_band``: band to compare on the units
+    (left empty, the first band of each candidate is used)."""
+    search = _try(lambda: chmv2_search(chmv2_candidates))
+    pairs = []
+    if isinstance(search, dict):
+        for cid, info in search.get("candidates", {}).items():
+            if isinstance(info, dict) and info.get("bands"):
+                pairs.append((cid, chmv2_band or info["bands"][0], info.get("kind", "ImageCollection")))
+    result = {"assets": asset_checks(), "chmv2_search": search,
+              "units": unit_checks(units, window, pairs), "window": list(window)}
     with open(path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, default=str)
     return result

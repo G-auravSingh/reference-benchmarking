@@ -193,3 +193,40 @@ def test_threatened_count_excludes_asset_without_confirmed_category_field(fake_e
     assert set(spec.lazy) == {"mammals", "fields_mammals"}          # birds not queried
     m = _measure(p, u, {"mammals": 4, "fields_mammals": True})
     assert m.value == 4 and m.extras["excluded_unconfirmed_field"] == ["birds"]
+
+
+def test_canopy_height_source_is_configurable_and_recorded(fake_ee):
+    """P-27-1: CHMv2 replaces v1 once the probe confirms an Earth Engine asset; the source is always recorded."""
+    from darukaa_adaptive.extraction import Unit
+    from darukaa_adaptive.layers import ExtractionContext
+    ctx = ExtractionContext(region=None, unit_region=None, **_ctx_base())
+    spec = L.b_chm(ctx)
+    assert "v1" in spec.period and L.META_CHM_ASSET in spec.period
+    fake_ee.ImageCollection.assert_any_call(L.META_CHM_ASSET)
+    opts = {"chm_asset": "projects/x/assets/chm_v2", "chm_band": "b1", "chm_label": "CHMv2 (imagery mostly 2018-2020)"}
+    ctx2 = ExtractionContext(region=None, unit_region=None, **{**_ctx_base(), "options": opts})
+    spec2 = L.b_chm(ctx2)
+    assert "CHMv2" in spec2.period and "projects/x/assets/chm_v2" in spec2.period
+    fake_ee.ImageCollection.assert_any_call("projects/x/assets/chm_v2")
+    assert "CHMv2" in L.b_managed_chm(ctx2).period
+
+
+def test_canopy_height_source_rejects_half_configured_option():
+    from darukaa_adaptive.layers import ExtractionContext
+    ctx = ExtractionContext(region=None, unit_region=None, **{**_ctx_base(), "options": {"chm_asset": "projects/x/assets/chm_v2"}})
+    with pytest.raises(ValueError):
+        L.chm_source(ctx.options)
+
+
+def test_chmv2_search_keeps_only_matching_assets_and_records_errors(fake_ee):
+    from darukaa_adaptive import probe as P
+    fake_ee.data.listAssets.side_effect = [
+        {"assets": [{"id": "projects/meta-forest-monitoring-okw37/assets/CanopyHeight_v2", "type": "IMAGE_COLLECTION"},
+                    {"id": "projects/meta-forest-monitoring-okw37/assets/boundaries", "type": "TABLE"}]},
+        RuntimeError("permission denied"),
+    ]
+    out = P.chmv2_search(["projects/user/pasted"])
+    folders = out["folders"]
+    assert [a["id"] for a in folders[P.CHMV2_SEARCH_FOLDERS[0]]] == ["projects/meta-forest-monitoring-okw37/assets/CanopyHeight_v2"]
+    assert "error" in folders[P.CHMV2_SEARCH_FOLDERS[1]]
+    assert set(out["candidates"]) == {"projects/user/pasted", "projects/meta-forest-monitoring-okw37/assets/CanopyHeight_v2"}

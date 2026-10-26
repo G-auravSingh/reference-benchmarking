@@ -149,10 +149,28 @@ def monthly_ndvi_means(region, months, crs: str, cloud_prob_max: float = 50.0):
     return out
 
 
-def chm_image():
+def chm_source(options=None):
+    """(asset, band, label) of the 1 m canopy-height source (P-27-1).
+
+    Default is Meta/WRI v1 (band "cover_code", EE probe 24 Oct). CHMv2 is switched on by
+    setting all three options ``chm_asset``, ``chm_band`` and ``chm_label`` once the probe
+    has confirmed its Earth Engine asset and band; a partial setting is an error, never a
+    silent fallback to v1.
+    """
+    o = options or {}
+    keys = ("chm_asset", "chm_band", "chm_label")
+    given = [k for k in keys if o.get(k)]
+    if not given:
+        return META_CHM_ASSET, "cover_code", "Meta/WRI CHM v1 (imagery 2009-2020, mostly 2018-2020)"
+    if len(given) != len(keys):
+        raise ValueError(f"canopy-height source half configured: set all of {keys}, got {given}")
+    return o["chm_asset"], o["chm_band"], o["chm_label"]
+
+
+def chm_image(options=None):
     ee = ee_module()
-    # Single band "cover_code" = canopy height in metres (EE probe 24 Oct: forest control 15.7 m).
-    return ee.ImageCollection(META_CHM_ASSET).mosaic().select(["cover_code"]).rename("v")
+    asset, band, _ = chm_source(options)
+    return ee.ImageCollection(asset).mosaic().select([band]).rename("v")
 
 
 def bii_image(end_exclusive: str):
@@ -393,12 +411,17 @@ def b_sbi(ctx):
                      post=sbi, extras={"n_scenes": n})
 
 
+def _chm_period(ctx):
+    asset, band, label = chm_source(ctx.options)
+    return f"{label}; {asset} band {band}"
+
+
 def b_chm(ctx):
-    return StatsSpec(chm_image(), 1, weight=_woody(ctx), by_stratum=True, period="Meta/WRI imagery 2009-2020 (mostly 2018-2020)")
+    return StatsSpec(chm_image(ctx.options), 1, weight=_woody(ctx), by_stratum=True, period=_chm_period(ctx))
 
 
 def b_managed_chm(ctx):
-    return StatsSpec(chm_image(), 1, weight="managed", by_stratum=True, period="Meta/WRI imagery 2009-2020 (mostly 2018-2020)")
+    return StatsSpec(chm_image(ctx.options), 1, weight="managed", by_stratum=True, period=_chm_period(ctx))
 
 
 def b_glad_height(ctx):
