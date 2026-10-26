@@ -40,6 +40,7 @@ STRATA: Dict[int, str] = {
 NATURAL_STRATA = (10, 11, 12, 13, 14, 15, 16, 17)
 MANAGED_STRATA = (21, 22, 23, 24)
 WOODY_STRATA = (10, 11, 12)
+VEGETATED_STRATA = (10, 11, 12, 13, 14)   # vegetation-condition metrics do not apply to water, bare or other
 TYPE_TO_STRATA = {"natural_forest": (10,), "woodland": (11,), "shrub": (12,), "grass": (13,), "wetland": (14,),
                   "water": (15,), "bare": (16,)}
 

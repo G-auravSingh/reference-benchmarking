@@ -214,13 +214,15 @@ CATALOGUE: Tuple[MetricContract, ...] = (
 
     # ------------------------------------------------------------------ P2 condition
     _m(id="ndvi_peak_season", name="Peak-season NDVI", pillar="P2", component="function",
-       definition="Median NDVI of cloud-masked Sentinel-2 scenes in the 3-month peak-greenness window inside the assessment period, natural pixels only.",
+       definition="Median NDVI of cloud-masked Sentinel-2 scenes in the 3-month peak-greenness window inside the assessment period, natural vegetated pixels only (forest, woodland, shrub, grass, wetland).",
+       applicable_types=("natural_forest", "woodland", "shrub", "grass", "wetland"),
        unit="NDVI", direction="higher_is_better", level="site_and_emu", datasets=(S2, S2CP), reference_type="reference_condition",
        recommended_role="scored", role_reason="Sentinel-2 indices used for preparatory condition (TOR pp.102, 116) [STD pilots].", can_score=True,
        natural_only=True, value_range=(-1, 1), framework_tags=("NPI:condition", "TNFD:C5.0", "ESRS:E4-5", "PV:P4"),
        map_spec=MapSpec(("#a50026", "#ffffbf", "#006837"), 0, 0.9, "NDVI")),
     _m(id="lai_s2", name="Leaf area index (Sentinel-2 SL2P)", pillar="P2", component="structure",
-       definition="Median SL2P LAI (20 m) in the peak-greenness window, natural pixels only.",
+       definition="Median SL2P LAI (20 m) in the peak-greenness window, natural vegetated pixels only.",
+       applicable_types=("natural_forest", "woodland", "shrub", "grass", "wetland"),
        unit="m2/m2", direction="higher_is_better", level="site_and_emu", datasets=(SL2P,), reference_type="reference_condition",
        recommended_role="scored", role_reason="Finest open LAI; replaces MODIS 500 m (C6).", can_score=True, natural_only=True,
        value_range=(0, 10), framework_tags=("NPI:condition", "TNFD:C5.0"), notes="EE implementation of SL2P to be verified before scoring.",

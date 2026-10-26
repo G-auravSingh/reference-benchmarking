@@ -361,9 +361,15 @@ def b_wdpa(ctx):
     return _overlap_spec(ctx, fc, "WDPA")
 
 
+def _vegetated(ctx):
+    return "strata:" + ",".join(str(c) for c in nm.VEGETATED_STRATA)
+
+
 def b_ndvi(ctx):
+    # Natural *vegetated* pixels only: NDVI over natural water or bare ground is not a
+    # vegetation-condition signal (R2 run 2: Pune's only natural pixels were water).
     img, n = ndvi_peak(ctx)
-    return StatsSpec(img, 10, weight="natural", by_stratum=True, period=f"S2 peak window {ctx.peak_window[0]}..{ctx.peak_window[1]}",
+    return StatsSpec(img, 10, weight=_vegetated(ctx), by_stratum=True, period=f"S2 peak window {ctx.peak_window[0]}..{ctx.peak_window[1]}",
                      extras={"n_scenes": n})
 
 
