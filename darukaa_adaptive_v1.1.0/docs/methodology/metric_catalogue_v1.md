@@ -121,6 +121,7 @@ A pixel is classified in this order:
 **Reference for P4 (option B, approved 25 Oct).**
 - **Reference value.** The median over *low-pressure* blocks in the same ring and ecoregion.
   - These blocks are chosen by their 2020 natural-ecosystem share from ForTy and SBTN: at least 90% natural, or failing that the most natural 20% of blocks, with at least 20 blocks either way.
+  - No block below 50% natural ever qualifies. If fewer than 20 blocks qualify within 25 km, the search widens to 50 km and then 100 km, staying in the same ecoregion. If there are still too few, P4 is not scored (D-26-1).
   - Because no pressure metric is used to choose them, the reference is not circular with what it scores.
 - **Worst value.** The 95th percentile of all ring blocks, falling back to the contract maximum if that is not usable.
 - **Context figures shown beside the score, not used in it:**
@@ -132,7 +133,7 @@ A pixel is classified in this order:
 | `built_fraction` | DW built class share in the window, 10 m | SCORED | Uses the pressure population (H2). |
 | `ghm` | `TNC/HM/v3/90m_s` (ImageCollection; `All_threats_combined`; 2022), 90 m, CC-BY-4.0 | SCORED | Rebuilt at native scale (H4). Never mixed with the 300 m time series. |
 | `road_density` (new) | GRIP4, `projects/sat-io/open-datasets/GRIP4/*`, CC-BY-4.0, about 2018; km of road per km² in the site + 1 km | SCORED | Vector data, so scale is not an issue. |
-| `fire_frequency` (new) | `MODIS/061/MCD64A1`, 500 m: share of 2016–2025 with a burn. Plus VIIRS 375 m active-fire counts from FIRMS as a finer cross-check *(ID to probe)* | SCORED at context scale | |
+| `fire_frequency` (new) | `MODIS/061/MCD64A1`, 500 m: share of *observed* years 2016–2025 with a burn. A year is observed if it has a burn or at least 6 valid months (D-26-2). Plus VIIRS 375 m active-fire counts from FIRMS as a finer cross-check *(ID to probe)* | SCORED at context scale | |
 | `night_lights` | `NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG` `avg_rad`, about 464 m, window median | SCORED at context scale | No finer open source exists. |
 | `forest_disturbance_alerts` (new) | GFW integrated alerts (GLAD-L, GLAD-S2, RADD), 10–30 m, CC-BY-4.0, 30°N–30°S only | CONTEXTUAL | Covers almost all of India. Access through EE is to be confirmed in the probe. |
 | `population_density` (new) | `WorldPop/GP/100m/pop` 2020, about 93 m, CC-BY-4.0 | CONTEXTUAL | Modelled; overlaps gHM. |

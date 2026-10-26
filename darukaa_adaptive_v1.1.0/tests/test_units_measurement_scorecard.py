@@ -227,9 +227,12 @@ def test_low_pressure_blocks_are_selected_by_natural_share_with_ladder():
     strict = {f"b{i}": 95.0 for i in range(25)} | {f"c{i}": 10.0 for i in range(50)}
     ids, stage = select_low_pressure_blocks(strict, cfg)
     assert len(ids) == 25 and stage.startswith("strict")
-    converted = {f"b{i}": 0.7 * i for i in range(120)}       # a converted ring: max 83 % natural
+    partly = {f"b{i}": 0.7 * i for i in range(120)}          # max 83 % natural, 48 blocks >= 50 %
+    ids, stage = select_low_pressure_blocks(partly, cfg)
+    assert len(ids) == 24 and stage.startswith("quantile") and min(partly[b] for b in ids) >= 50
+    converted = {f"b{i}": 0.3 + 0.01 * i for i in range(120)}  # Ludhiana-like: nothing near natural
     ids, stage = select_low_pressure_blocks(converted, cfg)
-    assert len(ids) == 24 and stage.startswith("quantile") and min(converted[b] for b in ids) >= 0.7 * 96
+    assert ids == [] and stage == "reference_insufficient"     # floor (D-26-1): never compare with cropland
     ids, stage = select_low_pressure_blocks({"a": 99.0, "b": None}, cfg)
     assert ids == [] and stage == "reference_insufficient"
 

@@ -128,3 +128,36 @@ def test_missing_condition_reference_withholds_condition_not_zero(mocked, monkey
     h = res.headlines[0]
     assert h.condition_score is None and "P2" in h.condition_status
     assert any(f["code"] == "condition_reference_failed" for f in res.flags)
+
+
+def test_low_pressure_search_widens_when_ring_is_converted(mocked, monkeypatch, tmp_path):
+    """D-26-1: 25 km ring fully converted -> 50 km ring supplies natural blocks."""
+    def measure(units, metric_ids, ctx_base, min_px=4.0):
+        out = fake_measure_units(units, metric_ids, ctx_base, min_px)
+        for m in out:
+            if m.metric == "natural_extent_pct" and m.level == "reference_block":
+                m.extras["natural_2020_pct"] = 95.0 if m.unit_id.startswith("W50_") else 2.0
+        return out
+    monkeypatch.setattr(A, "measure_units", measure)
+    cfg = AssessmentConfig(output_dir=str(tmp_path))
+    res = A.run_assessment(_project(), cfg, progress=lambda *_: None)
+    info = res.references["regional_blocks"]["SITE_01"]
+    assert info["low_pressure_radius_km"] == 50.0 and info["low_pressure_stage"].startswith("strict")
+    ghm = [s for s in res.scores if s.metric == "ghm" and s.unit_id == "SITE_01"][0]
+    assert ghm.score is not None and ghm.reference_status == "ok"
+
+
+def test_low_pressure_reference_insufficient_everywhere_gives_no_p4_score(mocked, monkeypatch, tmp_path):
+    def measure(units, metric_ids, ctx_base, min_px=4.0):
+        out = fake_measure_units(units, metric_ids, ctx_base, min_px)
+        for m in out:
+            if m.metric == "natural_extent_pct" and m.level == "reference_block":
+                m.extras["natural_2020_pct"] = 1.0
+        return out
+    monkeypatch.setattr(A, "measure_units", measure)
+    res = A.run_assessment(_project(), AssessmentConfig(output_dir=str(tmp_path)), progress=lambda *_: None)
+    info = res.references["regional_blocks"]["SITE_01"]
+    assert info["low_pressure_stage"] == "reference_insufficient" and info["low_pressure_radius_km"] == 100.0
+    ghm = [s for s in res.scores if s.metric == "ghm" and s.unit_id == "SITE_01"][0]
+    assert ghm.score is None and ghm.context_score is not None and ghm.absolute_class is not None
+    assert res.headlines[0].pressure_score is None

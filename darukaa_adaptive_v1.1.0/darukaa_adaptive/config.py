@@ -55,6 +55,7 @@ class AssessmentConfig:
         "iucn_category_field": "category",
         "flii_scale_factor": 0.001,            # EE probe 24 Oct: FLII stored x1000
         "peak_window_buffer_m": 1000.0,        # D-25-2
+        "fire_min_valid_months": 6,            # D-26-2
     })
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     pool: PoolConfig = field(default_factory=PoolConfig)

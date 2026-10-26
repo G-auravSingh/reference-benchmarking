@@ -194,14 +194,41 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
         nat2020 = {m.unit_id: m.extras.get("natural_2020_pct") for m in bms
                    if m.metric == "natural_extent_pct" and m.measured_valid}
         low_ids, stage = select_low_pressure_blocks(nat2020, config.pool)
-        block_info[s.site_id] = {"n_blocks": len(blocks), "low_pressure_blocks": len(low_ids), "low_pressure_stage": stage}
+        radius_used = config.pool.radius_km
+        low_values = {(m.unit_id, m.metric): m for m in bms}
+        # D-26-1: too few qualifying blocks -> widen the search (same ecoregion), measuring
+        # natural share first and pressure metrics only on the blocks that qualify.
+        prev_km = config.pool.radius_km
+        lp_ids = sorted(m for m in regional_ids if cat.get(m).reference_type == "low_pressure")
+        for outer_km in config.pool.low_pressure_search_radii_km:
+            if low_ids or not lp_ids:
+                break
+            try:
+                extra = same_ecoregion(regional_blocks(s.geometry, footprint, config.pool, inner_m=prev_km * 1000.0,
+                                                       outer_km=outer_km, prefix=f"W{int(outer_km)}_"), footprint)
+            except Exception as exc:  # noqa: BLE001
+                flags.append({"severity": "REVIEW", "code": "low_pressure_widening_failed", "message": f"{s.site_id}: {exc}"})
+                break
+            nat_ms = measure_units([Unit(b, "reference_block", g) for b, g, _ in extra], ["natural_extent_pct"], ctx_base,
+                                   config.min_support_px)
+            nat2020.update({m.unit_id: m.extras.get("natural_2020_pct") for m in nat_ms if m.measured_valid})
+            cells.update({b: cell for b, _, cell in extra})
+            low_ids, stage = select_low_pressure_blocks(nat2020, config.pool)
+            new = [(b, g) for b, g, _ in extra if b in set(low_ids)]
+            if new:
+                for m in measure_units([Unit(b, "reference_block", g) for b, g in new], lp_ids, ctx_base, config.min_support_px):
+                    low_values[(m.unit_id, m.metric)] = m
+            radius_used, prev_km = outer_km, outer_km
+        block_info[s.site_id] = {"n_blocks": len(blocks), "low_pressure_blocks": len(low_ids), "low_pressure_stage": stage,
+                                 "low_pressure_radius_km": radius_used}
         for mid in regional_ids:
             vals = {m.unit_id: (m.value if m.measured_valid else None) for m in bms if m.metric == mid}
             regional[(s.site_id, mid)] = regional_sample(mid, vals, cells, config.pool)
             if cat.get(mid).reference_type == "low_pressure":
-                sub = {b: v for b, v in vals.items() if b in set(low_ids)}
+                sub = {b: (low_values[(b, mid)].value if (b, mid) in low_values and low_values[(b, mid)].measured_valid else None)
+                       for b in low_ids}
                 rs = regional_sample(mid, sub, cells, config.pool)
-                rs.method = f"low-pressure blocks ({stage})"
+                rs.method = f"low-pressure blocks ({stage}; search radius {radius_used:g} km)"
                 rs.min_n = min(config.pool.min_n, config.pool.low_pressure_min_blocks)
                 low_ref[(s.site_id, mid)] = rs
 

@@ -57,12 +57,16 @@ class PoolConfig:
     low_pressure_natural_min_pct: float = 90.0   # option B (D-25-1): strict stage
     low_pressure_top_share: float = 0.20         # option B: fallback stage (most natural 20% of blocks)
     low_pressure_min_blocks: int = 20
+    low_pressure_natural_floor_pct: float = 50.0          # D-26-1: no block below this ever qualifies
+    low_pressure_search_radii_km: Tuple[float, ...] = (50.0, 100.0)   # D-26-1: widening, same ecoregion
     seed: int = 20261023
 
 
-def ring(footprint: BaseGeometry, cfg: PoolConfig) -> BaseGeometry:
-    outer = projected_buffer(footprint, cfg.radius_km * 1000.0)
-    inner = projected_buffer(footprint, cfg.exclusion_m)
+def ring(footprint: BaseGeometry, cfg: PoolConfig, inner_m: Optional[float] = None,
+         outer_km: Optional[float] = None) -> BaseGeometry:
+    """Annulus around all sites: from ``inner_m`` (default: the exclusion buffer) to ``outer_km``."""
+    outer = projected_buffer(footprint, (outer_km or cfg.radius_km) * 1000.0)
+    inner = projected_buffer(footprint, max(inner_m or 0.0, cfg.exclusion_m))
     return outer.difference(inner)
 
 
@@ -191,14 +195,15 @@ def build_condition_pool(footprint: BaseGeometry, ctx_base: Dict[str, Any], cfg:
     return ConditionPool(raw["eco"], stages, samples, len(feats), notes)
 
 
-def regional_blocks(site: BaseGeometry, footprint: BaseGeometry, cfg: PoolConfig) -> List[Tuple[str, BaseGeometry, int]]:
+def regional_blocks(site: BaseGeometry, footprint: BaseGeometry, cfg: PoolConfig, inner_m: Optional[float] = None,
+                    outer_km: Optional[float] = None, prefix: str = "RB") -> List[Tuple[str, BaseGeometry, int]]:
     """Client-side square blocks with the site's areal support, inside the ring.
 
     Returns (block_id, geometry, bootstrap cell id). Block side = sqrt(site area),
     clamped to [block_min_m, block_max_m].
     """
     from pyproj import Transformer
-    rg = ring(footprint, cfg)
+    rg = ring(footprint, cfg, inner_m, outer_km)
     epsg = _utm_epsg(footprint)
     fwd = Transformer.from_crs("EPSG:4326", epsg, always_xy=True)
     inv = Transformer.from_crs(epsg, "EPSG:4326", always_xy=True)
@@ -221,7 +226,7 @@ def regional_blocks(site: BaseGeometry, footprint: BaseGeometry, cfg: PoolConfig
     for i, b in enumerate(cands[: cfg.n_regional_blocks]):
         cx, cy = b.centroid.x, b.centroid.y
         cell = int(cx // cfg.bootstrap_cell_m) * 100000 + int(cy // cfg.bootstrap_cell_m)
-        out.append((f"RB{i:03d}", _reproject(b, inv), cell))
+        out.append((f"{prefix}{i:03d}", _reproject(b, inv), cell))
     return out
 
 
@@ -246,21 +251,25 @@ def regional_sample(metric: str, block_values: Dict[str, Optional[float]], cells
 
 
 def select_low_pressure_blocks(natural_2020_pct: Dict[str, Optional[float]], cfg: PoolConfig) -> Tuple[List[str], str]:
-    """Choose low-pressure reference blocks by 2020 natural-ecosystem share (option B, D-25-1).
+    """Choose low-pressure reference blocks by 2020 natural-ecosystem share (D-25-1, D-26-1).
 
     The selection variable comes from the natural mask (ForTy 2020 / SBTN v1.1 2020),
     which is not an input to any P4 pressure metric, so the reference is not chosen by
-    the quantity it is used to score. Ladder: blocks >= ``low_pressure_natural_min_pct``
-    natural; otherwise the most natural ``low_pressure_top_share`` of blocks. Too few
-    blocks -> empty list and stage ``reference_insufficient`` (no silent fallback).
+    the quantity it is used to score. Ladder:
+      strict   - blocks >= ``low_pressure_natural_min_pct`` natural;
+      quantile - the most natural ``low_pressure_top_share`` of all blocks, but only
+                 blocks >= ``low_pressure_natural_floor_pct`` natural ever qualify.
+    Fewer than ``low_pressure_min_blocks`` -> empty list, ``reference_insufficient``.
+    (R2 run 2: without the floor, Ludhiana's "most natural 20%" were 0.3% natural.)
     """
     vals = {b: v for b, v in natural_2020_pct.items() if v is not None}
     strict = [b for b, v in vals.items() if v >= cfg.low_pressure_natural_min_pct]
     if len(strict) >= cfg.low_pressure_min_blocks:
         return sorted(strict), f"strict: >= {cfg.low_pressure_natural_min_pct:.0f}% natural in 2020"
     ranked = sorted(vals, key=lambda b: vals[b], reverse=True)
-    top = ranked[: int(round(len(ranked) * cfg.low_pressure_top_share))]
+    n_top = max(int(round(len(ranked) * cfg.low_pressure_top_share)), cfg.low_pressure_min_blocks)
+    top = [b for b in ranked[:n_top] if vals[b] >= cfg.low_pressure_natural_floor_pct]
     if len(top) >= cfg.low_pressure_min_blocks:
-        floor = vals[top[-1]]
-        return sorted(top), f"quantile: most natural {cfg.low_pressure_top_share:.0%} of blocks (>= {floor:.1f}% natural)"
+        return sorted(top), (f"quantile: most natural blocks, all >= {cfg.low_pressure_natural_floor_pct:.0f}% natural "
+                             f"(lowest {vals[top[-1]]:.1f}%)")
     return [], "reference_insufficient"

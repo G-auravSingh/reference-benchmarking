@@ -4,7 +4,7 @@
 - CR1 probe and R2 run 1. These were an end-to-end Colab run on live Earth Engine on 24 Oct, at commit 80f1ce38.
 - The full review is in `validation/R2_review_2026-10-24.md`.
 
-**D-25-1. Pressure (P4) reference: option B, without circularity.**
+**D-25-1. Pressure (P4) reference: option B, without circularity.** *Refined on 26 Oct by D-26-1: a 50% naturalness floor and search widening to 50 and 100 km.*
 - **What changed.** This replaces D-23-9, which compared pressure against all land in the region. Under that rule an intensively used region flattered its sites: Ludhiana cropland scored P4 = 100.
 - **Reference.** Low-pressure blocks:
   - The blocks are square, the same size as the site, and lie in the same ring and RESOLVE ecoregion.

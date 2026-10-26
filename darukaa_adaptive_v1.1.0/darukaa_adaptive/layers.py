@@ -174,21 +174,23 @@ def ghm_image(region):
     return col.select(GHM_BAND).mosaic().rename("v").setDefaultProjection(first.projection()), first.projection()
 
 
-def fire_frequency_image(first_year: int, last_year: int):
-    """Share of years with a MODIS burned-area detection, valid-data pixels only.
+def fire_frequency_image(first_year: int, last_year: int, min_valid_months: int = 6):
+    """Share of observed years with a MODIS burned-area detection (D-26-2).
 
-    A month counts only where QA bit 1 (valid data) is set; a year is masked at a
-    pixel if any of its months lacks valid data there, so missing data never reads
-    as "not burned". Per-year image counts are returned for the record.
+    A pixel-year is *observed* if any month records a burn, or if at least
+    ``min_valid_months`` months carry the MCD64A1 valid-data QA flag (bit 1).
+    Unobserved pixel-years are masked, never counted as "not burned". Requiring all
+    12 months (R2 run 2) removed most monsoon-region years.
     """
     ee = ee_module()
     col = ee.ImageCollection(MCD64_ASSET)
     years, counts = [], {}
     for y in range(first_year, last_year + 1):
         yc = col.filterDate(f"{y}-01-01", f"{y + 1}-01-01")
-        valid_all = yc.map(lambda i: ee.Image(i).select("QA").bitwiseAnd(2).neq(0)).min()
+        n_valid = yc.map(lambda i: ee.Image(i).select("QA").bitwiseAnd(2).neq(0).unmask(0)).sum()
         burned = yc.map(lambda i: ee.Image(i).select("BurnDate").gt(0).unmask(0)).max()
-        years.append(burned.updateMask(valid_all).rename("v").toFloat())
+        observed = burned.Or(n_valid.gte(min_valid_months))
+        years.append(burned.updateMask(observed).rename("v").toFloat())
         counts[str(y)] = yc.size()
     proj = ee.Image(col.first()).projection()
     return ee.ImageCollection(years).mean().rename("v").setDefaultProjection(proj), proj, counts
@@ -459,7 +461,7 @@ def b_ghm(ctx):
 
 def b_fire(ctx):
     first, last = ctx.opt("fire_first_year", 2016), ctx.opt("fire_last_year", 2025)
-    img, proj, counts = fire_frequency_image(first, last)
+    img, proj, counts = fire_frequency_image(first, last, ctx.opt("fire_min_valid_months", 6))
     return StatsSpec(img, None, crs=proj, weight="none", period=f"MCD64A1 {first}-{last}",
                      extras={"images_per_year": counts})
 
