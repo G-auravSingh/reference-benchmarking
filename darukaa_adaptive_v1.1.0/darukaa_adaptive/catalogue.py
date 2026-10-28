@@ -127,7 +127,7 @@ FLII = Dataset("projects/darukaa-earth-product/assets/flii_global_2019", "2019 (
 MSA = Dataset("raster_paths['msa_gee_asset'] (GLOBIO4 2015 upload)", "GLOBIO4 2015", 300.0, "CC-BY-4.0 (globio.info)", "ACAD", "Schipper et al. 2020, Glob Change Biol 26:760")
 KBA = Dataset("projects/darukaa-earth-product/assets/Biodiversity/KBA_Global_POL_SEP25", "Sep 2025", None, "commercial use restricted (BirdLife/KBA terms); held for review", "STD", "World Database of KBAs")
 WDPA = Dataset("WCMC/WDPA/current/polygons", "monthly", None, "commercial use restricted (UNEP-WCMC terms); held for review", "STD", "UNEP-WCMC & IUCN, Protected Planet")
-IUCN_RANGES = Dataset("projects/darukaa-earth-product/assets/Biodiversity/RedList_* and IUCN_Plant_Redlist", "Darukaa-held", None, "IUCN terms: non-commercial; held for review", "STD", "IUCN Red List spatial data")
+IUCN_RANGES = Dataset("projects/darukaa-earth-product/assets/Biodiversity/RedList_* and IUCN_Plant_Redlist", "Darukaa-held snapshot", None, "IUCN / BirdLife terms", "ACAD", "IUCN Red List and BirdLife range maps")
 STAR = Dataset("raster_paths['star_t'] (IBAT STAR-t raster, if supplied)", "IBAT", 1000.0, "IBAT licence required", "STD", "Mair et al. 2021")
 GBIF = Dataset("GBIF occurrence API (CC0 and CC-BY records only)", "live", None, "CC0 / CC-BY-4.0 per record", "ACAD", "GBIF.org")
 TNC_HM = Dataset("TNC/HM/v3/90m_s", "v3 2022", 90.0, "CC-BY-4.0", "ACAD", "Theobald et al. 2025, Sci Data 12:489")
@@ -228,11 +228,19 @@ CATALOGUE: Tuple[MetricContract, ...] = (
        value_range=(0, 10), framework_tags=("NPI:condition", "TNFD:C5.0"), notes="EE implementation of SL2P to be verified before scoring.",
        map_spec=MapSpec(("#ffffe5", "#78c679", "#004529"), 0, 6, "LAI")),
     _m(id="canopy_height_m", name="Canopy height", pillar="P2", component="structure",
-       definition="Mean 1 m canopy height over natural forest and shrub pixels.",
+       definition=("Mean of Meta/WRI v1 1 m top-of-canopy heights (gaps between crowns count as near 0 m, so the value mixes "
+                   "height and cover; it is not tree height) over natural woody pixels: natural forest (ForTy 2020), woodland "
+                   "(Dynamic World trees) and shrub (Dynamic World shrub), restricted to pixels that already had the same woody "
+                   "class in the 2018-2020 source epoch. Reported by type with area in ha."),
        unit="m", direction="higher_is_better", level="site_and_emu", datasets=(META_CHM,), reference_type="reference_condition",
        recommended_role="scored", role_reason="Structure component [STD]; finest open source (1 m).", can_score=True, natural_only=True,
        applicable_types=("natural_forest", "shrub"), value_range=(0, 80), framework_tags=("NPI:condition", "TNFD:C5.0"),
-       failure_modes=COMMON_FAILURES + ("not_applicable_no_woody_type",), map_spec=MapSpec(("#ffffcc", "#41ab5d", "#00441b"), 0, 30, "m")),
+       failure_modes=COMMON_FAILURES + ("not_applicable_no_woody_type", "below_detection", "source_disagreement", "source_predates_state"),
+       map_spec=MapSpec(("#ffffcc", "#41ab5d", "#00441b"), 0, 30, "m"),
+       notes=("D-28-1. Caveats: single-date imagery 2009-2020, mostly 2018-2020; no field validation for trees taller than 25 m "
+              "(WRI); limited training geographies; slope and shadow bias; weak below about 2 m (below 2 m = below detection, "
+              "never 0). Like-for-like checks: Meta 95th percentile per 30 m cell against GLAD 2019 (>= 4 px) and GEDI rh98 "
+              "median (>= 10 footprints, >= 5 m); more than 50% apart = source_disagreement. No India-specific validation found.")),
     _m(id="bii", name="Biodiversity Intactness Index", pillar="P2", component="composition",
        definition="Mean BII over natural pixels for the latest year at or before the window end (year recorded).",
        unit="index 0-1", direction="higher_is_better", level="site_and_emu", datasets=(BII,), reference_type="reference_condition",
@@ -252,7 +260,7 @@ CATALOGUE: Tuple[MetricContract, ...] = (
        applicable_types=("natural_forest",), value_range=(0, 10), framework_tags=("NPI:condition", "TNFD:C5.0"),
        failure_modes=COMMON_FAILURES + ("not_applicable_non_forest",)),
     _m(id="gedi_rh98_m", name="GEDI canopy height (rh98)", pillar="P2", component="structure",
-       definition="Mean rh98 of quality-filtered GEDI L2A footprints over natural pixels; scored only with >= 10 footprints.",
+       definition="Mean rh98 (tallest return in a ~25 m footprint) of quality-filtered GEDI L2A footprints over natural woody pixels; >= 10 footprints; below 5 m = below detection (empirical floor from the cropland and built-up controls).",
        unit="m", direction="higher_is_better", level="site", datasets=(GEDI_L2A,), reference_type="reference_condition",
        recommended_role="contextual", role_reason="Sparse footprints on small sites; cross-check of canopy height.", can_score=True,
        natural_only=True, min_support_px=10, applicable_types=("natural_forest", "shrub"), value_range=(0, 100)),
@@ -300,17 +308,50 @@ CATALOGUE: Tuple[MetricContract, ...] = (
        direction="descriptive", level="site", datasets=(GBIF,), reference_type="none", recommended_role="screening",
        role_reason="National protection status, not IUCN extinction risk.", can_score=False),
     _m(id="threatened_species_range_count", name="Threatened species with overlapping ranges", pillar="P3", component="extinction_risk",
-       definition="Count of IUCN CR/EN/VU mammals and birds whose range polygons overlap the site.", unit="count",
+       definition="Count of IUCN CR/EN/VU mammals and birds whose range polygons overlap the site (birds: RedList__5).", unit="count",
        direction="descriptive", level="site", datasets=(IUCN_RANGES,), reference_type="none", recommended_role="diagnostic",
-       role_reason="Range overlap is not presence; licence held for review.", can_score=False),
+       role_reason="Range overlap is not presence.", can_score=False),
     _m(id="restricted_range_species_count", name="Restricted-range species with overlapping ranges", pillar="P3", component="extinction_risk",
        definition="Count of mammals, birds and plants with range < 100,000 km2 whose range overlaps the site.", unit="count",
        direction="descriptive", level="site", datasets=(IUCN_RANGES,), reference_type="none", recommended_role="diagnostic",
-       role_reason="Range overlap is not presence; licence held for review.", can_score=False),
+       role_reason="Range overlap is not presence.", can_score=False),
     _m(id="star_t", name="STAR threat-abatement score", pillar="P3", component="extinction_risk",
        definition="Sum of STAR-t over the site from a supplied IBAT raster.", unit="STAR units", direction="descriptive",
        level="site", datasets=(STAR,), reference_type="none", recommended_role="contextual",
        role_reason="Needs an IBAT raster; pending input.", can_score=False, failure_modes=COMMON_FAILURES + ("pending_input",)),
+
+    _m(id="star_t_estimated", name="Estimated STAR-t (range-based)", pillar="P3", component="extinction_risk",
+       definition=("100 x sum over species of STAR threat weight (CR 4, EN 3, VU 2, NT 1, LC 0) x share of the species' global "
+                   "range (extant; native or reintroduced; resident or breeding) that falls on the site. Range, not area of "
+                   "habitat (Guidance p.26 footnote). Mammals, birds and plants from the Darukaa-held snapshots."),
+       unit="STAR-t units (estimate)", direction="descriptive", level="site", datasets=(IUCN_RANGES,), reference_type="none",
+       recommended_role="contextual", role_reason=("Nature Positive species extinction risk, preparatory example 'estimated "
+                   "STAR-t' (Guidance p.26) [STD]. Measures the site's share of global threat-weighted range, which is "
+                   "importance, not condition; no defensible good/bad direction at baseline."), can_score=False,
+       framework_tags=("NPI:extinction_risk", "TNFD:C5.1", "ESRS:E4", "GBF:A.3"),
+       failure_modes=("error", "source_unavailable", "not_run"), map_spec=MapSpec(kind="none"),
+       notes=("D-28-2. Not IBAT STAR: no area-of-habitat refinement, Darukaa-held snapshots, global range area summed over "
+              "features (overlapping seasonal polygons may inflate it slightly); per-species site area capped at site area.")),
+    _m(id="rarity_weighted_richness", name="Range-size rarity-weighted richness", pillar="P3", component="extinction_risk",
+       definition=("Sum over all species (any category) of the share of each species' global range (same filters as "
+                   "star_t_estimated) that falls on the site."),
+       unit="range-share sum", direction="descriptive", level="site", datasets=(IUCN_RANGES,), reference_type="none",
+       recommended_role="contextual", role_reason="Preparatory example 'rarity-weighted richness' (Guidance p.26) [STD]; importance, not condition.",
+       can_score=False, framework_tags=("NPI:extinction_risk", "TNFD:C5.1"),
+       failure_modes=("error", "source_unavailable", "not_run"), map_spec=MapSpec(kind="none"), notes="D-28-2."),
+    _m(id="priority_species_habitat_trend", name="Priority species: habitat trend (population proxy)", pillar="P3", component="populations",
+       definition=("For each priority species (CR/EN/VU) whose range overlaps the site: natural habitat within the range on "
+                   "the site in 2020 against now (natural mask), plus candidate gain. Trend: declining if habitat fell by 5% "
+                   "or more; increasing (candidate) if candidate gain is 5% or more of 2020 habitat; otherwise stable. "
+                   "Value = % of priority species with declining habitat; counts and per-species rows in extras."),
+       unit="% of priority species", direction="lower_is_better", level="site", datasets=(IUCN_RANGES,), reference_type="none",
+       recommended_role="contextual", role_reason=("Nature Positive species populations metric at preparatory granularity with "
+                   "area of habitat as the proxy (Guidance p.28; Technical Output Report p.74) [STD]. On small sites most "
+                   "ranges cover the whole site, so it largely restates P1 habitat change; not scored to avoid double counting."),
+       can_score=False, framework_tags=("NPI:species_populations", "TNFD:C5.1", "ESRS:E4"),
+       failure_modes=("error", "source_unavailable", "not_run", "not_applicable_no_priority_species"), map_spec=MapSpec(kind="none"),
+       notes=("D-28-2. 5% threshold is a Darukaa choice, to be reviewed. 'Increasing' can only be candidate gain because the "
+              "natural mask never adds natural area after 2020. 'Slowing in decline' needs three or more time points.")),
 
     # ------------------------------------------------------------------ P4 pressure
     _m(id="built_fraction", name="Built-up share", pillar="P4", component="land_use",

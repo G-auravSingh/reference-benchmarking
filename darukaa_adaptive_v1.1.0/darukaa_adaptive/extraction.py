@@ -174,7 +174,8 @@ def _measure(plan: Planned, unit: Unit, raw: Dict[str, Any]) -> Measurement:
                         covered_pixel_equivalent=st.get("covered_pixel_equivalent"), touched_pixels=st.get("centre_pixels"),
                         analysis_scale_m=spec.scale, spread={k: st.get(k) for k in ("stdDev", "p5", "p50", "p95")},
                         extras=extras, **common)
-        return check_measurement(m)
+        m = check_measurement(m)
+        return spec.qa(m) if spec.qa else m
     if isinstance(spec, L.RatioSpec):
         sums = raw.get("sums") or {}
         num, den = sums.get("num"), sums.get("den")

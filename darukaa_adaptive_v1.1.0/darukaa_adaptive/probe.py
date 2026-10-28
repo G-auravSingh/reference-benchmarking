@@ -157,6 +157,20 @@ def unit_checks(units: Sequence[Tuple[str, BaseGeometry]], window: Tuple[str, st
             "hist_m": _load_height(ee, a, b, k).reduceRegion(
                 ee.Reducer.fixedHistogram(0, 30, 15), g, 10, crs, maxPixels=1e13).getInfo(),
             **ee.Dictionary(px(_load_height(ee, a, b, k), 10)).getInfo()}) for a, b, k in chm_candidates}
+        # D-28-1 small-forest step: like-for-like canopy evidence over the same eligible pixels, plus images to look at.
+        ctx = L.ExtractionContext(region=g, unit_region=g, crs=crs, start=window[0], end_exclusive=window[1], mask=mask,
+                                  peak_window=window, options={})
+        r["canopy_like_for_like"] = _try(lambda: ee.Dictionary(L._canopy_evidence_lazies(ctx)).getInfo())
+        view = g.buffer(150).bounds()
+        r["canopy_thumbnails"] = _try(lambda: {
+            "meta_chm_0_30m": L.chm_image().setDefaultProjection(crs=crs, scale=1).visualize(
+                min=0, max=30, palette=["ffffcc", "41ab5d", "00441b"]).getThumbURL({"region": view, "dimensions": 768}),
+            "sentinel2_rgb_window": ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(g).filterDate(*window)
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20)).median().visualize(bands=["B4", "B3", "B2"], min=0, max=2500)
+                .getThumbURL({"region": view, "dimensions": 768}),
+            "dw_2018_2020_mode": nm.dw_mode(g, *L.CANOPY_EPOCH)[0].visualize(min=0, max=8, palette=[
+                "419bdf", "397d49", "88b053", "7a87c6", "e49635", "dfc35a", "c4281b", "a59b8f", "b39fe1"]).getThumbURL(
+                {"region": view, "dimensions": 768})})
         r["glad_height_codes"] = _try(lambda: ee.ImageCollection(L.GLAD_HEIGHT_ASSET).mosaic().select([0]).reduceRegion(
             ee.Reducer.frequencyHistogram(), g, 30, crs, maxPixels=1e13).getInfo())
         r["fire_images_per_year"] = _try(lambda: {y: ee.ImageCollection(L.MCD64_ASSET).filterDate(f"{y}-01-01", f"{y+1}-01-01").size().getInfo()

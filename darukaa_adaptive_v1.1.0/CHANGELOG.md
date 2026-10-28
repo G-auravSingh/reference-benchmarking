@@ -1,3 +1,19 @@
+## 2026-10-28 - canopy-height evidence and preparatory species metrics (version remains 1.1.0)
+
+- Canopy height (D-28-1):
+  - The definition now states what is measured (gap-inclusive mean of 1 m heights; not tree height).
+  - Only pixels that were already woody in 2018–2020 count.
+  - New statuses, never 0: `source_predates_state`, `source_disagreement` (like-for-like: Meta 95th percentile at 30 m against GLAD or GEDI) and `below_detection` (Meta under 2 m, GLAD all 0, GEDI under 5 m).
+  - New evidence table in the report and in `canopy_height_evidence.csv`, with caveats.
+  - The probe records like-for-like evidence and image links per unit.
+- P3 (D-28-2), reported not scored:
+  - `star_t_estimated` (range-based estimated STAR-t);
+  - `rarity_weighted_richness`;
+  - `priority_species_habitat_trend` (the Nature Positive species-populations proxy), with `priority_species.csv`.
+  - The Nature Positive coverage table shows both species indicators as "partly (preparatory)".
+- Range-count metrics: licence wording removed at Gaurav's instruction.
+- CHMv2 parked; Meta v1 stays (D-28-3).
+
 ## 2026-10-27 - canopy-height source, SoN score, Karpa run 2 fixes (version remains 1.1.0)
 
 - Birds now count in the threatened-species range count. The probe confirmed the Red List field `RedList__5`.

@@ -73,10 +73,73 @@ def tables(res: AssessmentResult) -> Dict[str, pd.DataFrame]:
         "metrics": pd.DataFrame(mrows), "scores": pd.DataFrame(srows), "pillars": pd.DataFrame(prow),
         "site_headlines": pd.DataFrame(hrow), "project_summary": pd.DataFrame(proj), "metric_roles": roles,
         "units": units, "restoration_and_change": pd.DataFrame(res.project["restoration"]["sites"]),
+        "canopy_height_evidence": pd.DataFrame(canopy_evidence_rows(res)),
+        "priority_species": pd.DataFrame(priority_species_rows(res)),
         "nature_positive_coverage": pd.DataFrame(res.project["nature_positive_coverage"]),
         "reference_condition_pool": pd.DataFrame(res.references.get("condition_pool") or []),
         "flags": pd.DataFrame(res.flags),
     }
+
+
+def canopy_evidence_rows(res: AssessmentResult) -> List[Dict[str, Any]]:
+    """One row per unit and source for canopy height (D-28-1): what is measured, the reading, caveats."""
+    rows = []
+    for m in res.measurements:
+        if m.metric != "canopy_height_m":
+            continue
+        ex = m.extras or {}
+        base = {"unit_id": m.unit_id, "level": m.level, "metric_status": m.status, "scored_value_m": m.value,
+                "woody_natural_ha": ex.get("woody_ha"), "eligible_ha": ex.get("eligible_ha"),
+                "excluded_post_epoch_ha": ex.get("excluded_post_epoch_ha"),
+                "by_type": "; ".join(f"{nm_strata(k)}: {v.get('mean'):.2f} m" for k, v in (ex.get("by_stratum") or {}).items()
+                                     if isinstance(v, dict) and v.get("mean") is not None),
+                "disagreement": json.dumps(ex.get("disagreement") or []), "caveats": ex.get("caveats")}
+        for src, d in (ex.get("sources") or {}).items():
+            rows.append({**base, "source": src, "quantity": d.get("quantity"), "reading": d.get("reading"),
+                         "support": d.get("n_pixels") or d.get("n_footprints")})
+        if not ex.get("sources"):
+            rows.append({**base, "source": "meta_mean", "quantity": "mean of 1 m heights (gaps included)",
+                         "reading": m.status, "support": None})
+    return rows
+
+
+def nm_strata(code) -> str:
+    from . import natural_mask as nm
+    try:
+        return nm.STRATA.get(int(code), str(code))
+    except (TypeError, ValueError):
+        return str(code)
+
+
+def priority_species_rows(res: AssessmentResult) -> List[Dict[str, Any]]:
+    rows = []
+    for m in res.measurements:
+        if m.metric == "priority_species_habitat_trend" and m.level == "site":
+            for r in (m.extras or {}).get("species") or []:
+                rows.append({"unit_id": m.unit_id, **r})
+    return rows
+
+
+def _species_section(res: AssessmentResult) -> str:
+    out = []
+    for m in res.measurements:
+        if m.level != "site" or m.metric not in ("star_t_estimated", "rarity_weighted_richness", "priority_species_habitat_trend"):
+            continue
+        c = cat.get(m.metric)
+        ex = m.extras or {}
+        detail = ""
+        if m.metric == "star_t_estimated" and ex.get("top_contributors"):
+            detail = "top: " + ", ".join(f"{t['sci_name']} ({t['category']}, {t['contribution']:.3g})" for t in ex["top_contributors"][:5])
+        if m.metric == "priority_species_habitat_trend" and ex.get("counts"):
+            k = ex["counts"]
+            detail = (f"{ex.get('n_priority')} priority species: declining {k['declining']}, stable {k['stable']}, "
+                      f"increasing (candidate) {k['increasing_candidate']}; slowing in decline not assessable")
+        out.append(f"<tr><td>{html.escape(m.unit_id)}</td><td>{html.escape(c.name)}</td><td>{_fmt(m.value, 3)}</td>"
+                   f"<td>{html.escape(c.unit)}</td><td>{html.escape(m.status)}</td><td>{html.escape(detail)}</td></tr>")
+    if not out:
+        return "<p class='muted'>Not measured in this run.</p>"
+    return ("<table><thead><tr><th>unit</th><th>metric</th><th>value</th><th>unit</th><th>status</th><th>detail</th></tr></thead>"
+            f"<tbody>{''.join(out)}</tbody></table>")
 
 
 def _fmt(x, nd=1):
@@ -139,6 +202,12 @@ table{{border-collapse:collapse;font-size:12px;width:100%;margin:8px 0}}th,td{{b
 <h2>SoN composite score (secondary)</h2>
 <div class='tile'><div class='muted'>{html.escape(son['label'])}</div><div class='big'>{_fmt(son['value'])}</div><div>90% interval {_fmt(son['interval'][0])}–{_fmt(son['interval'][1])} · confidence {_fmt(son.get('confidence'))} · coverage: {html.escape(son.get('coverage_label') or '–')}</div><div>Weakest pillar: {_fmt(son.get('weakest_pillar'))} ({_fmt(son.get('weakest_pillar_score'))})</div>{f"<div class='note'>{html.escape(son['divergence_flag'])}</div>" if son.get('divergence_flag') else ''}</div>
 <p class='muted'>Equal-weight geometric mean of the scored state pillars (P1, P2, plus P3 when covered); withheld unless P1 and P2 are both scored; pressure is never included. The Nature Positive State of Nature indicators define no composite number; read the pillar profile first.</p>
+<h2>Canopy height evidence</h2>
+<p class='muted'>{html.escape(cat.get('canopy_height_m').definition)} It is not tree height. {html.escape(cat.get('canopy_height_m').notes)}</p>
+{table(t['canopy_height_evidence'], ['unit_id','source','quantity','reading','support','metric_status','scored_value_m','eligible_ha','excluded_post_epoch_ha','by_type'])}
+<h2>Species (preparatory, reported not scored)</h2>
+<p class='muted'>Range maps, not observations: a range overlapping the site does not mean the species is present. Estimated STAR-t and rarity-weighted richness show the site's share of global (threat-weighted) range; they are importance, not condition. The habitat trend uses natural habitat within each priority species' range as the population proxy (Nature Positive preparatory granularity).</p>
+{_species_section(res)}
 <h2>Sites: headline</h2>{table(t['site_headlines'], ['unit_id','son_score_0_100','son_low','son_high','son_confidence','coverage_label','weakest_pillar','weakest_pillar_score','weakest_pillar_metric','son_divergence_flag','pressure_score_0_100','pressure_confidence','son_status'])}
 <h2>Sites</h2>{table(t['units'], ['site_id','boundary_source','area_ha','emu_ids','emu_share_of_site_pct','flags'])}
 <h2>Pillars by unit</h2>{table(t['pillars'][t['pillars']['status']!='insufficient_evidence'] if not t['pillars'].empty else t['pillars'], ['unit_id','pillar_name','score_0_100','score_low','score_high','concern','limiting_component','n_metrics','component_scores','flags'])}

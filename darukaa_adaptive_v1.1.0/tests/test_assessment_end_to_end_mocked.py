@@ -119,6 +119,11 @@ def test_end_to_end_bundle(mocked, tmp_path):
     assert html.index("State of nature profile") < html.index("SoN composite score")
     assert "not a Nature Positive standard metric" in html and "Restoration and change" in html
     assert "never netted" in html
+    # D-28-1 / D-28-2: canopy-height evidence and preparatory species sections are always present
+    assert "Canopy height evidence" in html and "not tree height" in html
+    assert "Species (preparatory, reported not scored)" in html
+    for f in ("canopy_height_evidence.csv", "priority_species.csv"):
+        assert (d / f).exists(), f
     proj = pd.read_csv(d / "project_summary.csv")
     assert "son" in set(proj["item"]) and "condition" not in set(proj["item"])
     checks = check_bundle(d, {"values": {"natural_extent_pct": [">=", 85]}, "pillars": {"P1": [">=", 80]},

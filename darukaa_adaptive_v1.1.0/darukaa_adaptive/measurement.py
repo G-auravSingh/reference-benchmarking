@@ -24,6 +24,8 @@ STATUSES = (
     "below_min_support", "out_of_range_review", "pending_input", "year_unavailable",
     "not_applicable_no_forest_baseline", "not_applicable_non_forest", "not_applicable_no_woody_type",
     "not_applicable_no_natural_baseline", "not_applicable_no_natural_pixels",
+    # D-28-1 canopy-height evidence rules; D-28-2 species metrics
+    "below_detection", "source_disagreement", "source_predates_state", "not_applicable_no_priority_species",
 )
 VALID_STATUSES = {"ok", "scored_context_scale"}
 

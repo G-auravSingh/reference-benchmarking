@@ -120,7 +120,7 @@ Gaurav asked for a single SoN score for when one is needed, such as investor scr
   - `condition_*` becomes `son_*`.
   - `R2_expected.json` keys become `son_status` and `son_status_not`. The expectations themselves are unchanged.
 
-## P-27-4. Canopy height at changing or young sites (F-1): proposal, awaiting approval
+## P-27-4. Canopy height at changing or young sites (F-1): approved 28 Oct, implemented as D-28-1 (with P-27-5)
 
 Evidence: Karpa run 2 and the probe of 27 Oct (`validation/R2b_Karpa_review_2026-10-26.md`, "Run 2").
 

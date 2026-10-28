@@ -293,7 +293,7 @@ def run_assessment(project: ProjectInput, config: AssessmentConfig, boundary: Op
         project[p]["limiting_metrics"] = sorted({pr.limiting_metric for pr in lim if pr.limiting_metric})
     project["son"] = son_rollup(son, headlines, project)
     project["restoration"] = restoration_summary(measurements, units)
-    project["nature_positive_coverage"] = nature_positive_coverage(scores, roles)
+    project["nature_positive_coverage"] = nature_positive_coverage(scores, roles, measurements)
 
     refs = {"condition_pool": (pool.summary() if pool else []), "ecoregion": (pool.ecoregion if pool else None),
             "condition_points": (pool.n_points if pool else 0), "regional_blocks": block_info,
@@ -361,7 +361,13 @@ def restoration_summary(measurements: Sequence[Measurement], units: AssessmentUn
             "note": "Gross figures by type; never netted. Gain is a candidate: Dynamic World cannot confirm natural status."}
 
 
-def nature_positive_coverage(scores: Sequence[MetricScore], roles: Dict[str, cat.RoleDecision]) -> List[Dict[str, str]]:
+def _p3_cover(measurements: Sequence[Measurement], ids: Sequence[str]) -> str:
+    ok = any(m.metric in ids and m.level == "site" and m.measured_valid for m in measurements)
+    return "partly (preparatory, reported not scored)" if ok else "no"
+
+
+def nature_positive_coverage(scores: Sequence[MetricScore], roles: Dict[str, cat.RoleDecision],
+                             measurements: Sequence[Measurement] = ()) -> List[Dict[str, str]]:
     """Comply-or-explain table for the four Nature Positive indicators (TOR p.83)."""
     def any_scored(pillar):
         return any(s.pillar == pillar and s.score is not None for s in scores)
@@ -370,8 +376,8 @@ def nature_positive_coverage(scores: Sequence[MetricScore], roles: Dict[str, cat
          "how": "ForTy 2020 + SBTN v1.1 natural mask; gross loss and candidate gain since 2020 by type"},
         {"indicator": "Ecosystem condition", "covered": "yes (preparatory)" if any_scored("P2") else "no",
          "how": "remote-sensing condition metrics on natural pixels against least-disturbed reference; landscape connectivity pending"},
-        {"indicator": "Species extinction risk", "covered": "no",
-         "how": "IUCN/STAR/LIFE data need a commercial licence Darukaa does not hold; range-overlap counts shown as diagnostics only"},
-        {"indicator": "Species populations", "covered": "no",
-         "how": "needs repeated in-situ surveys; open occurrence records shown as screening only"},
+        {"indicator": "Species extinction risk", "covered": _p3_cover(measurements, ("star_t_estimated", "rarity_weighted_richness")),
+         "how": "estimated STAR-t and rarity-weighted richness from range maps (no area-of-habitat refinement; not IBAT STAR); reported, not scored"},
+        {"indicator": "Species populations", "covered": _p3_cover(measurements, ("priority_species_habitat_trend",)),
+         "how": "priority (CR/EN/VU) species habitat trend 2020 to now as the population proxy; reported, not scored; in-situ surveys needed for medium/high"},
     ]

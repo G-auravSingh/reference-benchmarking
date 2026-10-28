@@ -82,6 +82,7 @@ class StatsSpec:
     extras: Dict[str, Any] = field(default_factory=dict)
     post: Optional[Callable[[Dict[str, Optional[float]]], Optional[float]]] = None
     by_stratum: bool = False
+    qa: Optional[Callable[[Any], Any]] = None   # Measurement -> Measurement, after the contract gates
 
 
 @dataclass
@@ -246,6 +247,8 @@ def weight_image(ctx: ExtractionContext, kind: str, scale: float):
         w = m.select("natural_now")
     elif kind == "managed":
         w = m.select("managed")
+    elif kind == "canopy_eligible":
+        w = canopy_eligible(ctx)
     elif kind.startswith("strata:"):
         codes = [int(x) for x in kind.split(":", 1)[1].split(",")]
         s = m.select("stratum")
@@ -435,8 +438,158 @@ def _chm_period(ctx):
     return f"{label}; {asset} band {band}"
 
 
+# ---------------------------------------------------------------- canopy height (D-28-1)
+# Detection floors below which a reading is "below detection", never a measured 0.
+META_FLOOR_M = 2.0     # Darukaa: Meta v1 is weak on low vegetation (CHMv2 paper); same 2 m used for canopy cover
+GEDI_FLOOR_M = 5.0     # Darukaa, empirical: rh98 read 4.9 m over Ludhiana cropland and 15.3 m over Pune buildings (probe 27 Oct)
+DISAGREEMENT_SHARE = 0.5   # P-27-4 A: like-for-like sources more than 50% apart
+CANOPY_EPOCH = ("2018-01-01", "2021-01-01")   # Meta v1 imagery mostly 2018-2020
+CANOPY_CAVEATS = (
+    "Meta/WRI v1: single-date imagery 2009-2020 (mostly 2018-2020); no field validation for trees taller than 25 m "
+    "(WRI); trained and validated on a limited set of regions; slope and shadow bias; weak on vegetation below about 2 m. "
+    "GLAD 2019: 30 m, saturates above 30 m; 0 = no forest canopy detected. GEDI rh98: tallest return in a ~25 m "
+    "footprint; reads up to ~5 m over non-tree surfaces. No India-specific validation of any source was found.")
+
+
+def canopy_eligible(ctx):
+    """Natural woody pixels whose woody class already existed in the canopy-height source epoch (P-27-4 B).
+
+    Natural forest (ForTy) and woodland need Dynamic World 'trees' as the 2018-2020 mode;
+    shrub needs 'shrub_and_scrub'. Pixels that became woody later are excluded and reported.
+    """
+    ee = ee_module()
+    s = ctx.mask.select("stratum")
+    epoch, _ = nm.dw_mode(ctx.region, *CANOPY_EPOCH)
+    trees, shrub = nm.DW["trees"], nm.DW["shrub_and_scrub"]
+    ok = (s.eq(10).Or(s.eq(11)).And(epoch.eq(trees))).Or(s.eq(12).And(epoch.eq(shrub)))
+    return ok.unmask(0).setDefaultProjection(crs=ctx.crs, scale=10)
+
+
+def _woody_mask(ctx):
+    s = ctx.mask.select("stratum")
+    return s.eq(10).Or(s.eq(11)).Or(s.eq(12)).unmask(0)
+
+
+def _canopy_evidence_lazies(ctx):
+    """Like-for-like evidence over the same eligible pixels (P-27-5)."""
+    ee = ee_module()
+    elig = canopy_eligible(ctx)
+    chm = chm_image(ctx.options).setDefaultProjection(crs=ctx.crs, scale=1)
+    reg, crs = ctx.region, ctx.crs
+    p95 = (chm.reduceResolution(reducer=ee.Reducer.percentile([95]), bestEffort=False, maxPixels=1024)
+              .reproject(crs=crs, scale=30).rename("v"))
+    w30 = elig.toFloat().reduceResolution(ee.Reducer.mean(), False, 65535).reproject(crs=crs, scale=30)
+    glad = ee.ImageCollection(GLAD_HEIGHT_ASSET).mosaic().select([0])
+    glad = glad.updateMask(glad.lte(60)).rename("v")
+    col = ee.ImageCollection(GEDI_L2A_ASSET).filterBounds(reg)
+    gedi = col.map(lambda i: ee.Image(i).select("rh98").updateMask(ee.Image(i).select("quality_flag").eq(1)
+                                                                    .And(ee.Image(i).select("degrade_flag").eq(0)))).median().rename("v")
+    w25 = elig.toFloat().reduceResolution(ee.Reducer.mean(), False, 65535).reproject(crs=crs, scale=25)
+    mc = ee.Reducer.mean().combine(ee.Reducer.count(), sharedInputs=True)
+    areas = ee.Image.cat([_woody_mask(ctx).rename("woody"), elig.rename("eligible")]).toFloat().multiply(ee.Image.pixelArea())
+    return {
+        "meta_p95_30m": p95.updateMask(w30.gte(0.5)).reduceRegion(ee.Reducer.mean(), reg, 30, crs, maxPixels=1e13, tileScale=4),
+        "meta_cover_2m": chm.gt(META_FLOOR_M).rename("v").updateMask(elig).reduceRegion(ee.Reducer.mean(), reg, 1, crs, maxPixels=1e13, tileScale=4),
+        "glad": glad.updateMask(w30.gte(0.5)).reduceRegion(mc, reg, 30, crs, maxPixels=1e13, tileScale=4),
+        "gedi": gedi.updateMask(w25.gte(0.5)).reduceRegion(ee.Reducer.median().combine(ee.Reducer.count(), sharedInputs=True),
+                                                          reg, 25, crs, maxPixels=1e13, tileScale=4),
+        "areas": areas.reduceRegion(ee.Reducer.sum(), reg, 10, crs, maxPixels=1e13, tileScale=4),
+    }
+
+
+def _f(x):
+    try:
+        return None if x is None else float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalise_evidence(extras):
+    if "evidence" in extras:
+        return extras["evidence"]
+    def one(d, key):
+        return _f((d or {}).get(key)) if isinstance(d, dict) else _f(d)
+    ar = extras.pop("areas", None) or {}
+    ev = {"meta_p95_30m": one(extras.pop("meta_p95_30m", None), "v"),
+          "meta_cover_2m": one(extras.pop("meta_cover_2m", None), "v"),
+          "glad": {"mean": one(extras.get("glad"), "v_mean"), "count": one(extras.get("glad"), "v_count")},
+          "gedi": {"median": one(extras.get("gedi"), "v_median"), "count": one(extras.get("gedi"), "v_count")},
+          "areas": {"woody_ha": (_f(ar.get("woody")) or 0.0) / 1e4, "eligible_ha": (_f(ar.get("eligible")) or 0.0) / 1e4}}
+    extras.pop("glad", None)
+    extras.pop("gedi", None)
+    return ev
+
+
+def _reading(v, floor, unit="m"):
+    if v is None:
+        return "no reading"
+    return f"below detection (< {floor:g} {unit})" if v < floor else f"{v:.1f} {unit}"
+
+
+def canopy_qa(m):
+    """Apply the approved canopy-height evidence rules (D-28-1) and label every source.
+
+    Order: epoch (source predates the woody state) -> like-for-like disagreement ->
+    below detection. Each sets an explicit status and removes the value; none is a zero.
+    """
+    ex = dict(m.extras or {})
+    ev = _normalise_evidence(ex)
+    glad, gedi, areas = ev.get("glad") or {}, ev.get("gedi") or {}, ev.get("areas") or {}
+    woody, elig = _f(areas.get("woody_ha")) or 0.0, _f(areas.get("eligible_ha")) or 0.0
+    raw_mean = m.value
+    ex.update({"evidence": ev, "raw_mean_m": raw_mean, "excluded_post_epoch_ha": max(0.0, woody - elig),
+               "woody_ha": woody, "eligible_ha": elig, "caveats": CANOPY_CAVEATS,
+               "quantity": "mean 1 m top-of-canopy height incl. gaps, natural woody pixels woody since 2018-2020"})
+    p95 = _f(ev.get("meta_p95_30m"))
+    ex["sources"] = {
+        "meta_mean": {"quantity": "mean of 1 m heights (gaps included)", "reading": _reading(raw_mean, META_FLOOR_M)},
+        "meta_p95_30m": {"quantity": "95th percentile of 1 m heights per 30 m cell, averaged", "reading": _reading(p95, META_FLOOR_M)},
+        "meta_cover_2m": {"quantity": "share of 1 m pixels taller than 2 m",
+                          "reading": None if ev.get("meta_cover_2m") is None else f"{100 * _f(ev['meta_cover_2m']):.1f} %"},
+        "glad_2019": {"quantity": "30 m forest canopy height (GEDI-calibrated)", "n_pixels": glad.get("count"),
+                      "reading": "no reading" if glad.get("mean") is None else
+                      ("0 = no forest canopy detected" if _f(glad["mean"]) == 0 else f"{_f(glad['mean']):.1f} m")},
+        "gedi_rh98": {"quantity": "median rh98 of quality-filtered footprints (tallest return per ~25 m)",
+                      "n_footprints": gedi.get("count"), "reading": _reading(_f(gedi.get("median")), GEDI_FLOOR_M)},
+    }
+    m.extras = ex
+    if m.status in ("no_valid_pixels", "below_min_support") and woody > elig:
+        m.status, m.value = "source_predates_state", None
+        m.notes = (m.notes + f" {woody - elig:.2f} ha became woody after the 2018-2020 source epoch").strip()
+        return m
+    dis = []
+    if p95 is not None and p95 >= META_FLOOR_M:
+        g, n = _f(glad.get("mean")), _f(glad.get("count")) or 0
+        if g is not None and g > 0 and n >= 4 and abs(p95 - g) / max(p95, g) > DISAGREEMENT_SHARE:
+            dis.append({"against": "glad", "meta_p95_30m": p95, "other": g})
+        d, n = _f(gedi.get("median")), _f(gedi.get("count")) or 0
+        if d is not None and d >= GEDI_FLOOR_M and n >= 10 and abs(p95 - d) / max(p95, d) > DISAGREEMENT_SHARE:
+            dis.append({"against": "gedi", "meta_p95_30m": p95, "other": d})
+    ex["disagreement"] = dis
+    if dis and m.value is not None:
+        m.status, m.value = "source_disagreement", None
+        return m
+    if raw_mean is not None and raw_mean < META_FLOOR_M and m.status in ("ok", "scored_context_scale"):
+        m.status, m.value = "below_detection", None
+    return m
+
+
+def _floor_qa(floor, use_p95=False):
+    def qa(m):
+        if m.value is None:
+            return m
+        p95 = (m.spread or {}).get("p95")
+        low = (p95 is not None and p95 == 0) if use_p95 else m.value < floor
+        if low:
+            m.extras = {**(m.extras or {}), "raw_mean_m": m.value, "caveats": CANOPY_CAVEATS}
+            m.status, m.value = "below_detection", None
+        return m
+    return qa
+
+
 def b_chm(ctx):
-    return StatsSpec(chm_image(ctx.options), 1, weight=_woody(ctx), by_stratum=True, period=_chm_period(ctx))
+    return StatsSpec(chm_image(ctx.options), 1, weight="canopy_eligible", by_stratum=True, period=_chm_period(ctx),
+                     extras=_canopy_evidence_lazies(ctx), qa=canopy_qa)
 
 
 def b_managed_chm(ctx):
@@ -447,7 +600,7 @@ def b_glad_height(ctx):
     ee = ee_module()
     raw = ee.ImageCollection(GLAD_HEIGHT_ASSET).mosaic().select([0])
     img = raw.updateMask(raw.lte(60)).rename("v")   # 101 water, 102 snow/ice, 103 no data are codes, not heights
-    return StatsSpec(img, 30, weight="strata:10", period="2019/2020")
+    return StatsSpec(img, 30, weight="strata:10", period="2019", qa=_floor_qa(0, use_p95=True))
 
 
 def b_gedi(ctx):
@@ -458,7 +611,7 @@ def b_gedi(ctx):
         i = ee.Image(i)
         return i.select("rh98").updateMask(i.select("quality_flag").eq(1).And(i.select("degrade_flag").eq(0)))
     img = col.map(q).mean().rename("v")
-    return StatsSpec(img, 25, weight=_woody(ctx), period="GEDI L2A 2019-2025")
+    return StatsSpec(img, 25, weight=_woody(ctx), period="GEDI L2A 2019-2025", qa=_floor_qa(GEDI_FLOOR_M))
 
 
 def b_bii(ctx):
@@ -675,6 +828,175 @@ def b_star(ctx):
                       period="IBAT STAR-t", native_scale_m=1000)
 
 
+# ---------------------------------------------------------------- P3 preparatory (D-28-2)
+STAR_WEIGHTS = {"CR": 4, "EN": 3, "VU": 2, "NT": 1, "LC": 0}   # Mair et al. 2021 (STAR threat weights)
+PRIORITY_CATEGORIES = ("CR", "EN", "VU")
+RANGE_FILTERS = {"presence": [1, "1"], "origin": [1, 2, "1", "2"], "seasonal": [1, 2, "1", "2"]}  # extant; native/reintroduced; resident/breeding
+SPECIES_PERIOD = "Darukaa-held IUCN/BirdLife range snapshots; habitat = natural mask 2020 vs assessment window"
+
+
+def _species_lazies(ctx):
+    """Per-species range areas and on-site habitat areas for every group with a confirmed category field."""
+    ee = ee_module()
+    site = ctx.unit_region
+    fields = {"plants": "category", **ctx.opt("iucn_category_fields", {"mammals": "category", "birds": "RedList__5"})}
+    m = ctx.mask
+    hab = ee.Image.cat([ee.Image.constant(1).rename("site"),
+                        m.select("natural_2020").And(m.select("uncertain").eq(0)).rename("h2020"),
+                        m.select("natural_now").rename("hnow"), m.select("gain_candidate").rename("gain")]
+                       ).unmask(0).toFloat().multiply(ee.Image.pixelArea()).divide(1e6)
+    lazy = {"site_km2": ee.Image.pixelArea().divide(1e6).rename("a").reduceRegion(
+        ee.Reducer.sum(), site, 10, ctx.crs, maxPixels=1e13, tileScale=4).get("a")}
+    excluded = []
+    for g, asset in (("mammals", MAMMALS_ASSET), ("birds", BIRDS_ASSET), ("plants", PLANTS_ASSET)):
+        cf = fields.get(g)
+        if not cf:
+            excluded.append(g)
+            continue
+        full = ee.FeatureCollection(ctx.raster_paths.get(g, asset))
+        filt = full
+        for k, vals in RANGE_FILTERS.items():
+            filt = filt.filter(ee.Filter.inList(k, vals))
+        local = filt.filterBounds(site)
+        names = local.aggregate_array("sci_name").distinct()
+        glob = filt.filter(ee.Filter.inList("sci_name", names)).map(
+            lambda f: f.set("a_km2", f.geometry().area(ee.ErrorMargin(1000)).divide(1e6)))
+        per = ee.FeatureCollection(names.map(lambda n: ee.Feature(
+            local.filter(ee.Filter.eq("sci_name", n)).geometry().intersection(site, ee.ErrorMargin(1)), {"sci_name": n})))
+        red = hab.reduceRegions(collection=per, reducer=ee.Reducer.sum(), scale=10, crs=ctx.crs, tileScale=4)
+        lazy[g] = ee.Dictionary({
+            "global": glob.reduceColumns(ee.Reducer.sum().group(groupField=1, groupName="sci_name"), ["a_km2", "sci_name"]).get("groups"),
+            "cats": local.reduceColumns(ee.Reducer.first().group(groupField=1, groupName="sci_name"), [cf, "sci_name"]).get("groups"),
+            "areas": red.reduceColumns(ee.Reducer.toList(5), ["sci_name", "site", "h2020", "hnow", "gain"]).get("list"),
+            "n_local_unfiltered": full.filterBounds(site).size(), "n_local": local.size()})
+        lazy[f"fields_{g}"] = full.first().propertyNames().containsAll(["sci_name", cf, *RANGE_FILTERS])
+    return lazy, excluded
+
+
+def species_rows(raw):
+    """Turn the evaluated lazies into rows: (sci_name, group, category, global_km2, site_km2, h2020, hnow, gain)."""
+    missing = [k[7:] for k, v in raw.items() if k.startswith("fields_") and not v]
+    if missing:
+        raise ValueError(f"range asset(s) {missing} lack sci_name, the category field or presence/origin/seasonal")
+    rows, diag = [], {}
+    for g in ("mammals", "birds", "plants"):
+        d = raw.get(g)
+        if not isinstance(d, dict):
+            continue
+        if (d.get("n_local_unfiltered") or 0) > 0 and (d.get("n_local") or 0) == 0:
+            raise ValueError(f"{g}: presence/origin/seasonal filter removed every overlapping feature (field type?)")
+        glob = {x["sci_name"]: _f(x.get("sum")) for x in d.get("global") or []}
+        cats = {x["sci_name"]: x.get("first") for x in d.get("cats") or []}
+        for name, site, h20, hn, gn in d.get("areas") or []:
+            rows.append((name, g, str(cats.get(name) or "").strip().upper(), glob.get(name), _f(site) or 0.0,
+                         _f(h20) or 0.0, _f(hn) or 0.0, _f(gn) or 0.0))
+        diag[g] = {"species": len(d.get("areas") or []), "features_overlapping": d.get("n_local_unfiltered")}
+    return rows, diag
+
+
+def _share(row, site_km2):
+    glob = row[3]
+    if not glob or glob <= 0:
+        return None
+    return min(row[4], site_km2) / glob
+
+
+def star_t_from_rows(rows, site_km2):
+    """Estimated STAR-t (range-based): 100 x sum over species of threat weight x share of global range on site."""
+    if not rows:
+        raise ValueError("no species ranges overlap the unit; check the range assets")
+    total, contrib, skipped = 0.0, [], []
+    for r in rows:
+        w, sh = STAR_WEIGHTS.get(r[2]), _share(r, site_km2)
+        if w is None or sh is None:
+            skipped.append(r[0])
+            continue
+        c = 100.0 * w * sh
+        total += c
+        if c > 0:
+            contrib.append({"sci_name": r[0], "group": r[1], "category": r[2], "contribution": c})
+    contrib.sort(key=lambda x: -x["contribution"])
+    return total, {"n_species": len(rows), "weights": dict(STAR_WEIGHTS), "top_contributors": contrib[:10],
+                   "skipped_no_weight_or_area": skipped,
+                   "by_category": {k: sum(1 for r in rows if r[2] == k) for k in ("CR", "EN", "VU", "NT", "LC", "DD")}}
+
+
+def rarity_from_rows(rows, site_km2):
+    """Range-size rarity-weighted richness: sum over species of the share of each global range on site."""
+    if not rows:
+        raise ValueError("no species ranges overlap the unit; check the range assets")
+    shares = [(r[0], _share(r, site_km2)) for r in rows]
+    return sum(sh for _, sh in shares if sh is not None), {"n_species": len(rows),
+                                                            "skipped_no_area": [n for n, sh in shares if sh is None]}
+
+
+def habitat_trend_from_rows(rows, threshold=0.05):
+    """Priority-species population proxy (area of natural habitat within range on site), 2020 vs now.
+
+    NPI species populations metric at preparatory granularity with area of habitat as the
+    proxy (TOR p.74; Guidance p.28). 'Increasing' can only come from candidate gain,
+    because the natural mask never adds natural area after 2020.
+    """
+    pri = [r for r in rows if r[2] in PRIORITY_CATEGORIES]
+    counts = {"declining": 0, "stable": 0, "increasing_candidate": 0}
+    per, no_hab = [], []
+    for name, g, cat_, _, _, h20, hn, gn in pri:
+        if h20 <= 0 and gn <= 0:
+            no_hab.append(name)
+            continue
+        if h20 > 0 and (hn - h20) / h20 <= -threshold:
+            cls = "declining"
+        elif gn > 0 and (h20 <= 0 or gn / h20 >= threshold):
+            cls = "increasing_candidate"
+        else:
+            cls = "stable"
+        counts[cls] += 1
+        per.append({"sci_name": name, "group": g, "category": cat_, "habitat_2020_ha": 100 * h20,
+                    "habitat_now_ha": 100 * hn, "candidate_gain_ha": 100 * gn, "trend": cls})
+    n = sum(counts.values())
+    ex = {"counts": {**counts, "slowing_in_decline": None}, "n_priority": n, "no_habitat_on_site": no_hab,
+          "threshold_relative_change": threshold, "species": per[:200],
+          "note": "slowing in decline needs three or more time points; not assessable at baseline"}
+    if n == 0:
+        ex["reason"] = "no priority (CR/EN/VU) species on site"
+        return None, ex
+    ex["pct_by_trend"] = {k: 100.0 * v / n for k, v in counts.items()}
+    return 100.0 * counts["declining"] / n, ex
+
+
+def _species_spec(ctx, kind):
+    lazy, excluded = _species_lazies(ctx)
+    thr = ctx.opt("species_trend_threshold", 0.05)
+
+    def parse(raw):
+        rows, diag = species_rows(raw)
+        site_km2 = _f(raw.get("site_km2")) or 0.0
+        if kind == "star":
+            v, ex = star_t_from_rows(rows, site_km2)
+        elif kind == "rarity":
+            v, ex = rarity_from_rows(rows, site_km2)
+        else:
+            if not rows:
+                raise ValueError("no species ranges overlap the unit; check the range assets")
+            v, ex = habitat_trend_from_rows(rows, thr)
+            if v is None:
+                return None, "not_applicable_no_priority_species", {**ex, "groups": diag, "excluded_groups": excluded}
+        return v, "ok", {**ex, "groups": diag, "excluded_groups": excluded, "site_km2": site_km2}
+    return CustomSpec(lazy, parse, period=SPECIES_PERIOD)
+
+
+def b_star_estimated(ctx):
+    return _species_spec(ctx, "star")
+
+
+def b_rarity(ctx):
+    return _species_spec(ctx, "rarity")
+
+
+def b_habitat_trend(ctx):
+    return _species_spec(ctx, "trend")
+
+
 BUILDERS: Dict[str, Callable[[ExtractionContext], Any]] = {
     "natural_extent_pct": b_natural_extent,
     "natural_gross_loss_pct": b_gross_loss,
@@ -706,6 +1028,9 @@ BUILDERS: Dict[str, Callable[[ExtractionContext], Any]] = {
     "threatened_species_range_count": b_threatened_range,
     "restricted_range_species_count": b_restricted_range,
     "star_t": b_star,
+    "star_t_estimated": b_star_estimated,
+    "rarity_weighted_richness": b_rarity,
+    "priority_species_habitat_trend": b_habitat_trend,
     "built_fraction": b_built_fraction,
     "ghm": b_ghm,
     "road_density": b_road_density,
